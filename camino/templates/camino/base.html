@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Camino de Santiago Accommodations</title>
+  <style>
+    :root {
+      --gold: #d97706;
+      --gold-light: #fef3c7;
+      --navy: #1e3a8a;
+      --bg: #f8fafc;
+      --surface: #ffffff;
+      --border: #e2e8f0;
+      --text: #1e293b;
+    }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 0; line-height: 1.5; }
+    header { background: var(--navy); color: white; padding: 1rem 1.5rem; display: flex; justify-content: space-between; align-items: center; }
+    header a { color: white; text-decoration: none; font-weight: bold; }
+    main { max-width: 1040px; margin: 1.5rem auto; padding: 0 1rem; }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.25rem; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+    .badge { display: inline-block; padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.8rem; font-weight: 600; margin-right: 0.4rem; background: var(--gold-light); color: var(--gold); }
+    .btn { display: inline-block; padding: 0.4rem 0.8rem; border-radius: 4px; text-decoration: none; font-size: 0.85rem; font-weight: 600; margin-right: 0.4rem; margin-top: 0.4rem; }
+    .btn-booking { background: #003580; color: white; }
+    .btn-wa { background: #25d366; color: white; }
+    .btn-phone { background: #334155; color: white; }
+    .map-box { position: relative; width: 100%; border-radius: 8px; overflow: hidden; background: #e2e8f0; }
+    .map-box img { width: 100%; height: auto; display: block; }
+    .hotspot { fill: rgba(217, 119, 6, 0.25); stroke: var(--gold); stroke-width: 2; transition: fill 0.15s; cursor: pointer; }
+    .hotspot:hover { fill: rgba(217, 119, 6, 0.7); }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; }
+    .btn-email { 
+  background: #0284c7; 
+  color: white; 
+}
+.btn-web { 
+  background: #475569; 
+  color: white; 
+}
+.card.alt-route {
+  border-left: 4px solid var(--gold);
+  background-color: #fffdfa;
+}
+.stage-section {
+  margin-bottom: 2rem;
+  background: transparent;
+}
+.stage-section.has-options {
+  background: #f1f5f9;
+  padding: 1rem;
+  border-radius: 10px;
+  border: 1px solid #cbd5e1;
+}
+.stage-section-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+.stage-index {
+  font-weight: 700;
+  font-size: 1.1rem;
+  color: var(--navy);
+}
+.variant-badge {
+  background: #dbeafe;
+  color: #1e40af;
+}
+.stage-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+}
+.stage-card {
+  margin-bottom: 0;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+.main-route {
+  border-left: 5px solid var(--navy);
+}
+.alt-route {
+  border-left: 5px solid var(--gold);
+  background: #fffdf7;
+}
+.route-type-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #64748b;
+  margin-bottom: 0.25rem;
+}
+.alt-label {
+  color: var(--gold);
+}
+  </style>
+</head>
+<body>
+  <header>
+    <a href="{% url 'stage_list' %}">🚶 Camino Accommodation Guide</a>
+  </header>
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

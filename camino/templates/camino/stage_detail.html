@@ -1,0 +1,72 @@
+{% extends 'camino/base.html' %}
+{% block content %}
+<h2>{{ stage.stage_name }}</h2>
+<p><strong>Distance:</strong> {{ stage.distance_km }} km | <strong>Est. Time:</strong> {{ stage.time_minutes }} mins</p>
+
+<!-- Interactive Map Container -->
+<div class="map-box" style="position: relative; width: 100%; display: block; overflow: hidden;">
+  <!-- Displays stageMapURL (which now holds the 1920 URL) -->
+  <img id="stage-map-img" 
+       src="{{ stage.stage_map_url|default:stage.map_url_1920 }}" 
+       alt="{{ stage.stage_name }} Map" 
+       style="width: 100%; height: auto; display: block;" />
+
+  <!-- The SVG overlay matches the image layer -->
+  <svg id="hotspot-svg" 
+       style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none;"
+       preserveAspectRatio="none">
+    {% for spot in hotspots %}
+      {% if spot.x_1920 is not None and spot.w_1920 > 0 %}
+      <a href="{% url 'location_detail' spot.location.id %}" style="pointer-events: auto;">
+        <rect x="{{ spot.x_1920 }}" 
+              y="{{ spot.y_1920 }}" 
+              width="{{ spot.w_1920 }}" 
+              height="{{ spot.h_1920 }}" 
+              class="hotspot" 
+              rx="4">
+          <title>{{ spot.location.location_name }}</title>
+        </rect>
+      </a>
+      {% endif %}
+    {% endfor %}
+  </svg>
+</div>
+
+<!-- Diagnostics bar (remove once alignment is verified) -->
+<p id="debug-info" style="font-size: 0.8rem; color: #64748b; margin-top: 0.5rem;"></p>
+
+{% if stage.elevation_chart_url %}
+<div class="card" style="margin-top: 1.5rem;">
+  <h3>Stage Elevation Chart</h3>
+  <img src="{{ stage.elevation_chart_url }}" alt="Elevation Chart" style="width: 100%; height: auto;">
+</div>
+{% endif %}
+
+<script>
+  function syncOverlay() {
+    const img = document.getElementById('stage-map-img');
+    const svg = document.getElementById('hotspot-svg');
+    const debug = document.getElementById('debug-info');
+
+    if (img && svg && img.naturalWidth > 0 && img.naturalHeight > 0) {
+      // Set the SVG coordinate canvas to match the image's raw dimensions
+      svg.setAttribute('viewBox', `0 0 ${img.naturalWidth} ${img.naturalHeight}`);
+      
+      if (debug) {
+        debug.innerText = `Rendered image natural size: ${img.naturalWidth}px × ${img.naturalHeight}px. SVG viewBox: 0 0 ${img.naturalWidth} ${img.naturalHeight}`;
+      }
+    }
+  }
+
+  const mapImg = document.getElementById('stage-map-img');
+  if (mapImg) {
+    if (mapImg.complete) {
+      syncOverlay();
+    } else {
+      mapImg.addEventListener('load', syncOverlay);
+    }
+    // Re-check when window resizes
+    window.addEventListener('resize', syncOverlay);
+  }
+</script>
+{% endblock %}

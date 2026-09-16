@@ -1,0 +1,102 @@
+{% extends 'camino/base.html' %}
+{% block content %}
+<h2>{{ location.location_name }}</h2>
+
+{% if paragraphs %}
+  <div class="card">
+    <h3>Stage Notes & History</h3>
+    {% for p in paragraphs %}
+      <p><strong>{{ p.type }}:</strong> {{ p.text }}</p>
+    {% endfor %}
+  </div>
+{% endif %}
+
+<h3>Albergues & Hostels ({{ albergues|length }})</h3>
+<div class="grid">
+  {% for item in albergues %}
+  <div class="card">
+    <h4>{{ item.name }}</h4>
+    <p><small>{{ item.address|default:"Town Center" }}</small></p>
+    
+    <p>
+      {% if item.rate_1p_min %}<strong>Price:</strong> €{{ item.rate_1p_min }}<br>{% endif %}
+      <strong>Beds:</strong> {{ item.beds|default:"Inquire" }}<br>
+      <strong>Open:</strong> {{ item.opening_period|default:"Seasonal" }}
+    </p>
+
+    <!-- Amenities Badges -->
+    <p>
+      {% if item.kitchen %}<span class="badge">Kitchen</span>{% endif %}
+      {% if item.washer %}<span class="badge">Laundry</span>{% endif %}
+      {% if item.communal_meal %}<span class="badge">Communal Meal</span>{% endif %}
+    </p>
+
+    <!-- Action & Contact Links -->
+    <div>
+      {% if item.phone %}
+        <a class="btn btn-phone" href="tel:{{ item.phone }}">📞 Call</a>
+      {% endif %}
+
+      {% if item.whatsapp %}
+        <a class="btn btn-wa" href="https://wa.me/{{ item.whatsapp }}" target="_blank" rel="noopener noreferrer">💬 WhatsApp</a>
+      {% endif %}
+
+      {% if item.email and item.email != "NULL" %}
+        <a class="btn btn-email" href="mailto:{{ item.email }}">✉️ Email</a>
+      {% endif %}
+
+      {% if item.website_url and item.website_url != "no website available" and item.website_url != "NULL" %}
+        <a class="btn btn-web" href="{{ item.website_url }}" target="_blank" rel="noopener noreferrer">🌐 Website</a>
+      {% endif %}
+
+      {% if item.booking_url and item.booking_url != "not on Booking" and item.booking_url != "NULL" %}
+        <a class="btn btn-booking" href="{{ item.booking_url }}" target="_blank" rel="noopener noreferrer">Booking.com</a>
+      {% endif %}
+    </div>
+  </div>
+  {% empty %}
+  <p>No municipal or pilgrim albergues registered here.</p>
+  {% endfor %}
+</div>
+
+<h3>Private B&Bs & Hotels ({{ private_accomm|length }})</h3>
+<div class="grid">
+  {% for item in private_accomm %}
+  <div class="card">
+    <h4>{{ item.name }}</h4>
+    <p><small>{{ item.address|default:"" }}</small></p>
+    
+    <p>
+      {% if item.rate_1p_min %}<strong>Single:</strong> from €{{ item.rate_1p_min }}<br>{% endif %}
+      {% if item.rate_2p_min %}<strong>Double:</strong> from €{{ item.rate_2p_min }}<br>{% endif %}
+      {% if item.rate_notes %}<small>{{ item.rate_notes }}</small>{% endif %}
+    </p>
+
+    <!-- Action & Contact Links -->
+    <div>
+      {% if item.phone %}
+        <a class="btn btn-phone" href="tel:{{ item.phone }}">📞 Call</a>
+      {% endif %}
+
+      {% if item.whatsapp %}
+        <a class="btn btn-wa" href="https://wa.me/{{ item.whatsapp }}" target="_blank" rel="noopener noreferrer">💬 WhatsApp</a>
+      {% endif %}
+
+      {% if item.email and item.email != "NULL" %}
+        <a class="btn btn-email" href="mailto:{{ item.email }}">✉️ Email</a>
+      {% endif %}
+
+      {% if item.website_url and item.website_url != "no website available" and item.website_url != "NULL" %}
+        <a class="btn btn-web" href="{{ item.website_url }}" target="_blank" rel="noopener noreferrer">🌐 Website</a>
+      {% endif %}
+
+      {% if item.booking_url and item.booking_url != "not on Booking" and item.booking_url != "NULL" %}
+        <a class="btn btn-booking" href="{{ item.booking_url }}" target="_blank" rel="noopener noreferrer">Booking.com</a>
+      {% endif %}
+    </div>
+  </div>
+  {% empty %}
+  <p>No private rooms or hotels listed for this stop.</p>
+  {% endfor %}
+</div>
+{% endblock %}

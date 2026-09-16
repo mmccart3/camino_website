@@ -1,0 +1,49 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+venv/
+env/
+ENV/
+.env
+.venv
+
+# Django runtime generated static files
+# (Collected by Railway via 'collectstatic' in the Procfile)
+staticfiles/
+
+# SQLite Databases
+# Exclude standard local development databases...
+*.sqlite3
+*.db
+db.sqlite3
+
+# ...BUT explicitly force-track your Camino database
+!camino.sqlite
+
+# Media uploads (if any are stored locally)
+media/
+
+# Environment variable files containing secrets
+.env
+.env.*
+!.env.example
+
+# IDEs and Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Logs and debug files
+*.log
+
+# Pytest / coverage test runners (if added later)
+.coverage
+htmlcov/
+.pytest_cache/

@@ -1,0 +1,49 @@
+{% extends 'camino/base.html' %}
+{% block content %}
+<h2>Camino Stages & Route Options</h2>
+
+{% for group in stage_groups %}
+  <div class="stage-section {% if group.has_alternate %}has-options{% endif %}">
+    <div class="stage-section-header">
+      <span class="stage-index">Stage {{ forloop.counter }}</span>
+      {% if group.has_alternate %}
+        <span class="badge variant-badge">Route Choice Available</span>
+      {% endif %}
+    </div>
+
+    <div class="stage-row">
+      <!-- Main Route Card -->
+      <div class="card stage-card main-route">
+        <div class="route-type-label">Main Route</div>
+        <h3>
+          <a href="{% url 'stage_detail' group.primary.id %}">
+            {{ group.primary.stage_name }}
+          </a>
+        </h3>
+        <p>
+          <strong>Distance:</strong> {{ group.primary.distance_km }} km<br>
+          <strong>Est. Time:</strong> ~{{ group.primary.time_minutes }} mins
+        </p>
+        <a href="{% url 'stage_detail' group.primary.id %}" class="btn btn-booking">View Map & Stays</a>
+      </div>
+
+      <!-- Paired Alternate Route Cards -->
+      {% for alt in group.alternates %}
+      <div class="card stage-card alt-route">
+        <div class="route-type-label alt-label">Alternate Option</div>
+        <h3>
+          <a href="{% url 'stage_detail' alt.id %}">
+            {{ alt.stage_name }}
+          </a>
+        </h3>
+        <p>
+          <strong>Distance:</strong> {{ alt.distance_km }} km<br>
+          <strong>Est. Time:</strong> ~{{ alt.time_minutes }} mins
+        </p>
+        <a href="{% url 'stage_detail' alt.id %}" class="btn btn-booking">View Map & Stays</a>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+{% endfor %}
+{% endblock %}

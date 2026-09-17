@@ -7,76 +7,102 @@ def get_stage_groups():
     if not all_stages:
         return []
 
-    # Map each stage ID to all stages that follow it (primary or alternate)
-    children_map = {}
-    for stage in all_stages.values():
-        priors = [p for p in (stage.prior_stage, stage.alt_prior_stage) if p]
-        for p in priors:
-            children_map.setdefault(p, []).append(stage.id)
+    # 1. Map stages strictly by shared prior_stage and shared next_stage
+    prior_groups = {}
+    next_groups = {}
 
-    # Locate route start stage (no prior stage, or priorStage is 0 / not in DB)
-    start_stage = None
-    for stage in all_stages.values():
-        if not stage.prior_stage or stage.prior_stage == 0 or stage.prior_stage not in all_stages:
-            start_stage = stage
-            break
+    for s in all_stages.values():
+        # Treat None, 0, or missing IDs as the common start marker (e.g., Stage 1 & 43)
+        prior_key = s.prior_stage if (s.prior_stage and s.prior_stage in all_stages) else 0
+        prior_groups.setdefault(prior_key, []).append(s.id)
 
-    if not start_stage:
-        start_stage = min(all_stages.values(), key=lambda s: s.id)
+        # Treat valid next_stage pointers
+        if s.next_stage and s.next_stage in all_stages:
+            next_groups.setdefault(s.next_stage, []).append(s.id)
+
+    # 2. Build direct alternate links strictly matching your criteria
+    alternate_links = {s_id: set() for s_id in all_stages}
+
+    for s_ids in prior_groups.values():
+        if len(s_ids) > 1:
+            for i in s_ids:
+                for j in s_ids:
+                    if i != j:
+                        alternate_links[i].add(j)
+
+    for s_ids in next_groups.values():
+        if len(s_ids) > 1:
+            for i in s_ids:
+                for j in s_ids:
+                    if i != j:
+                        alternate_links[i].add(j)
+
+    # Helper function to gather all connected alternates in a cluster
+    def get_cluster(stage_id, visited_set):
+        cluster = [all_stages[stage_id]]
+        visited_set.add(stage_id)
+        for neighbor_id in sorted(alternate_links[stage_id]):
+            if neighbor_id not in visited_set:
+                cluster.extend(get_cluster(neighbor_id, visited_set))
+        return cluster
+
+    # 3. Locate the initial stage (prior_stage is None, 0, or not in table)
+    start_candidates = prior_groups.get(0, [])
+    if start_candidates:
+        start_id = min(start_candidates)
+    else:
+        start_id = min(all_stages.keys())
 
     grouped_stages = []
     visited = set()
-    current_id = start_stage.id
+    current_stage = all_stages[start_id]
 
-    while current_id and current_id in all_stages and current_id not in visited:
-        current_stage = all_stages[current_id]
-        visited.add(current_stage.id)
+    # 4. Traverse sequentially along the route
+    while current_stage and current_stage.id not in visited:
+        cluster = get_cluster(current_stage.id, visited)
 
-        # Collect alternates paired with this stage (via explicit links or shared priorStage)
-        alternates = []
-        
-        # 1. Check if an alternate stage branches off here directly
-        if current_stage.alt_next_stage and current_stage.alt_next_stage in all_stages:
-            alt = all_stages[current_stage.alt_next_stage]
-            if alt.id not in visited:
-                alternates.append(alt)
-                visited.add(alt.id)
+        # Main route comes first (routes without 'via', 'option', or 'valcarlos' rank first)
+        def sort_key(s):
+            name_lower = s.stage_name.lower()
+            is_alt = 1 if ('via' in name_lower or 'option' in name_lower or 'valcarlos' in name_lower) else 0
+            return (is_alt, s.id)
 
-        # 2. Check sibling stages that share the same priorStage
-        if current_stage.prior_stage:
-            siblings = children_map.get(current_stage.prior_stage, [])
-            for sib_id in siblings:
-                if sib_id != current_stage.id and sib_id not in visited:
-                    sib = all_stages[sib_id]
-                    alternates.append(sib)
-                    visited.add(sib.id)
+        cluster.sort(key=sort_key)
+        primary = cluster[0]
+        alternates = cluster[1:]
 
-        # Append as a grouped bundle
         grouped_stages.append({
-            'primary': current_stage,
+            'primary': primary,
             'alternates': alternates,
             'has_alternate': len(alternates) > 0
         })
 
-        # Advance along the primary mainline
-        next_id = current_stage.next_stage
-        
-        # Fallback to the next unvisited sequential child if next_stage is missing
-        if not next_id or next_id in visited:
-            remaining_children = [cid for cid in children_map.get(current_stage.id, []) if cid not in visited]
-            next_id = remaining_children[0] if remaining_children else None
+        # Advance to the next stage using the next_stage pointer
+        candidate_next = None
+        for member in cluster:
+            if member.next_stage and member.next_stage in all_stages and member.next_stage not in visited:
+                candidate_next = all_stages[member.next_stage]
+                break
 
-        current_id = next_id
+        # If next_stage is unavailable or already visited, check stages that have this cluster as prior_stage
+        if not candidate_next:
+            for member in cluster:
+                children = [all_stages[cid] for cid in prior_groups.get(member.id, []) if cid not in visited]
+                if children:
+                    candidate_next = min(children, key=lambda s: s.id)
+                    break
 
-    # Append any remaining unlinked stages (if any exist)
-    for s in all_stages.values():
-        if s.id not in visited:
+        current_stage = candidate_next
+
+    # 5. Append any remaining unlinked stages (if any exist)
+    for s_id in sorted(all_stages.keys()):
+        if s_id not in visited:
+            cluster = get_cluster(s_id, visited)
             grouped_stages.append({
-                'primary': s,
-                'alternates': [],
-                'has_alternate': False
+                'primary': cluster[0],
+                'alternates': cluster[1:],
+                'has_alternate': len(cluster) > 1
             })
-            visited.add(s.id)
 
     return grouped_stages
 

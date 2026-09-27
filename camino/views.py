@@ -132,11 +132,26 @@ def location_detail(request, location_id):
     next_location = None
     if location.next_loc and location.next_loc != 0:
         next_location = Location.objects.filter(pk=location.next_loc).first()
+        
+# Find the stage associated with this location without using select_related('stage')
+    parent_stage = None
+    coord_entry = MapLocationCoord.objects.filter(location_id=location_id).first()
+    
+    if coord_entry:
+        # Check either stage_id or whatever attribute holds the stage integer on the model
+        stage_num = getattr(coord_entry, 'stage_id', None) or getattr(coord_entry, 'stage', None)
+        
+        # If it's already a Stage model instance, use it; otherwise fetch the Stage record
+        if isinstance(stage_num, Stage):
+            parent_stage = stage_num
+        elif stage_num:
+            parent_stage = Stage.objects.filter(pk=stage_num).first()
 
     context = {
-        'location': location,
+'location': location,
         'prior_location': prior_location,
         'next_location': next_location,
+        'parent_stage': parent_stage,
         'albergues': albergues,
         'private_accomm': private_accomm,
         'paragraphs': paragraphs,

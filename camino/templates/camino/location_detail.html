@@ -4,31 +4,37 @@
 
 <!-- Top Trail Navigation Bar -->
 <div class="location-nav">
-  {% if prior_location %}
-  <a
-    href="{% url 'location_detail' prior_location.id %}"
-    class="btn-nav btn-prior"
-  >
-    ← {{ prior_location.location_name }}
-  </a>
-  {% else %}
-  <span class="btn-nav btn-disabled">← Route Start</span>
-  {% endif %}
+  <div>
+    {% if prior_location %}
+      <a href="{% url 'location_detail' prior_location.id %}" class="btn-nav btn-prior">
+        ← {{ prior_location.location_name }}
+      </a>
+    {% else %}
+      <span class="btn-nav btn-disabled">← Route Start</span>
+    {% endif %}
+  </div>
 
-  <a href="{% url 'stage_list' %}" class="btn-nav btn-all-stages">All Stages</a>
+  <div class="nav-center-buttons">
+    {% if parent_stage %}
+      <a href="{% url 'stage_detail' parent_stage.id %}" class="btn-nav btn-stage">
+        🗺️ Back to Stage {{ parent_stage.id }}
+      </a>
+    {% endif %}
+    <a href="{% url 'stage_list' %}" class="btn-nav btn-all-stages">All Stages</a>
+  </div>
 
-  {% if next_location %}
-  <a
-    href="{% url 'location_detail' next_location.id %}"
-    class="btn-nav btn-next"
-  >
-    {{ next_location.location_name }} →
-  </a>
-  {% else %}
-  <span class="btn-nav btn-disabled">Route Finish (Santiago) →</span>
-  {% endif %}
+  <div>
+    {% if next_location %}
+      <a href="{% url 'location_detail' next_location.id %}" class="btn-nav btn-next">
+        {{ next_location.location_name }} →
+      </a>
+    {% else %}
+      <span class="btn-nav btn-disabled">Route Finish (Santiago) →</span>
+    {% endif %}
+  </div>
 </div>
 
+<!-- Location Title -->
 <h2>{{ location.location_name }}</h2>
 
 {% if paragraphs %}
@@ -126,9 +132,11 @@
         rel="noopener noreferrer"
         >💬 WhatsApp</a
       >
-      {% endif %} {% if item.email and item.email != "NULL" %}
+      {% endif %}
+      {% if item.email and item.email != "NULL" %}
       <a class="btn btn-email" href="mailto:{{ item.email }}">✉️ Email</a>
-      {% endif %} {% if item.website_url and item.website_url != "no website available" and item.website_url != "NULL" %}
+      {% endif %}
+      {% if item.website_url and item.website_url != "no website available" and item.website_url != "NULL" %}
       <a
         class="btn btn-web"
         href="{{ item.website_url }}"
@@ -153,31 +161,36 @@
   {% endfor %}
 </div>
 
-<!-- Bottom Navigation Bar for easy tapping after scrolling through accommodations -->
-<div class="location-nav" style="margin-top: 2rem; margin-bottom: 2rem">
-  {% if prior_location %}
-  <a
-    href="{% url 'location_detail' prior_location.id %}"
-    class="btn-nav btn-prior"
-  >
-    ← {{ prior_location.location_name }}
-  </a>
-  {% else %}
-  <span class="btn-nav btn-disabled">← Route Start</span>
-  {% endif %}
+<!-- Bottom Navigation Bar -->
+<div class="location-nav" style="margin-top: 2.5rem; margin-bottom: 2rem;">
+  <div>
+    {% if prior_location %}
+      <a href="{% url 'location_detail' prior_location.id %}" class="btn-nav btn-prior">
+        ← {{ prior_location.location_name }}
+      </a>
+    {% else %}
+      <span class="btn-nav btn-disabled">← Route Start</span>
+    {% endif %}
+  </div>
 
-  <a href="{% url 'stage_list' %}" class="btn-nav btn-all-stages">All Stages</a>
+  <div class="nav-center-buttons">
+    {% if parent_stage %}
+      <a href="{% url 'stage_detail' parent_stage.id %}" class="btn-nav btn-stage">
+        🗺️ Back to Stage {{ parent_stage.id }}
+      </a>
+    {% endif %}
+    <a href="{% url 'stage_list' %}" class="btn-nav btn-all-stages">All Stages</a>
+  </div>
 
-  {% if next_location %}
-  <a
-    href="{% url 'location_detail' next_location.id %}"
-    class="btn-nav btn-next"
-  >
-    {{ next_location.location_name }} →
-  </a>
-  {% else %}
-  <span class="btn-nav btn-disabled">Route Finish (Santiago) →</span>
-  {% endif %}
+  <div>
+    {% if next_location %}
+      <a href="{% url 'location_detail' next_location.id %}" class="btn-nav btn-next">
+        {{ next_location.location_name }} →
+      </a>
+    {% else %}
+      <span class="btn-nav btn-disabled">Route Finish (Santiago) →</span>
+    {% endif %}
+  </div>
 </div>
 
 {% endblock %}

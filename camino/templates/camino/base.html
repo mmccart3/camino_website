@@ -1,108 +1,297 @@
-<!DOCTYPE html>
+{% load static %}
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Camino de Santiago Accommodations</title>
-  <style>
-    :root {
-      --gold: #d97706;
-      --gold-light: #fef3c7;
-      --navy: #1e3a8a;
-      --bg: #f8fafc;
-      --surface: #ffffff;
-      --border: #e2e8f0;
-      --text: #1e293b;
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Camino de Santiago Accommodations</title>
+
+    <!-- Favicon & Mobile Touch Icons -->
+<link rel="icon" type="image/jpeg" href="{% static 'camino/img/app_icon.jpg' %}?v=2">
+<link rel="shortcut icon" type="image/jpeg" href="{% static 'camino/img/app_icon.jpg' %}?v=2">
+<link rel="apple-touch-icon" href="{% static 'camino/img/app_icon.jpg' %}">
+
+    <style>
+@font-face {
+      font-family: 'Fiesta';
+      /* Adjust the extension and format depending on your actual file: .woff2, .woff, or .ttf */
+      src: url("{% static 'camino/fonts/Fiesta.ttf' %}") format('truetype');
+      font-weight: normal;
+      font-style: normal;
+      font-display: swap;
     }
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 0; line-height: 1.5; }
-    header { background: var(--navy); color: white; padding: 1rem 1.5rem; display: flex; justify-content: space-between; align-items: center; }
-    header a { color: white; text-decoration: none; font-weight: bold; }
-    main { max-width: 1040px; margin: 1.5rem auto; padding: 0 1rem; }
-    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.25rem; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
-    .badge { display: inline-block; padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.8rem; font-weight: 600; margin-right: 0.4rem; background: var(--gold-light); color: var(--gold); }
-    .btn { display: inline-block; padding: 0.4rem 0.8rem; border-radius: 4px; text-decoration: none; font-size: 0.85rem; font-weight: 600; margin-right: 0.4rem; margin-top: 0.4rem; }
-    .btn-booking { background: #003580; color: white; }
-    .btn-wa { background: #25d366; color: white; }
-    .btn-phone { background: #334155; color: white; }
-    .map-box { position: relative; width: 100%; border-radius: 8px; overflow: hidden; background: #e2e8f0; }
-    .map-box img { width: 100%; height: auto; display: block; }
-    .hotspot { fill: rgba(217, 119, 6, 0.25); stroke: var(--gold); stroke-width: 2; transition: fill 0.15s; cursor: pointer; }
-    .hotspot:hover { fill: rgba(217, 119, 6, 0.7); }
-    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; }
-    .btn-email { 
-  background: #0284c7; 
-  color: white; 
-}
-.btn-web { 
-  background: #475569; 
-  color: white; 
-}
-.card.alt-route {
-  border-left: 4px solid var(--gold);
-  background-color: #fffdfa;
-}
-.stage-section {
-  margin-bottom: 2rem;
-  background: transparent;
-}
-.stage-section.has-options {
-  background: #f1f5f9;
-  padding: 1rem;
-  border-radius: 10px;
-  border: 1px solid #cbd5e1;
-}
-.stage-section-header {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 0.75rem;
-}
-.stage-index {
-  font-weight: 700;
-  font-size: 1.1rem;
-  color: var(--navy);
-}
-.variant-badge {
-  background: #dbeafe;
-  color: #1e40af;
-}
-.stage-row {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 1rem;
-}
-.stage-card {
-  margin-bottom: 0;
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-}
-.main-route {
-  border-left: 5px solid var(--navy);
-}
-.alt-route {
-  border-left: 5px solid var(--gold);
-  background: #fffdf7;
-}
-.route-type-label {
-  font-size: 0.75rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  color: #64748b;
-  margin-bottom: 0.25rem;
-}
-.alt-label {
-  color: var(--gold);
-}
-  </style>
-</head>
-<body>
+
+      :root {
+        --gold: #d97706;
+        --gold-light: #fef3c7;
+        --navy: #1e3a8a;
+        --bg: #f8fafc;
+        --surface: #ffffff;
+        --border: #e2e8f0;
+        --text: #1e293b;
+      }
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        margin: 0;
+        padding: 0;
+        line-height: 1.5;
+      }
+      {% comment %} header {
+        background: var(--navy);
+        color: white;
+        padding: 1rem 1.5rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      } {% endcomment %}
+      header { 
+      background: var(--navy); 
+      color: white; 
+      padding: 0.75rem 1.5rem; 
+      display: flex; 
+      justify-content: space-between; 
+      align-items: center; 
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+      header a {
+        color: white;
+        text-decoration: none;
+        font-weight: bold;
+      }
+      .brand-container {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      text-decoration: none;
+      color: white;
+    }
+    .brand-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 8px;
+      object-fit: cover;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    }
+    .brand-text {
+      display: flex;
+      flex-direction: column;
+    }
+.brand-title {
+      font-family: 'Fiesta', cursive, sans-serif;
+      font-size: 1.6rem;
+      /* Display fonts usually need a slight bump in size */
+      letter-spacing: 0.03em;
+      line-height: 1.1;
+      color: #ffffff;
+      text-transform: uppercase;
+       /* Use if Fiesta is an all-caps or titling font */
+    }
+    .brand-subtitle {
+      font-size: 0.75rem;
+      color: var(--gold);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+      main {
+        max-width: 1040px;
+        margin: 1.5rem auto;
+        padding: 0 1rem;
+      }
+      .card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 1.25rem;
+        margin-bottom: 1.25rem;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+      }
+      .badge {
+        display: inline-block;
+        padding: 0.2rem 0.6rem;
+        border-radius: 4px;
+        font-size: 0.8rem;
+        font-weight: 600;
+        margin-right: 0.4rem;
+        background: var(--gold-light);
+        color: var(--gold);
+      }
+      .btn {
+        display: inline-block;
+        padding: 0.4rem 0.8rem;
+        border-radius: 4px;
+        text-decoration: none;
+        font-size: 0.85rem;
+        font-weight: 600;
+        margin-right: 0.4rem;
+        margin-top: 0.4rem;
+      }
+      .btn-booking {
+        background: #003580;
+        color: white;
+      }
+      .btn-wa {
+        background: #25d366;
+        color: white;
+      }
+      .btn-phone {
+        background: #334155;
+        color: white;
+      }
+      .btn-email {
+        background: #0284c7;
+        color: white;
+      }
+      .btn-web {
+        background: #475569;
+        color: white;
+      }
+      .hotspot {
+        fill: rgba(217, 119, 6, 0.25);
+        stroke: var(--gold);
+        stroke-width: 2;
+        transition: fill 0.15s;
+        cursor: pointer;
+      }
+      .hotspot:hover {
+        fill: rgba(217, 119, 6, 0.7);
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 1rem;
+      }
+
+      /* Trail Location Navigation Styles */
+      .location-nav {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 0.5rem;
+        margin-bottom: 1rem;
+        flex-wrap: wrap;
+      }
+      .btn-nav {
+        padding: 0.5rem 0.9rem;
+        border-radius: 6px;
+        text-decoration: none;
+        font-size: 0.9rem;
+        font-weight: 600;
+        display: inline-block;
+        border: 1px solid var(--border);
+        background: var(--surface);
+        color: var(--navy);
+      }
+      .btn-nav:hover {
+        background: #f1f5f9;
+        border-color: #cbd5e1;
+      }
+      .btn-all-stages {
+        background: transparent;
+        border: none;
+        color: #64748b;
+      }
+      .btn-disabled {
+        color: #94a3b8;
+        border-color: transparent;
+        background: transparent;
+        cursor: default;
+      }
+      .card.alt-route {
+        border-left: 4px solid var(--gold);
+        background-color: #fffdfa;
+      }
+      .stage-section {
+        margin-bottom: 2rem;
+        background: transparent;
+      }
+      .stage-section.has-options {
+        background: #f1f5f9;
+        padding: 1rem;
+        border-radius: 10px;
+        border: 1px solid #cbd5e1;
+      }
+      .stage-section-header {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        margin-bottom: 0.75rem;
+      }
+      .stage-index {
+        font-weight: 700;
+        font-size: 1.1rem;
+        color: var(--navy);
+      }
+      .variant-badge {
+        background: #dbeafe;
+        color: #1e40af;
+      }
+      .stage-row {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 1rem;
+      }
+      .stage-card {
+        margin-bottom: 0;
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+      }
+      .main-route {
+        border-left: 5px solid var(--navy);
+      }
+      .alt-route {
+        border-left: 5px solid var(--gold);
+        background: #fffdf7;
+      }
+      .route-type-label {
+        font-size: 0.75rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        color: #64748b;
+        margin-bottom: 0.25rem;
+      }
+      .alt-label {
+        color: var(--gold);
+      }
+      footer {
+        text-align: center;
+        padding: 2rem 1rem;
+        color: #64748b;
+        font-size: 0.85rem;
+        border-top: 1px solid var(--border);
+        margin-top: 3rem;
+      }
+    </style>
+  </head>
+  <body>
   <header>
-    <a href="{% url 'stage_list' %}">🚶 Camino Accommodation Guide</a>
+    <a href="{% url 'stage_list' %}" class="brand-container">
+      <img src="{% static 'camino/img/app_icon.jpg' %}" alt="Saint Jean to Santiago Icon" class="brand-icon">
+      <div class="brand-text">
+        <span class="brand-title">Saint Jean to Santiago</span>
+        <span class="brand-subtitle">Camino Accommodation Guide</span>
+      </div>
+    </a>
+    <span style="font-size: 0.8rem; background: rgba(255,255,255,0.15); padding: 0.2rem 0.5rem; border-radius: 4px;">{{ APP_VERSION }}</span>
   </header>
+  
   <main>
     {% block content %}{% endblock %}
   </main>
+  
+  <footer>
+    <p>Saint Jean to Santiago &bull; Camino Lodging Directory &bull; {{ APP_VERSION }}</p>
+  </footer>
 </body>
+  {% comment %} <body>
+    <header>
+      <a href="{% url 'stage_list' %}">🚶 Camino Accommodation Guide</a>
+    </header>
+    <main>{% block content %}{% endblock %}</main>
+  </body> {% endcomment %}
 </html>

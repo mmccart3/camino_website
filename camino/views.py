@@ -116,14 +116,27 @@ def stage_detail(request, stage_id):
     hotspots = MapLocationCoord.objects.filter(stage_id=stage_id).select_related('location')
     return render(request, 'camino/stage_detail.html', {'stage': stage, 'hotspots': hotspots})
 
+# camino/views.py
+
 def location_detail(request, location_id):
     location = get_object_or_404(Location, pk=location_id)
     albergues = location.albergues.all()
     private_accomm = location.private_accomm.all()
     paragraphs = location.paragraphs.all()
     
+    # Retrieve linked prior and next location objects
+    prior_location = None
+    if location.prior_loc and location.prior_loc != 0:
+        prior_location = Location.objects.filter(pk=location.prior_loc).first()
+
+    next_location = None
+    if location.next_loc and location.next_loc != 0:
+        next_location = Location.objects.filter(pk=location.next_loc).first()
+
     context = {
         'location': location,
+        'prior_location': prior_location,
+        'next_location': next_location,
         'albergues': albergues,
         'private_accomm': private_accomm,
         'paragraphs': paragraphs,

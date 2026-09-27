@@ -113,8 +113,40 @@ def stage_list(request):
 
 def stage_detail(request, stage_id):
     stage = get_object_or_404(Stage, pk=stage_id)
-    hotspots = MapLocationCoord.objects.filter(stage_id=stage_id).select_related('location')
-    return render(request, 'camino/stage_detail.html', {'stage': stage, 'hotspots': hotspots})
+    
+    # Retrieve hotspots with valid location IDs
+    hotspots = (
+        MapLocationCoord.objects.filter(stage_id=stage_id)
+        .exclude(location__isnull=True)
+    )
+
+    # 1. Previous Stages
+    prior_stage = None
+    if stage.prior_stage and stage.prior_stage != 0:
+        prior_stage = Stage.objects.filter(pk=stage.prior_stage).first()
+
+    alt_prior_stage = None
+    if stage.alt_prior_stage and stage.alt_prior_stage != 0:
+        alt_prior_stage = Stage.objects.filter(pk=stage.alt_prior_stage).first()
+
+    # 2. Next Stages
+    next_stage = None
+    if stage.next_stage and stage.next_stage != 0:
+        next_stage = Stage.objects.filter(pk=stage.next_stage).first()
+
+    alt_next_stage = None
+    if stage.alt_next_stage and stage.alt_next_stage != 0:
+        alt_next_stage = Stage.objects.filter(pk=stage.alt_next_stage).first()
+
+    context = {
+        'stage': stage,
+        'hotspots': hotspots,
+        'prior_stage': prior_stage,
+        'alt_prior_stage': alt_prior_stage,
+        'next_stage': next_stage,
+        'alt_next_stage': alt_next_stage,
+    }
+    return render(request, 'camino/stage_detail.html', context)
 
 # camino/views.py
 

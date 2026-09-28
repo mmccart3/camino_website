@@ -39,63 +39,72 @@
         padding: 0;
         line-height: 1.5;
       }
-      {% comment %} header {
-        background: var(--navy);
-        color: white;
-        padding: 1rem 1.5rem;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-      } {% endcomment %}
       header { 
-      background: var(--navy); 
-      color: white; 
-      padding: 0.75rem 1.5rem; 
-      display: flex; 
-      justify-content: space-between; 
-      align-items: center; 
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    }
+        background: var(--navy); 
+        color: white; 
+        padding: 0.75rem 1.5rem; 
+        display: grid;
+        grid-template-columns: 1fr auto 1fr; /* 3-column grid locks the center element in the exact middle */
+        align-items: center; 
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      }
       header a {
         color: white;
         text-decoration: none;
         font-weight: bold;
       }
+      h2 {
+        text-align: center;
+        margin-top: 1rem;
+        margin-bottom: 0.75rem;
+      }
       .brand-container {
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
-      text-decoration: none;
-      color: white;
-    }
-    .brand-icon {
-      width: 44px;
-      height: 44px;
-      border-radius: 8px;
-      object-fit: cover;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.3);
-    }
-    .brand-text {
-      display: flex;
-      flex-direction: column;
-    }
-.brand-title {
-      font-family: 'Fiesta', cursive, sans-serif;
-      font-size: 1.6rem;
-      /* Display fonts usually need a slight bump in size */
-      letter-spacing: 0.03em;
-      line-height: 1.1;
-      color: #ffffff;
-      text-transform: uppercase;
-       /* Use if Fiesta is an all-caps or titling font */
-    }
-    .brand-subtitle {
-      font-size: 0.75rem;
-      color: var(--gold);
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-    }
+        grid-column: 2; /* Forces the brand logo + text into the center column */
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.75rem;
+        text-decoration: none;
+        color: white;
+        text-align: center;
+      }
+      .brand-icon {
+        width: 44px;
+        height: 44px;
+        border-radius: 8px;
+        object-fit: cover;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+      }
+      .brand-text {
+        display: flex;
+        flex-direction: column;
+        align-items: center; /* Centers the subtitle under the main title */
+      }
+      .brand-title {
+        font-family: 'Fiesta', cursive, sans-serif;
+        font-size: 1.6rem;
+        letter-spacing: 0.03em;
+        line-height: 1.1;
+        color: #ffffff;
+        text-transform: uppercase;
+      }
+      .brand-subtitle {
+        font-size: 0.75rem;
+        color: var(--gold);
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        text-align: center;
+      }
+      /* Keep the version pill aligned neatly on the right */
+      .header-version {
+        grid-column: 3;
+        justify-self: end;
+        font-size: 0.8rem;
+        background: rgba(255, 255, 255, 0.15);
+        padding: 0.2rem 0.5rem;
+        border-radius: 4px;
+      }
       main {
         max-width: 1040px;
         margin: 1.5rem auto;
@@ -332,6 +341,10 @@
   </head>
   <body>
   <header>
+    <!-- Empty placeholder for column 1 to keep column 2 centered -->
+    <div></div>
+
+    <!-- Centered Brand -->
     <a href="{% url 'stage_list' %}" class="brand-container">
       <img src="{% static 'camino/img/app_icon.jpg' %}" alt="Saint Jean to Santiago Icon" class="brand-icon">
       <div class="brand-text">
@@ -339,7 +352,8 @@
         <span class="brand-subtitle">Camino Accommodation Guide</span>
       </div>
     </a>
-    <span style="font-size: 0.8rem; background: rgba(255,255,255,0.15); padding: 0.2rem 0.5rem; border-radius: 4px;">{{ APP_VERSION }}</span>
+  <!-- Right-aligned Version Tag -->
+  <span class="header-version">{{ APP_VERSION }}</span>
   </header>
   
   <main>

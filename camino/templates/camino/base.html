@@ -329,14 +329,37 @@
       .alt-label {
         color: var(--gold);
       }
-      footer {
-        text-align: center;
-        padding: 2rem 1rem;
-        color: #64748b;
-        font-size: 0.85rem;
-        border-top: 1px solid var(--border);
-        margin-top: 3rem;
-      }
+/* Footer & Disclaimer Styling */
+    footer { 
+      text-align: center; 
+      padding: 2.5rem 1rem; 
+      color: #64748b; 
+      font-size: 0.85rem; 
+      border-top: 1px solid var(--border); 
+      margin-top: 3.5rem; 
+      background: #f1f5f9;
+    }
+
+    .footer-content {
+      max-width: 800px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .footer-brand {
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .disclaimer-box {
+      font-size: 0.78rem;
+      line-height: 1.45;
+      color: #64748b;
+      border-top: 1px dashed var(--border);
+      padding-top: 0.75rem;
+    }
     </style>
   </head>
   <body>
@@ -361,7 +384,20 @@
   </main>
   
   <footer>
-    <p>Saint Jean to Santiago &bull; Camino Lodging Directory &bull; {{ APP_VERSION }}</p>
+    <div class="footer-content">
+      <div class="footer-brand">
+        Saint Jean to Santiago &bull; Camino Accommodation Guide &bull; {{ APP_VERSION }}
+      </div>
+      
+      <div class="disclaimer-box">
+        <p style="margin: 0 0 0.4rem 0;">
+          <strong>Affiliate Disclosure:</strong> Some lodging links on this guide are affiliate links through Booking.com. If you book an accommodation through these links, we may earn a small referral commission at no additional cost to you, which helps support maintenance of this guide.
+        </p>
+        <p style="margin: 0;">
+          <strong>Privacy &amp; Cookies:</strong> This website only uses strictly necessary functional cookies required for core site operation and security. We do not track or profile personal browsing behavior.
+        </p>
+      </div>
+    </div>
   </footer>
 </body>
   {% comment %} <body>

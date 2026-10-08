@@ -1,5 +1,76 @@
+# camino/models.py
 from django.db import models
 
+class Path(models.Model):
+    path_id = models.IntegerField(db_column='pathID', primary_key=True)
+    stage_id = models.IntegerField(db_column='stageID')
+    origin_loc = models.IntegerField(db_column='originLoc')
+    destination_loc = models.IntegerField(db_column='destinationLoc')
+    distance_metres = models.IntegerField(db_column='distance_metres', null=True, blank=True)
+    time_seconds = models.IntegerField(db_column='time_seconds', null=True, blank=True)
+
+    class Meta:
+        managed = False
+        db_table = 'paths'
+
+
+class ElevationPoint(models.Model):
+    # Django requires a surrogate primary key column; use path_id or an explicit composite id
+    path = models.ForeignKey(Path, db_column='pathID', on_delete=models.DO_NOTHING, primary_key=True)
+    sequence = models.IntegerField()
+    distance_along_path_metres = models.FloatField(db_column='distanceAlongPathMetres')
+    elevation_metres = models.FloatField(db_column='elevationMetres')
+    latitude = models.FloatField()
+    longitude = models.FloatField()
+    source_sequence = models.IntegerField(db_column='sourceSequence')
+    distance_basis = models.TextField(db_column='distanceBasis')
+    source_sha256 = models.TextField(db_column='sourceSHA256')
+
+    class Meta:
+        managed = False
+        db_table = 'elevation_points'
+        unique_together = (('path', 'sequence'),)
+
+
+class LocationFacility(models.Model):
+    location_id = models.IntegerField(db_column='locationID', primary_key=True)
+    category = models.TextField()
+    osm_type = models.TextField(db_column='osmType')
+    osm_id = models.BigIntegerField(db_column='osmID')
+    name = models.TextField(null=True, blank=True)
+    latitude = models.FloatField(null=True, blank=True)
+    longitude = models.FloatField(null=True, blank=True)
+    distance_metres = models.FloatField(db_column='distanceMetres', null=True, blank=True)
+    source_url = models.TextField(db_column='sourceURL', null=True, blank=True)
+    retrieved_at = models.TextField(db_column='retrievedAt', null=True, blank=True)
+    tags_json = models.TextField(db_column='tagsJSON', null=True, blank=True)
+    decision = models.TextField(null=True, blank=True)
+    review_note = models.TextField(db_column='reviewNote', null=True, blank=True)
+
+    class Meta:
+        managed = False
+        db_table = 'locationFacilities'
+        unique_together = (('location_id', 'category', 'osm_type', 'osm_id'),)
+
+
+class TrackPoint(models.Model):
+    track_point_id = models.BigIntegerField(primary_key=True, db_column='track_point_id')
+    path_id = models.IntegerField(db_column='pathID')
+    latitude = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True)
+    longitude = models.DecimalField(max_digits=11, decimal_places=7, null=True, blank=True)
+    elevation = models.DecimalField(max_digits=7, decimal_places=2, null=True, blank=True)
+    previous_track_point_id = models.BigIntegerField(null=True, blank=True)
+    distance_3d_meters = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    slope_angle_degrees = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    weighted_distance = models.DecimalField(max_digits=9, decimal_places=5, null=True, blank=True)
+    waypoint = models.SmallIntegerField(null=True, blank=True)
+    distance_3d = models.FloatField(db_column='3D-Distance', null=True, blank=True)
+    slope = models.FloatField(null=True, blank=True)
+
+    class Meta:
+        managed = False
+        db_table = 'track_points'
+        
 class Stage(models.Model):
     id = models.IntegerField(db_column='ID', primary_key=True) #
     stage_name = models.CharField(db_column='stageName', max_length=255) #[cite: 1]
@@ -31,6 +102,10 @@ class Location(models.Model):
     pic2_url = models.CharField(db_column='locationPic2URL', max_length=255, null=True)
     prior_loc = models.IntegerField(db_column='priorLoc', null=True)
     next_loc = models.IntegerField(db_column='nextLoc', null=True)
+    # Updated Location model attributes
+    has_bar_cafe = models.IntegerField(db_column='hasBarCafe', null=True, blank=True)
+    has_pharmacy = models.IntegerField(db_column='hasPharmacy', null=True, blank=True)
+    has_grocery_store = models.IntegerField(db_column='hasGroceryStore', null=True, blank=True)
 
     class Meta:
         managed = False

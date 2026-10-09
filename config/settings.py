@@ -18,8 +18,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Read secret key and debug status from environment
 SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-dev-fallback-key')
-# DEBUG = True
-DEBUG = os.environ.get('DEBUG', 'False') == 'True'
+DEBUG = True
+# DEBUG = os.environ.get('DEBUG', 'False') == 'True'
 
 ALLOWED_HOSTS = ['*']
 CSRF_TRUSTED_ORIGINS = [
@@ -141,9 +141,3 @@ MAILERS = {
     },
 }
 
-# In config/settings.py or environment
-CLOUDINARY_STORAGE = {
-    'CLOUD_NAME': 'dbylfmnac',  # extracted from your existing Cloudinary asset URLs
-    'API_KEY': 743239415514369,
-    'API_SECRET': 'X_WmpF9vITcdeUeMhGtY3QGRIn0',
-}

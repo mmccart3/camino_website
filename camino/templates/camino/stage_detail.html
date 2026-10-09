@@ -1,4 +1,5 @@
 {% extends 'camino/base.html' %}
+{% load static %}
 {% load camino_tags %}
 {% block content %}
 
@@ -47,6 +48,25 @@
   <strong>Est. Time:</strong> {{ stage.time_minutes|format_duration }}
 </p>
 
+<!-- Interactive Elevation Profile Card -->
+<div class="card elevation-card">
+  <div class="elevation-header">
+    <h3>Elevation Profile</h3>
+    <span class="elevation-hint">Touch or hover across the curve to inspect altitudes</span>
+  </div>
+
+  {% if has_elevation_data %}
+    <div class="chart-container">
+      <canvas id="elevationChart"></canvas>
+    </div>
+  {% elif stage.stageElevationChartURL %}
+    <!-- Fallback to static Cloudinary image if points aren't loaded yet -->
+    <img src="{{ stage.stageElevationChartURL }}" alt="Elevation Profile" style="width:100%; border-radius:6px;">
+  {% else %}
+    <p><small>Elevation data pending for this stage.</small></p>
+  {% endif %}
+</div>
+
 <!-- Interactive Map Container -->
 <div class="map-box" style="position: relative; width: 100%; display: block; overflow: hidden; border-radius: 8px; border: 1px solid var(--border);">
   <img id="stage-map-img" 
@@ -57,7 +77,7 @@
   <svg id="hotspot-svg" 
        style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none;"
        preserveAspectRatio="none">
-    {% for spot in hotspots %}
+{% for spot in hotspots %}
       {% if spot.x_1920 is not None and spot.w_1920 > 0 and spot.location_id %}
       <a href="{% url 'location_detail' spot.location_id %}" style="pointer-events: auto;">
         <rect x="{{ spot.x_1920 }}" 
@@ -66,7 +86,7 @@
               height="{{ spot.h_1920 }}" 
               class="hotspot" 
               rx="4">
-          <title>{{ spot.location.location_name }}</title>
+          <title>{% if spot.location %}{{ spot.location.location_name }}{% else %}Location {{ spot.location_id }}{% endif %}</title>
         </rect>
       </a>
       {% endif %}
@@ -146,4 +166,160 @@
     window.addEventListener('resize', syncOverlay);
   }
 </script>
+{% if has_elevation_data %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    const ctx = document.getElementById('elevationChart');
+    if (!ctx) return;
+
+    const dataPoints = {{ chart_points_json|safe }};
+    const waypoints = {{ waypoint_markers_json|safe }};
+
+    const elevations = dataPoints.map(p => p.y);
+    const minEle = Math.min(...elevations);
+    const maxEle = Math.max(...elevations);
+    const maxDist = dataPoints[dataPoints.length - 1].x;
+
+    const yMin = Math.max(0, Math.floor((minEle - 60) / 50) * 50);
+    const yMax = Math.ceil((maxEle + 90) / 50) * 50;
+
+    const waypointPlugin = {
+      id: 'waypointMarkers',
+      afterDraw(chart) {
+        const { ctx, chartArea: { top, bottom, left, right }, scales: { x, y } } = chart;
+        ctx.save();
+
+        waypoints.forEach((wp, i) => {
+          // Precise pixel location using the linear X scale
+          const xPos = x.getPixelForValue(wp.km);
+          const yPos = y.getPixelForValue(wp.elevation);
+
+          if (xPos >= left && xPos <= right) {
+            // 1. Dashed vertical drop line
+            ctx.beginPath();
+            ctx.setLineDash([3, 3]);
+            ctx.strokeStyle = 'rgba(100, 116, 139, 0.45)';
+            ctx.lineWidth = 1;
+            ctx.moveTo(xPos, top + 30); // leave space for staggered labels
+            ctx.lineTo(xPos, bottom);
+            ctx.stroke();
+
+            // 2. Waypoint node on the curve
+            ctx.setLineDash([]);
+            ctx.beginPath();
+            ctx.arc(xPos, yPos, 4, 0, Math.PI * 2);
+            ctx.fillStyle = '#12284c';
+            ctx.fill();
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+
+            // 3. Waypoint label (staggered vertically to avoid overlap)
+            ctx.font = 'bold 10px sans-serif';
+            ctx.fillStyle = '#1e293b';
+            
+            // Boundary alignment to prevent text clipping at chart edges
+            if (i === 0 || xPos - left < 30) {
+              ctx.textAlign = 'left';
+            } else if (i === waypoints.length - 1 || right - xPos < 30) {
+              ctx.textAlign = 'right';
+            } else {
+              ctx.textAlign = 'center';
+            }
+
+            const labelY = (i % 2 === 0) ? top + 10 : top + 24;
+            ctx.fillText(wp.name, xPos, labelY);
+          }
+        });
+        ctx.restore();
+      }
+    };
+
+    new Chart(ctx, {
+      type: 'line',
+      data: {
+        datasets: [{
+          label: 'Elevation (m)',
+          data: dataPoints,
+          fill: 'start',
+          borderColor: '#d97706',
+          backgroundColor: 'rgba(245, 158, 11, 0.16)',
+          borderWidth: 2,
+          pointRadius: 0,
+          pointHoverRadius: 6,
+          pointHoverBackgroundColor: '#12284c',
+          pointHoverBorderColor: '#ffffff',
+          pointHoverBorderWidth: 2,
+          tension: 0.2,
+        }]
+      },
+      plugins: [waypointPlugin],
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: {
+          mode: 'nearest',
+          axis: 'x',
+          intersect: false,
+        },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: '#12284c',
+            titleFont: { size: 12, weight: 'bold' },
+            bodyFont: { size: 13 },
+            padding: 8,
+            displayColors: false,
+            callbacks: {
+              title: function(items) {
+                const km = items[0].parsed.x;
+                const hit = waypoints.find(w => Math.abs(w.km - km) <= 0.4);
+                return hit ? `${hit.name} (${km} km)` : `${km} km from start`;
+              },
+              label: function(item) {
+                return item.parsed.y + ' m altitude';
+              }
+            }
+          }
+        },
+        scales: {
+          x: {
+            type: 'linear',  // Explicit linear scale spreads points across the full stage width
+            min: 0,
+            max: maxDist,
+            title: {
+              display: true,
+              text: 'Distance (km)',
+              color: '#64748b',
+              font: { size: 11 }
+            },
+            ticks: {
+              stepSize: 5,
+              color: '#94a3b8',
+              callback: val => val + ' km'
+            },
+            grid: { color: '#f1f5f9' }
+          },
+          y: {
+            min: yMin,
+            max: yMax,
+            title: {
+              display: true,
+              text: 'Altitude (m)',
+              color: '#64748b',
+              font: { size: 11 }
+            },
+            ticks: {
+              stepSize: 100,
+              color: '#94a3b8'
+            },
+            grid: { color: '#e2e8f0' }
+          }
+        }
+      }
+    });
+  });
+</script>
+{% endif %}
 {% endblock %}

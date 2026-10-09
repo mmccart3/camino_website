@@ -21,3 +21,33 @@ def partner_booking_url(url):
     
     # Append the new affiliate partner string
     return f"{clean_base}?{PARTNER_QUERY}"
+
+@register.filter
+def format_duration(minutes):
+    """
+    Converts minutes (int) into a human-readable duration, e.g.:
+    330 -> "5 hrs 30 mins"
+    60  -> "1 hr"
+    45  -> "45 mins"
+    """
+    if minutes is None or minutes == "":
+        return "--"
+    
+    try:
+        total_mins = int(minutes)
+    except (ValueError, TypeError):
+        return minutes
+
+    if total_mins <= 0:
+        return "--"
+
+    hours = total_mins // 60
+    remaining_mins = total_mins % 60
+
+    parts = []
+    if hours > 0:
+        parts.append(f"{hours} hr" if hours == 1 else f"{hours} hrs")
+    if remaining_mins > 0:
+        parts.append(f"{remaining_mins} min" if remaining_mins == 1 else f"{remaining_mins} mins")
+
+    return " ".join(parts) if parts else "0 mins"

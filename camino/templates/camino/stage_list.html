@@ -1,4 +1,5 @@
 {% extends 'camino/base.html' %}
+{% load camino_tags %}
 {% block content %}
 <h2>Camino Stages & Route Options</h2>
 
@@ -22,7 +23,7 @@
         </h3>
         <p>
           <strong>Distance:</strong> {{ group.primary.distance_km }} km<br>
-          <strong>Est. Time:</strong> ~{{ group.primary.time_minutes }} mins
+          <strong>Est. Time:</strong> {{ group.primary.time_minutes|format_duration }} mins
         </p>
         <a href="{% url 'stage_detail' group.primary.id %}" class="btn btn-booking">View Map & Stays</a>
       </div>
@@ -38,7 +39,7 @@
         </h3>
         <p>
           <strong>Distance:</strong> {{ alt.distance_km }} km<br>
-          <strong>Est. Time:</strong> ~{{ alt.time_minutes }} mins
+          <strong>Est. Time:</strong> {{ alt.time_minutes|format_duration }} mins
         </p>
         <a href="{% url 'stage_detail' alt.id %}" class="btn btn-booking">View Map & Stays</a>
       </div>

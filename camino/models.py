@@ -15,8 +15,13 @@ class Path(models.Model):
 
 
 class ElevationPoint(models.Model):
-    # Django requires a surrogate primary key column; use path_id or an explicit composite id
-    path = models.ForeignKey(Path, db_column='pathID', on_delete=models.DO_NOTHING, primary_key=True)
+    # Use OneToOneField with db_column to satisfy Django's single-PK requirement on compound tables
+    path = models.OneToOneField(
+        Path, 
+        db_column='pathID', 
+        on_delete=models.DO_NOTHING, 
+        primary_key=True
+    )
     sequence = models.IntegerField()
     distance_along_path_metres = models.FloatField(db_column='distanceAlongPathMetres')
     elevation_metres = models.FloatField(db_column='elevationMetres')
@@ -178,6 +183,11 @@ class Albergue(models.Model):
     whatsapp = models.CharField(db_column='whatsAppNumber', max_length=32, null=True)
     website_url = models.CharField(db_column='albergueWebsiteURL', max_length=255, null=True)
     booking_url = models.CharField(db_column='albergueBookingDotComURL', max_length=255, null=True)
+    # Add the photo fields mapped to SQLite column names:
+    pic1_url = models.CharField(db_column='alberguepic1URL', max_length=255, null=True, blank=True)
+    pic2_url = models.CharField(db_column='alberguepic2URL', max_length=255, null=True, blank=True)
+    pic3_url = models.CharField(db_column='alberguepic3URL', max_length=255, null=True, blank=True)
+    pic4_url = models.CharField(db_column='alberguepic4URL', max_length=255, null=True, blank=True)
 
     class Meta:
         managed = False

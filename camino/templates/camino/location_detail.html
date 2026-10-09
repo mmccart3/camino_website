@@ -37,9 +37,57 @@
 <!-- Location Title -->
 <h2>{{ location.location_name }}</h2>
 
+<!-- Village Facilities & Services Strip -->
+<div class="facility-bar">
+  <!-- Bar / Café -->
+  {% if location.has_bar_cafe == 1 %}
+    <span class="facility-badge badge-available" title="Café / Bar available">
+      ☕ <strong>Café / Bar</strong>
+    </span>
+  {% elif location.has_bar_cafe == 0 %}
+    <span class="facility-badge badge-none" title="No Café or Bar verified">
+      ☕ <span class="facility-strike">Café / Bar</span> (None)
+    </span>
+  {% else %}
+    <span class="facility-badge badge-none" title="Service unverified">
+      ☕ <span class="facility-strike">Café / Bar</span> (None)
+    </span>
+  {% endif %}
+
+  <!-- Grocery Store -->
+  {% if location.has_grocery_store == 1 %}
+    <span class="facility-badge badge-available" title="Grocery store or market available">
+      🛒 <strong>Grocery Store</strong>
+    </span>
+  {% elif location.has_grocery_store == 0 %}
+    <span class="facility-badge badge-none" title="No grocery store verified">
+      🛒 <span class="facility-strike">Grocery Store</span> (None)
+    </span>
+  {% else %}
+    <span class="facility-badge badge-none" title="Service unverified">
+      🛒 <span class="facility-strike">Grocery Store</span> (None)
+    </span>
+  {% endif %}
+
+  <!-- Pharmacy -->
+  {% if location.has_pharmacy == 1 %}
+    <span class="facility-badge badge-available" title="Pharmacy available">
+      💊 <strong>Pharmacy</strong>
+    </span>
+  {% elif location.has_pharmacy == 0 %}
+    <span class="facility-badge badge-none" title="No pharmacy verified">
+      💊 <span class="facility-strike">Pharmacy</span> (None)
+    </span>
+  {% else %}
+    <span class="facility-badge badge-none" title="Service unverified">
+      💊 <span class="facility-strike">Pharmacy</span> (None)
+    </span>
+  {% endif %}
+</div>
+
 {% if paragraphs %}
 <div class="card">
-  <h3>Stage Notes & History</h3>
+  <h3>Location Notes & History</h3>
   {% for p in paragraphs %}
   <p><strong>{{ p.type }}:</strong> {{ p.text }}</p>
   {% endfor %}
@@ -50,6 +98,20 @@
 <div class="grid">
   {% for item in albergues %}
   <div class="card">
+    <!-- Inside each albergue card -->
+    {% if item.alberguepic1URL or item.alberguepic2URL or item.alberguepic3URL %}
+      <div class="albergue-photo-gallery">
+        {% if item.alberguepic1URL %}
+          <img src="{{ item.alberguepic1URL }}" alt="{{ item.name }} - Exterior / Facade" loading="lazy">
+        {% endif %}
+        {% if item.alberguepic2URL %}
+          <img src="{{ item.alberguepic2URL }}" alt="{{ item.name }} - Bunk Rooms / Dorms" loading="lazy">
+        {% endif %}
+        {% if item.alberguepic3URL %}
+          <img src="{{ item.alberguepic3URL }}" alt="{{ item.name }} - Bathrooms / Facilities" loading="lazy">
+        {% endif %}
+      </div>
+    {% endif %}
     <h4>{{ item.name }}</h4>
     <p><small>{{ item.address|default:"Town Center" }}</small></p>
     <p>

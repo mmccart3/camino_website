@@ -1,4 +1,5 @@
 {% extends 'camino/base.html' %}
+{% load camino_tags %}
 {% block content %}
 
 <!-- Top Stage Navigation Bar -->
@@ -42,8 +43,8 @@
 
 <h2>Stage {{ stage.id }}: {{ stage.stage_name }}</h2>
 <p>
-  <strong>Distance:</strong> {{ stage.distance_km }} km | 
-  <strong>Est. Time:</strong> {{ stage.time_minutes|default:"--" }} mins
+  <strong>Distance:</strong> {{ stage.distance_km }} km |   
+  <strong>Est. Time:</strong> {{ stage.time_minutes|format_duration }}
 </p>
 
 <!-- Interactive Map Container -->

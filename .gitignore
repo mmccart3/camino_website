@@ -9,6 +9,7 @@ env/
 ENV/
 .env
 .venv
+camino/management/
 
 # Django runtime generated static files
 # (Collected by Railway via 'collectstatic' in the Procfile)

@@ -140,3 +140,10 @@ MAILERS = {
         'BACKEND': 'django.core.mail.backends.console.EmailBackend',
     },
 }
+
+# In config/settings.py or environment
+CLOUDINARY_STORAGE = {
+    'CLOUD_NAME': 'dbylfmnac',  # extracted from your existing Cloudinary asset URLs
+    'API_KEY': 743239415514369,
+    'API_SECRET': 'X_WmpF9vITcdeUeMhGtY3QGRIn0',
+}

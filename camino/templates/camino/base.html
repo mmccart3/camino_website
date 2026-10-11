@@ -470,6 +470,104 @@
   }
 }
 
+/* Waypoint Timeline & Amenity Badges */
+.waypoint-timeline {
+  display: flex;
+  flex-direction: column;
+}
+
+.waypoint-row {
+  display: flex;
+  align-items: flex-start;
+  position: relative;
+  padding-bottom: 1rem;
+}
+
+.waypoint-row:last-child {
+  padding-bottom: 0;
+}
+
+.waypoint-milestone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 24px;
+  margin-right: 12px;
+  align-self: stretch;
+}
+
+.waypoint-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #cbd5e1;
+  border: 2px solid #0f243a;
+  z-index: 1;
+}
+
+.waypoint-dot.start {
+  background: #16a34a; /* Green for stage start */
+}
+
+.waypoint-dot.finish {
+  background: #e11d48; /* Red for stage finish */
+}
+
+.waypoint-line {
+  flex: 1;
+  width: 2px;
+  background: #e2e8f0;
+  margin-top: 2px;
+}
+
+.waypoint-content {
+  flex: 1;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  background: #f8fafc;
+  padding: 0.6rem 0.85rem;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.waypoint-link {
+  color: #0f243a;
+  text-decoration: none;
+  font-size: 1rem;
+}
+
+.waypoint-link:hover {
+  text-decoration: underline;
+  color: #d97706;
+}
+
+.waypoint-metrics {
+  display: block;
+  font-size: 0.8rem;
+  color: #64748b;
+  margin-top: 2px;
+}
+
+.amenity-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.badge {
+  font-size: 0.75rem;
+  padding: 3px 7px;
+  border-radius: 12px;
+  background: #e2e8f0;
+  color: #334155;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+}
+
 
     </style>
   </head>

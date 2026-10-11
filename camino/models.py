@@ -15,13 +15,8 @@ class Path(models.Model):
 
 
 class ElevationPoint(models.Model):
-    # Use OneToOneField with db_column to satisfy Django's single-PK requirement on compound tables
-    path = models.OneToOneField(
-        Path, 
-        db_column='pathID', 
-        on_delete=models.DO_NOTHING, 
-        primary_key=True
-    )
+    # Django requires a surrogate primary key column; use path_id or an explicit composite id
+    path = models.ForeignKey(Path, db_column='pathID', on_delete=models.DO_NOTHING, primary_key=True)
     sequence = models.IntegerField()
     distance_along_path_metres = models.FloatField(db_column='distanceAlongPathMetres')
     elevation_metres = models.FloatField(db_column='elevationMetres')

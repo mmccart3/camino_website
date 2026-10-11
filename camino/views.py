@@ -223,8 +223,8 @@ def stage_detail(request, stage_id):
                     for p in sampled_points
                 ]
 
-                # chart_distances = [round(p['distance_m'] / 1000.0, 1) for p in sampled_points]
-                # chart_elevations = [round(p['elevation_m']) for p in sampled_points]
+                chart_distances = [round(p['distance_m'] / 1000.0, 1) for p in sampled_points]
+                chart_elevations = [round(p['elevation_m']) for p in sampled_points]
 
     except Exception as err:
         import traceback

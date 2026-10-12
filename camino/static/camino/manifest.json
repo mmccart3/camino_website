@@ -1,0 +1,16 @@
+{
+  "name": "Saint Jean to Santiago",
+  "short_name": "Camino Guide",
+  "description": "Camino de Santiago Route and Accommodation Guide",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#1e3a8a",
+  "theme_color": "#1e3a8a",
+  "icons": [
+    {
+      "src": "/static/camino/img/app_icon.jpg",
+      "sizes": "192x192 512x512",
+      "type": "image/jpeg"
+    }
+  ]
+}

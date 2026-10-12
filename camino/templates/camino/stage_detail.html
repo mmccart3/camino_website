@@ -43,10 +43,15 @@
 </div>
 
 <h2>Stage {{ stage.id }}: {{ stage.stage_name }}</h2>
-<p>
-  <strong>Distance:</strong> {{ stage.distance_km }} km |   
-  <strong>Est. Time:</strong> {{ stage.time_minutes|format_duration }}
-</p>
+<div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
+  <p style="margin: 0;">
+    <strong>Distance:</strong> {{ stage.distance_km }} km |   
+    <strong>Est. Time:</strong> {{ stage.time_minutes|format_duration }}
+  </p>
+  <button onclick="window.print()" class="btn" style="background: #e2e8f0; color: #1e293b; cursor: pointer; border: none;">
+    &#128424; Print / Save PDF
+  </button>
+</div>
 
 <!-- Interactive Elevation Profile Card -->
 <div class="card elevation-card">
@@ -73,7 +78,7 @@
 
   <div class="waypoint-timeline">
     {% for loc in stage_locations %}
-      <div class="waypoint-row">
+      <div class="waypoint-row" data-location-id="{{ loc.id }}">
         <!-- Milestone Dot and Line -->
         <div class="waypoint-milestone">
           <div class="waypoint-dot {% if forloop.first %}start{% elif forloop.last %}finish{% endif %}"></div>
@@ -132,6 +137,7 @@
               width="{{ spot.w_1920 }}" 
               height="{{ spot.h_1920 }}" 
               class="hotspot" 
+              data-location-id="{{ spot.location_id }}" 
               rx="4">
           <title>{% if spot.location %}{{ spot.location.location_name }}{% else %}Location {{ spot.location_id }}{% endif %}</title>
         </rect>
@@ -216,6 +222,7 @@
 
     const dataPoints = {{ chart_points_json|safe }};
     const waypoints = {{ waypoint_markers_json|safe }};
+    let activeLocationId = null;
 
     const elevations = dataPoints.map(p => p.y);
     const minEle = Math.min(...elevations);
@@ -224,6 +231,27 @@
 
     const yMin = Math.max(0, Math.floor((minEle - 60) / 50) * 50);
     const yMax = Math.ceil((maxEle + 90) / 50) * 50;
+
+    // Helper: Sync highlights across DOM elements
+    window.setStageHighlight = function(locationId) {
+      if (activeLocationId === locationId) return;
+      activeLocationId = locationId;
+
+      // 1. Highlight timeline rows
+      document.querySelectorAll('.waypoint-row').forEach(row => {
+        row.classList.toggle('is-highlighted', row.dataset.locationId === String(locationId));
+      });
+
+      // 2. Highlight SVG map hotspots
+      document.querySelectorAll('#hotspot-svg rect.hotspot').forEach(rect => {
+        rect.classList.toggle('is-highlighted', rect.dataset.locationId === String(locationId));
+      });
+
+      // 3. Re-render chart markers
+      if (window.elevationChartInstance) {
+        window.elevationChartInstance.draw();
+      }
+    };
 
     const waypointPlugin = {
       id: 'waypointMarkers',
@@ -236,11 +264,14 @@
           const yPos = y.getPixelForValue(wp.elevation);
 
           if (xPos >= left && xPos <= right) {
+            const isMatch = (wp.location_id && String(wp.location_id) === String(activeLocationId)) ||
+                            (!wp.location_id && activeLocationId === wp.name);
+
             // 1. Dashed drop line
             ctx.beginPath();
-            ctx.setLineDash([3, 3]);
-            ctx.strokeStyle = 'rgba(100, 116, 139, 0.45)';
-            ctx.lineWidth = 1;
+            ctx.setLineDash(isMatch ? [] : [3, 3]);
+            ctx.strokeStyle = isMatch ? '#d97706' : 'rgba(100, 116, 139, 0.45)';
+            ctx.lineWidth = isMatch ? 2.5 : 1;
             ctx.moveTo(xPos, top + 30);
             ctx.lineTo(xPos, bottom);
             ctx.stroke();
@@ -248,16 +279,16 @@
             // 2. Point marker
             ctx.setLineDash([]);
             ctx.beginPath();
-            ctx.arc(xPos, yPos, 4, 0, Math.PI * 2);
-            ctx.fillStyle = '#12284c';
+            ctx.arc(xPos, yPos, isMatch ? 7 : 4, 0, Math.PI * 2);
+            ctx.fillStyle = isMatch ? '#d97706' : '#12284c';
             ctx.fill();
             ctx.strokeStyle = '#ffffff';
-            ctx.lineWidth = 1.5;
+            ctx.lineWidth = isMatch ? 2.5 : 1.5;
             ctx.stroke();
 
-            // 3. Staggered village label
-            ctx.font = 'bold 10px sans-serif';
-            ctx.fillStyle = '#1e293b';
+            // 3. Label
+            ctx.font = isMatch ? 'bold 12px sans-serif' : 'bold 10px sans-serif';
+            ctx.fillStyle = isMatch ? '#d97706' : '#1e293b';
 
             if (i === 0 || xPos - left < 30) {
               ctx.textAlign = 'left';
@@ -275,7 +306,7 @@
       }
     };
 
-    new Chart(ctx, {
+    window.elevationChartInstance = new Chart(ctx, {
       type: 'line',
       data: {
         datasets: [{
@@ -314,7 +345,12 @@
               title: function(items) {
                 const km = items[0].parsed.x;
                 const hit = waypoints.find(w => Math.abs(w.km - km) <= 0.4);
-                return hit ? `${hit.name} (${km} km)` : `${km} km from start`;
+                if (hit) {
+                  setStageHighlight(hit.location_id || hit.name);
+                  return `${hit.name} (${km} km)`;
+                }
+                setStageHighlight(null);
+                return `${km} km from start`;
               },
               label: function(item) {
                 return item.parsed.y + ' m altitude';
@@ -327,36 +363,31 @@
             type: 'linear',
             min: 0,
             max: maxDist,
-            title: {
-              display: true,
-              text: 'Distance (km)',
-              color: '#64748b',
-              font: { size: 11 }
-            },
-            ticks: {
-              stepSize: 5,
-              color: '#94a3b8',
-              callback: val => val + ' km'
-            },
+            title: { display: true, text: 'Distance (km)', color: '#64748b', font: { size: 11 } },
+            ticks: { stepSize: 5, color: '#94a3b8', callback: val => val + ' km' },
             grid: { color: '#f1f5f9' }
           },
           y: {
             min: yMin,
             max: yMax,
-            title: {
-              display: true,
-              text: 'Altitude (m)',
-              color: '#64748b',
-              font: { size: 11 }
-            },
-            ticks: {
-              stepSize: 100,
-              color: '#94a3b8'
-            },
+            title: { display: true, text: 'Altitude (m)', color: '#64748b', font: { size: 11 } },
+            ticks: { stepSize: 100, color: '#94a3b8' },
             grid: { color: '#e2e8f0' }
           }
         }
       }
+    });
+
+    // Wire up Timeline row events
+    document.querySelectorAll('.waypoint-row').forEach(row => {
+      row.addEventListener('mouseenter', () => setStageHighlight(row.dataset.locationId));
+      row.addEventListener('mouseleave', () => setStageHighlight(null));
+    });
+
+    // Wire up Map Hotspot events
+    document.querySelectorAll('#hotspot-svg rect.hotspot').forEach(rect => {
+      rect.addEventListener('mouseenter', () => setStageHighlight(rect.dataset.locationId));
+      rect.addEventListener('mouseleave', () => setStageHighlight(null));
     });
   });
 </script>

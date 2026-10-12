@@ -1,12 +1,13 @@
 {% extends 'camino/base.html' %}
-{% load camino_tags %}
+{% load static %}
+
 {% block content %}
 
-<!-- Top Trail Navigation Bar -->
+<!-- Top Navigation -->
 <div class="location-nav">
   <div>
     {% if prior_location %}
-      <a href="{% url 'location_detail' prior_location.id %}" class="btn-nav btn-prior">
+      <a href="{% url 'location_detail' prior_location.id %}" class="btn-nav">
         ← {{ prior_location.location_name }}
       </a>
     {% else %}
@@ -17,7 +18,7 @@
   <div class="nav-center-buttons">
     {% if parent_stage %}
       <a href="{% url 'stage_detail' parent_stage.id %}" class="btn-nav btn-stage">
-        🗺️ Back to Stage {{ parent_stage.id }}
+        Stage {{ parent_stage.id }}: {{ parent_stage.stage_name|truncatechars:20 }}
       </a>
     {% endif %}
     <a href="{% url 'stage_list' %}" class="btn-nav btn-all-stages">All Stages</a>
@@ -25,234 +26,209 @@
 
   <div>
     {% if next_location %}
-      <a href="{% url 'location_detail' next_location.id %}" class="btn-nav btn-next">
+      <a href="{% url 'location_detail' next_location.id %}" class="btn-nav">
         {{ next_location.location_name }} →
       </a>
     {% else %}
-      <span class="btn-nav btn-disabled">Route Finish (Santiago) →</span>
+      <span class="btn-nav btn-disabled">Route Finish →</span>
     {% endif %}
   </div>
 </div>
 
-<!-- Location Title -->
 <h2>{{ location.location_name }}</h2>
 
-<!-- Village Facilities & Services Strip -->
+<!-- Village Facilities Pill Bar -->
 <div class="facility-bar">
-  <!-- Bar / Café -->
-  {% if location.has_bar_cafe == 1 %}
-    <span class="facility-badge badge-available" title="Café / Bar available">
-      ☕ <strong>Café / Bar</strong>
-    </span>
-  {% elif location.has_bar_cafe == 0 %}
-    <span class="facility-badge badge-none" title="No Café or Bar verified">
-      ☕ <span class="facility-strike">Café / Bar</span> (None)
-    </span>
-  {% else %}
-    <span class="facility-badge badge-none" title="Service unverified">
-      ☕ <span class="facility-strike">Café / Bar</span> (None)
-    </span>
-  {% endif %}
-
-  <!-- Grocery Store -->
-  {% if location.has_grocery_store == 1 %}
-    <span class="facility-badge badge-available" title="Grocery store or market available">
-      🛒 <strong>Grocery Store</strong>
-    </span>
-  {% elif location.has_grocery_store == 0 %}
-    <span class="facility-badge badge-none" title="No grocery store verified">
-      🛒 <span class="facility-strike">Grocery Store</span> (None)
-    </span>
-  {% else %}
-    <span class="facility-badge badge-none" title="Service unverified">
-      🛒 <span class="facility-strike">Grocery Store</span> (None)
-    </span>
-  {% endif %}
-
-  <!-- Pharmacy -->
-  {% if location.has_pharmacy == 1 %}
-    <span class="facility-badge badge-available" title="Pharmacy available">
-      💊 <strong>Pharmacy</strong>
-    </span>
-  {% elif location.has_pharmacy == 0 %}
-    <span class="facility-badge badge-none" title="No pharmacy verified">
-      💊 <span class="facility-strike">Pharmacy</span> (None)
-    </span>
-  {% else %}
-    <span class="facility-badge badge-none" title="Service unverified">
-      💊 <span class="facility-strike">Pharmacy</span> (None)
-    </span>
-  {% endif %}
+  <span class="facility-badge {% if location.has_bar_cafe == 1 %}badge-available{% elif location.has_bar_cafe == 0 %}badge-none{% else %}badge-unknown{% endif %}">
+    ☕ <span class="{% if location.has_bar_cafe == 0 %}facility-strike{% endif %}">Bar / Café</span>
+  </span>
+  <span class="facility-badge {% if location.has_grocery_store == 1 %}badge-available{% elif location.has_grocery_store == 0 %}badge-none{% else %}badge-unknown{% endif %}">
+    🛒 <span class="{% if location.has_grocery_store == 0 %}facility-strike{% endif %}">Groceries</span>
+  </span>
+  <span class="facility-badge {% if location.has_pharmacy == 1 %}badge-available{% elif location.has_pharmacy == 0 %}badge-none{% else %}badge-unknown{% endif %}">
+    ⚕️ <span class="{% if location.has_pharmacy == 0 %}facility-strike{% endif %}">Pharmacy</span>
+  </span>
 </div>
 
+<!-- Location Description / History -->
 {% if paragraphs %}
-<div class="card">
-  <h3>Location Notes & History</h3>
-  {% for p in paragraphs %}
-  <p><strong>{{ p.type }}:</strong> {{ p.text }}</p>
-  {% endfor %}
-</div>
+  <div class="card" style="margin-bottom: 1.5rem;">
+    {% for p in paragraphs %}
+      <p style="margin-top: 0; line-height: 1.6;">{{ p.text }}</p>
+    {% endfor %}
+  </div>
 {% endif %}
 
-<h3>Albergues & Hostels ({{ albergues|length }})</h3>
-<div class="grid">
-  {% for item in albergues %}
-  <div class="card">
-    <!-- Inside each albergue card -->
-    {% if item.alberguepic1URL or item.alberguepic2URL or item.alberguepic3URL %}
-      <div class="albergue-photo-gallery">
-        {% if item.alberguepic1URL %}
-          <img src="{{ item.alberguepic1URL }}" alt="{{ item.name }} - Exterior / Facade" loading="lazy">
+<!-- Accommodation Section -->
+<h3 style="margin-bottom: 0.25rem;">Places to Stay ({{ albergues|length|add:private_accomm|length }})</h3>
+<p style="color: #64748b; font-size: 0.85rem; margin-top: 0;">
+  Filter by accommodation style and available pilgrim services.
+</p>
+
+<!-- Filter Chips -->
+<div class="filter-chip-bar">
+  <button class="filter-chip active" data-filter="all">All</button>
+  <button class="filter-chip" data-filter="albergue">Albergues</button>
+  <button class="filter-chip" data-filter="private">Private Rooms</button>
+  <button class="filter-chip" data-filter="kitchen">🍳 Kitchen</button>
+  <button class="filter-chip" data-filter="washer">🧺 Laundry</button>
+  <button class="filter-chip" data-filter="communal">🍽️ Communal Meal</button>
+</div>
+
+<!-- Accommodations List -->
+<div id="accomm-list">
+  <!-- 1. ALBERGUES -->
+  {% for a in albergues %}
+    <div class="accomm-card" 
+         data-type="albergue" 
+         data-kitchen="{{ a.kitchen|yesno:'1,0' }}" 
+         data-washer="{{ a.washer|yesno:'1,0' }}" 
+         data-communal="{{ a.communal_meal|yesno:'1,0' }}">
+      
+      <!-- Photo Strip (Collapses completely if no images exist) -->
+      {% if a.pic1_url or a.pic2_url or a.pic3_url or a.pic4_url %}
+        <div class="accomm-photo-strip">
+          {% if a.pic1_url %}<img src="{{ a.pic1_url }}" alt="{{ a.name }}" loading="lazy">{% endif %}
+          {% if a.pic2_url %}<img src="{{ a.pic2_url }}" alt="{{ a.name }}" loading="lazy">{% endif %}
+          {% if a.pic3_url %}<img src="{{ a.pic3_url }}" alt="{{ a.name }}" loading="lazy">{% endif %}
+          {% if a.pic4_url %}<img src="{{ a.pic4_url }}" alt="{{ a.name }}" loading="lazy">{% endif %}
+        </div>
+      {% endif %}
+
+      <div class="accomm-body">
+        <div class="accomm-header-row">
+          <div>
+            <span class="badge" style="background:#e0f2fe; color:#0369a1; margin-bottom: 0.35rem;">Albergue</span>
+            <h4 class="accomm-title">{{ a.name }}</h4>
+            {% if a.address %}
+              <div style="font-size: 0.82rem; color: #64748b; margin-top: 2px;">📍 {{ a.address }}</div>
+            {% endif %}
+          </div>
+          {% if a.rate_1p_min %}
+            <div class="price-pill">from €{{ a.rate_1p_min|floatformat:0 }}</div>
+          {% endif %}
+        </div>
+
+        <!-- Facility Badges -->
+        <div class="feature-pill-row">
+          {% if a.beds %}
+            <span class="feature-pill">🛏️ {{ a.beds }} beds</span>
+          {% endif %}
+          {% if a.kitchen %}
+            <span class="feature-pill">🍳 Kitchen</span>
+          {% endif %}
+          {% if a.washer %}
+            <span class="feature-pill">🧺 Washing machine</span>
+          {% endif %}
+          {% if a.communal_meal %}
+            <span class="feature-pill">🍽️ Communal meal</span>
+          {% endif %}
+          {% if a.opening_period %}
+            <span class="feature-pill">📅 {{ a.opening_period }}</span>
+          {% endif %}
+          {% if a.check_in_times %}
+            <span class="feature-pill">🕒 {{ a.check_in_times }}</span>
+          {% endif %}
+        </div>
+
+        {% if a.rate_notes %}
+          <p style="font-size: 0.85rem; color: #475569; margin: 0.4rem 0;">{{ a.rate_notes }}</p>
         {% endif %}
-        {% if item.alberguepic2URL %}
-          <img src="{{ item.alberguepic2URL }}" alt="{{ item.name }} - Bunk Rooms / Dorms" loading="lazy">
-        {% endif %}
-        {% if item.alberguepic3URL %}
-          <img src="{{ item.alberguepic3URL }}" alt="{{ item.name }} - Bathrooms / Facilities" loading="lazy">
-        {% endif %}
+
+        <!-- Action Links -->
+        <div class="accomm-actions">
+          {% if a.booking_url %}
+            <a href="{{ a.booking_url }}" target="_blank" rel="noopener" class="btn btn-booking">Book on Booking.com</a>
+          {% endif %}
+          {% if a.whatsapp %}
+            <a href="https://wa.me/{{ a.whatsapp|cut:'+'|cut:' ' }}" target="_blank" rel="noopener" class="btn btn-wa">WhatsApp</a>
+          {% endif %}
+          {% if a.phone %}
+            <a href="tel:{{ a.phone }}" class="btn btn-phone">📞 {{ a.phone }}</a>
+          {% endif %}
+          {% if a.email %}
+            <a href="mailto:{{ a.email }}" class="btn btn-email">✉️ Email</a>
+          {% endif %}
+          {% if a.website_url %}
+            <a href="{{ a.website_url }}" target="_blank" rel="noopener" class="btn btn-web">Website</a>
+          {% endif %}
+        </div>
       </div>
-    {% endif %}
-    <h4>{{ item.name }}</h4>
-    <p><small>{{ item.address|default:"Town Center" }}</small></p>
-    <p>
-      {% if item.rate_1p_min %}
-      <strong>Price:</strong> €{{ item.rate_1p_min}}<br />
-      {% endif %}
-      <strong>Beds:</strong> {{ item.beds|default:"Inquire"}}<br />
-      <strong>Open:</strong> {{ item.opening_period|default:"Seasonal" }}
-    </p>
-    <p>
-      {% if item.kitchen %}<span class="badge">Kitchen</span>{% endif %}
-      {% if item.washer %}<span class="badge">Laundry</span>{% endif %}
-      {% if item.communal_meal %}<span class="badge">Communal Meal</span>
-      {% endif %}
-    </p>
-    <div>
-      {% if item.phone %}
-      <a class="btn btn-phone" href="tel:{{ item.phone }}">📞 Call</a>
-      {% endif %}
-      {% if item.whatsapp %}
-      <a
-        class="btn btn-wa"
-        href="https://wa.me/{{ item.whatsapp }}"
-        target="_blank"
-        rel="noopener noreferrer"
-        >💬 WhatsApp</a
-      >
-      {% endif %}
-      {% if item.email and item.email != "NULL" %}
-      <a class="btn btn-email" href="mailto:{{ item.email }}">✉️ Email</a>
-      {% endif %}
-      {% if item.website_url and item.website_url != "no website available" and item.website_url != "NULL" %}
-      <a
-        class="btn btn-web"
-        href="{{ item.website_url }}"
-        target="_blank"
-        rel="noopener noreferrer"
-        >🌐 Website</a
-      >
-      {% endif %}
-      {% if item.booking_url and item.booking_url != "not on Booking" and item.booking_url != "NULL" %}
-      <a
-        class="btn btn-booking"
-        href="{{ item.booking_url|partner_booking_url }}"
-        target="_blank"
-        rel="noopener noreferrer"
-        >Booking.com</a
-      >
-      {% endif %}
     </div>
-  </div>
-  {% empty %}
-  <p>No municipal or pilgrim albergues registered here.</p>
+  {% endfor %}
+
+  <!-- 2. PRIVATE ACCOMMODATIONS -->
+  {% for p in private_accomm %}
+    <div class="accomm-card" data-type="private" data-kitchen="0" data-washer="0" data-communal="0">
+      <div class="accomm-body">
+        <div class="accomm-header-row">
+          <div>
+            <span class="badge" style="background:#f3e8ff; color:#7e22ce; margin-bottom: 0.35rem;">Private Room</span>
+            <h4 class="accomm-title">{{ p.name }}</h4>
+            {% if p.address %}
+              <div style="font-size: 0.82rem; color: #64748b; margin-top: 2px;">📍 {{ p.address }}</div>
+            {% endif %}
+          </div>
+          {% if p.rate_1p_min or p.rate_2p_min %}
+            <div class="price-pill">
+              from €{% if p.rate_1p_min %}{{ p.rate_1p_min|floatformat:0 }}{% else %}{{ p.rate_2p_min|floatformat:0 }}{% endif %}
+            </div>
+          {% endif %}
+        </div>
+
+        {% if p.rate_notes %}
+          <p style="font-size: 0.85rem; color: #475569; margin: 0.4rem 0;">{{ p.rate_notes }}</p>
+        {% endif %}
+
+        <!-- Action Links -->
+        <div class="accomm-actions">
+          {% if p.booking_url %}
+            <a href="{{ p.booking_url }}" target="_blank" rel="noopener" class="btn btn-booking">Book on Booking.com</a>
+          {% endif %}
+          {% if p.whatsapp %}
+            <a href="https://wa.me/{{ p.whatsapp|cut:'+'|cut:' ' }}" target="_blank" rel="noopener" class="btn btn-wa">WhatsApp</a>
+          {% endif %}
+          {% if p.phone %}
+            <a href="tel:{{ p.phone }}" class="btn btn-phone">📞 {{ p.phone }}</a>
+          {% endif %}
+          {% if p.email %}
+            <a href="mailto:{{ p.email }}" class="btn btn-email">✉️ Email</a>
+          {% endif %}
+          {% if p.website_url %}
+            <a href="{{ p.website_url }}" target="_blank" rel="noopener" class="btn btn-web">Website</a>
+          {% endif %}
+        </div>
+      </div>
+    </div>
   {% endfor %}
 </div>
 
-<h3>Private B&Bs & Hotels ({{ private_accomm|length }})</h3>
-<div class="grid">
-  {% for item in private_accomm %}
-  <div class="card">
-    <h4>{{ item.name }}</h4>
-    <p><small>{{ item.address|default:"" }}</small></p>
-    <p>
-      {% if item.rate_1p_min %}<strong>Single:</strong> from €{{item.rate_1p_min}}<br />{% endif %}
-      {% if item.rate_2p_min %}
-      <strong>Double:</strong >from €{{ item.rate_2p_min }}<br />
-      {% endif %}
-      {% if item.rate_notes%}<small>{{ item.rate_notes }}</small>
-      {% endif %}
-    </p>
-    <div>
-      {% if item.phone %}
-      <a class="btn btn-phone" href="tel:{{ item.phone }}">📞 Call</a>
-      {% endif %}
-      {% if item.whatsapp %}
-      <a
-        class="btn btn-wa"
-        href="https://wa.me/{{ item.whatsapp }}"
-        target="_blank"
-        rel="noopener noreferrer"
-        >💬 WhatsApp</a
-      >
-      {% endif %}
-      {% if item.email and item.email != "NULL" %}
-      <a class="btn btn-email" href="mailto:{{ item.email }}">✉️ Email</a>
-      {% endif %}
-      {% if item.website_url and item.website_url != "no website available" and item.website_url != "NULL" %}
-      <a
-        class="btn btn-web"
-        href="{{ item.website_url }}"
-        target="_blank"
-        rel="noopener noreferrer"
-        >🌐 Website</a
-      >
-      {% endif %}
-      {% if item.booking_url and item.booking_url != "not on Booking" and item.booking_url != "NULL" %}
-      <a
-        class="btn btn-booking"
-        href="{{ item.booking_url|partner_booking_url }}"
-        target="_blank"
-        rel="noopener noreferrer"
-        >Booking.com</a
-      >
-      {% endif %}
-    </div>
-  </div>
-  {% empty %}
-  <p>No private rooms or hotels listed for this stop.</p>
-  {% endfor %}
-</div>
+<script>
+  // Client-side instant filter logic
+  document.addEventListener('DOMContentLoaded', () => {
+    const chips = document.querySelectorAll('.filter-chip');
+    const cards = document.querySelectorAll('.accomm-card');
 
-<!-- Bottom Navigation Bar -->
-<div class="location-nav" style="margin-top: 2.5rem; margin-bottom: 2rem;">
-  <div>
-    {% if prior_location %}
-      <a href="{% url 'location_detail' prior_location.id %}" class="btn-nav btn-prior">
-        ← {{ prior_location.location_name }}
-      </a>
-    {% else %}
-      <span class="btn-nav btn-disabled">← Route Start</span>
-    {% endif %}
-  </div>
+    chips.forEach(chip => {
+      chip.addEventListener('click', () => {
+        chips.forEach(c => c.classList.remove('active'));
+        chip.classList.add('active');
 
-  <div class="nav-center-buttons">
-    {% if parent_stage %}
-      <a href="{% url 'stage_detail' parent_stage.id %}" class="btn-nav btn-stage">
-        🗺️ Back to Stage {{ parent_stage.id }}
-      </a>
-    {% endif %}
-    <a href="{% url 'stage_list' %}" class="btn-nav btn-all-stages">All Stages</a>
-  </div>
+        const filter = chip.dataset.filter;
 
-  <div>
-    {% if next_location %}
-      <a href="{% url 'location_detail' next_location.id %}" class="btn-nav btn-next">
-        {{ next_location.location_name }} →
-      </a>
-    {% else %}
-      <span class="btn-nav btn-disabled">Route Finish (Santiago) →</span>
-    {% endif %}
-  </div>
-</div>
+        cards.forEach(card => {
+          let visible = true;
+          if (filter === 'albergue') visible = card.dataset.type === 'albergue';
+          else if (filter === 'private') visible = card.dataset.type === 'private';
+          else if (filter === 'kitchen') visible = card.dataset.kitchen === '1';
+          else if (filter === 'washer') visible = card.dataset.washer === '1';
+          else if (filter === 'communal') visible = card.dataset.communal === '1';
+
+          card.style.display = visible ? 'block' : 'none';
+        });
+      });
+    });
+  });
+</script>
 
 {% endblock %}

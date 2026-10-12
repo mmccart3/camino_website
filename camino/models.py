@@ -72,26 +72,33 @@ class TrackPoint(models.Model):
         db_table = 'track_points'
         
 class Stage(models.Model):
-    id = models.IntegerField(db_column='ID', primary_key=True) #
-    stage_name = models.CharField(db_column='stageName', max_length=255) #[cite: 1]
-    distance_meters = models.IntegerField(db_column='stageDistanceInMetres', null=True) #[cite: 1]
-    time_minutes = models.IntegerField(db_column='stageTimeInMinutes', null=True) #[cite: 1]
-    elevation_chart_url = models.CharField(db_column='stageElevationChartURL', max_length=255, null=True) #[cite: 1]
-    map_url_1024 = models.CharField(db_column='stageMap1024URL', max_length=255, null=True) #[cite: 1]
-    map_url_1920 = models.CharField(db_column='stageMap1920URL', max_length=255, null=True) #[cite: 1]
-    stage_map_url = models.CharField(db_column='stageMapURL', max_length=255, null=True) #[cite: 1]
-    prior_stage = models.IntegerField(db_column='priorStage', null=True) #[cite: 1]
-    alt_prior_stage = models.IntegerField(db_column='altPriorStage', null=True) #[cite: 1]
-    next_stage = models.IntegerField(db_column='nextStage', null=True) #[cite: 1]
-    alt_next_stage = models.IntegerField(db_column='altNextStage', null=True) #[cite: 1]
+    id = models.IntegerField(db_column='ID', primary_key=True)
+    stage_name = models.CharField(db_column='stageName', max_length=255)
+    # New column mapping
+    stage_display_reference = models.CharField(db_column='stageDisplayReference', max_length=20, null=True, blank=True)
+    distance_meters = models.IntegerField(db_column='stageDistanceInMetres', null=True)
+    time_minutes = models.IntegerField(db_column='stageTimeInMinutes', null=True)
+    elevation_chart_url = models.CharField(db_column='stageElevationChartURL', max_length=255, null=True)
+    map_url_1024 = models.CharField(db_column='stageMap1024URL', max_length=255, null=True)
+    map_url_1920 = models.CharField(db_column='stageMap1920URL', max_length=255, null=True)
+    stage_map_url = models.CharField(db_column='stageMapURL', max_length=255, null=True)
+    prior_stage = models.IntegerField(db_column='priorStage', null=True)
+    alt_prior_stage = models.IntegerField(db_column='altPriorStage', null=True)
+    next_stage = models.IntegerField(db_column='nextStage', null=True)
+    alt_next_stage = models.IntegerField(db_column='altNextStage', null=True)
 
     class Meta:
         managed = False
-        db_table = 'stages' #[cite: 1]
+        db_table = 'stages'
 
     @property
     def distance_km(self):
         return round(self.distance_meters / 1000, 1) if self.distance_meters else 0
+
+    @property
+    def display_ref(self):
+        """Returns stageDisplayReference or falls back to the database ID."""
+        return self.stage_display_reference if self.stage_display_reference else str(self.id)
 
 class Location(models.Model):
     id = models.IntegerField(db_column='ID', primary_key=True)

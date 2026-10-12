@@ -7,6 +7,8 @@ from .models import (
     Albergue, PrivateAccomm
 )
 
+# camino/views.py
+
 def get_stage_groups():
     all_stages = {s.id: s for s in Stage.objects.all()}
     if not all_stages:
@@ -47,32 +49,48 @@ def get_stage_groups():
         return cluster
 
     start_candidates = prior_groups.get(0, [])
-    if start_candidates:
-        start_id = min(start_candidates)
-    else:
-        start_id = min(all_stages.keys())
+    start_id = min(start_candidates) if start_candidates else min(all_stages.keys())
 
     grouped_stages = []
     visited = set()
     current_stage = all_stages[start_id]
+    section_index = 1
+
+    def classify_variant(stage):
+        name_lower = stage.stage_name.lower()
+        if 'valcarlos' in name_lower or 'low' in name_lower or 'winter' in name_lower:
+            return {'label': 'Low-Valley / Winter Variant', 'badge_class': 'badge-valley', 'icon': '🌦️'}
+        elif 'napoleon' in name_lower or 'high' in name_lower or 'mountain' in name_lower:
+            return {'label': 'Mountain Route / High Pass', 'badge_class': 'badge-mountain', 'icon': '⛰️'}
+        elif 'via' in name_lower or 'option' in name_lower or 'alt' in name_lower:
+            return {'label': 'Alternative Variant', 'badge_class': 'badge-alt', 'icon': '🔀'}
+        return {'label': 'Main Camino Route', 'badge_class': 'badge-main', 'icon': '🚶'}
 
     while current_stage and current_stage.id not in visited:
         cluster = get_cluster(current_stage.id, visited)
 
         def sort_key(s):
             name_lower = s.stage_name.lower()
-            is_alt = 1 if ('via' in name_lower or 'option' in name_lower or 'valcarlos' in name_lower) else 0
+            is_alt = 1 if any(k in name_lower for k in ['via', 'option', 'valcarlos', 'alt']) else 0
             return (is_alt, s.id)
 
         cluster.sort(key=sort_key)
+
+        for s in cluster:
+            s.variant_meta = classify_variant(s)
+
         primary = cluster[0]
         alternates = cluster[1:]
 
         grouped_stages.append({
+            'section_index': section_index,
             'primary': primary,
             'alternates': alternates,
+            'all_variants': cluster,
+            'variant_count': len(cluster),
             'has_alternate': len(alternates) > 0
         })
+        section_index += 1
 
         candidate_next = None
         for member in cluster:
@@ -92,14 +110,19 @@ def get_stage_groups():
     for s_id in sorted(all_stages.keys()):
         if s_id not in visited:
             cluster = get_cluster(s_id, visited)
+            for s in cluster:
+                s.variant_meta = classify_variant(s)
             grouped_stages.append({
+                'section_index': section_index,
                 'primary': cluster[0],
                 'alternates': cluster[1:],
+                'all_variants': cluster,
+                'variant_count': len(cluster),
                 'has_alternate': len(cluster) > 1
             })
+            section_index += 1
 
     return grouped_stages
-
 
 def stage_list(request):
     stage_groups = get_stage_groups()

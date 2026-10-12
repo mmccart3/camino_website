@@ -1,50 +1,60 @@
 {% extends 'camino/base.html' %}
 {% load camino_tags %}
+
+
 {% block content %}
-<h2>Camino Stages & Route Options</h2>
+<div style="margin-bottom: 1.75rem; text-align: center;">
+  <h2 style="margin-bottom: 0.25rem;">Camino Francés Stages</h2>
+  <p style="color: #64748b; font-size: 0.95rem; margin-top: 0;">
+    Select a stage to view waypoint timelines, elevation charts, and accommodations.
+  </p>
+</div>
 
-{% for group in stage_groups %}
-  <div class="stage-section {% if group.has_alternate %}has-options{% endif %}">
-    <div class="stage-section-header">
-      <span class="stage-index">Stage {{ forloop.counter }}</span>
+<div class="stage-list-container">
+  {% for group in stage_groups %}
+    <div class="route-section-group {% if group.has_alternate %}has-fork{% endif %}">
+      
       {% if group.has_alternate %}
-        <span class="badge variant-badge">Route Choice Available</span>
+        <!-- Route Fork Banner -->
+        <div class="fork-banner">
+          <div class="fork-banner-text">
+            <span>🔀 Route Choice &bull; Milestone {{ group.section_index }}</span>
+            <span class="fork-count-pill">{{ group.variant_count }} Route Options</span>
+          </div>
+          <span style="font-size: 0.78rem; color: #92400e;">Compare distance, elevation, and terrain before choosing</span>
+        </div>
       {% endif %}
-    </div>
 
-    <div class="stage-row">
-      <!-- Main Route Card -->
-      <div class="card stage-card main-route">
-        <div class="route-type-label">Main Route</div>
-        <h3>
-          <a href="{% url 'stage_detail' group.primary.id %}">
-            {{ group.primary.stage_name }}
-          </a>
-        </h3>
-        <p>
-          <strong>Distance:</strong> {{ group.primary.distance_km }} km<br>
-          <strong>Est. Time:</strong> {{ group.primary.time_minutes|format_duration }} mins
-        </p>
-        <a href="{% url 'stage_detail' group.primary.id %}" class="btn btn-booking">View Map & Stays</a>
-      </div>
+      <!-- Side-by-Side Cards (1 to 4 columns depending on available alternatives) -->
+      <!-- Side-by-Side Cards -->
+      <div class="variants-grid">
+        {% for stage in group.all_variants %}
+          <div class="variant-card {% if forloop.first %}is-primary{% else %}is-alt{% endif %}">
+            <div>
+              <span class="variant-tag {{ stage.variant_meta.badge_class }}">
+                {{ stage.variant_meta.icon }} {{ stage.variant_meta.label }}
+              </span>
 
-      <!-- Paired Alternate Route Cards -->
-      {% for alt in group.alternates %}
-      <div class="card stage-card alt-route">
-        <div class="route-type-label alt-label">Alternate Option</div>
-        <h3>
-          <a href="{% url 'stage_detail' alt.id %}">
-            {{ alt.stage_name }}
-          </a>
-        </h3>
-        <p>
-          <strong>Distance:</strong> {{ alt.distance_km }} km<br>
-          <strong>Est. Time:</strong> {{ alt.time_minutes|format_duration }} mins
-        </p>
-        <a href="{% url 'stage_detail' alt.id %}" class="btn btn-booking">View Map & Stays</a>
+              <h3 class="variant-card-title">
+                Stage {{ stage.display_ref }}: {{ stage.stage_name }}
+              </h3>
+
+              <div class="variant-metrics">
+                <strong>{{ stage.distance_km }} km</strong>
+                {% if stage.time_minutes %}
+                  &bull; {{ stage.time_minutes|format_duration }}
+                {% endif %}
+              </div>
+            </div>
+
+            <a href="{% url 'stage_detail' stage.id %}" class="btn-open-stage">
+              View Stage {{ stage.display_ref }} &rarr;
+            </a>
+          </div>
+        {% endfor %}
       </div>
-      {% endfor %}
+      
     </div>
-  </div>
-{% endfor %}
+  {% endfor %}
+</div>
 {% endblock %}

@@ -15,10 +15,10 @@
     {% endif %}
   </div>
 
-  <div class="nav-center-buttons">
+<div class="nav-center-buttons">
     {% if parent_stage %}
       <a href="{% url 'stage_detail' parent_stage.id %}" class="btn-nav btn-stage">
-        Stage {{ parent_stage.id }}: {{ parent_stage.stage_name|truncatechars:20 }}
+        Stage {{ parent_stage.display_ref }}: {{ parent_stage.stage_name|truncatechars:20 }}
       </a>
     {% endif %}
     <a href="{% url 'stage_list' %}" class="btn-nav btn-all-stages">All Stages</a>

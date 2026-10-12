@@ -8,12 +8,12 @@
   <div class="nav-group nav-left">
     {% if prior_stage %}
       <a href="{% url 'stage_detail' prior_stage.id %}" class="btn-nav">
-        ← Stage {{ prior_stage.id }}: {{ prior_stage.stage_name|truncatechars:26 }}
+        ← Stage {{ prior_stage.display_ref }}: {{ prior_stage.stage_name|truncatechars:26 }}
       </a>
     {% endif %}
     {% if alt_prior_stage %}
       <a href="{% url 'stage_detail' alt_prior_stage.id %}" class="btn-nav btn-alt">
-        ⇠ Alt Prior (Stage {{ alt_prior_stage.id }})
+        ⇠ Alt Prior (Stage {{ alt_prior_stage.display_ref }})
       </a>
     {% endif %}
     {% if not prior_stage and not alt_prior_stage %}
@@ -28,12 +28,12 @@
   <div class="nav-group nav-right">
     {% if next_stage %}
       <a href="{% url 'stage_detail' next_stage.id %}" class="btn-nav">
-        Stage {{ next_stage.id }}: {{ next_stage.stage_name|truncatechars:26 }} →
+        Stage {{ next_stage.display_ref }}: {{ next_stage.stage_name|truncatechars:26 }} →
       </a>
     {% endif %}
     {% if alt_next_stage %}
       <a href="{% url 'stage_detail' alt_next_stage.id %}" class="btn-nav btn-alt">
-        Alt Next (Stage {{ alt_next_stage.id }}) ⇢
+        Alt Next (Stage {{ alt_next_stage.display_ref }}) ⇢
       </a>
     {% endif %}
     {% if not next_stage and not alt_next_stage %}
@@ -42,7 +42,8 @@
   </div>
 </div>
 
-<h2>Stage {{ stage.id }}: {{ stage.stage_name }}</h2>
+<h2>Stage {{ stage.display_ref }}: {{ stage.stage_name }}</h2>
+
 <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
   <p style="margin: 0;">
     <strong>Distance:</strong> {{ stage.distance_km }} km |   
@@ -61,13 +62,62 @@
   </div>
 
   {% if has_elevation_data %}
+          <button type="button" id="openScrubModal" class="btn" style="background: #1e3a8a; color: #ffffff; cursor: pointer; border: none; margin: 0;">
+        🔍 Explore &amp; Scrub
+      </button>
     <div class="chart-container">
+
       <canvas id="elevationChart"></canvas>
     </div>
   {% else %}
     <p><small>Elevation data pending for this stage.</small></p>
   {% endif %}
 </div>
+
+<!-- Scrub Modal Drawer -->
+<div id="scrubModalBackdrop" class="scrub-modal-backdrop" aria-hidden="true">
+  <div class="scrub-drawer" role="dialog" aria-modal="true" aria-labelledby="scrubDrawerTitle">
+    <div class="scrub-drawer-header">
+      <h3 id="scrubDrawerTitle" class="scrub-drawer-title">Stage {{ stage.display_ref }} Elevation Explorer</h3>
+      <button type="button" id="closeScrubModal" class="btn-close-drawer" aria-label="Close modal">&times;</button>
+    </div>
+
+    <!-- Live HUD Readout -->
+    <div class="scrub-hud">
+      <div class="scrub-stat">
+        <span class="scrub-stat-label">Distance</span>
+        <span id="hudDistance" class="scrub-stat-value">0.0 km</span>
+      </div>
+      <div class="scrub-stat">
+        <span class="scrub-stat-label">Altitude</span>
+        <span id="hudAltitude" class="scrub-stat-value">--- m</span>
+      </div>
+      <div class="scrub-stat">
+        <span class="scrub-stat-label">Grade / Slope</span>
+        <span id="hudGrade" class="scrub-stat-value">--- %</span>
+      </div>
+      <div class="scrub-stat">
+        <span class="scrub-stat-label">Nearest Waypoint</span>
+        <span id="hudWaypoint" class="scrub-stat-value">---</span>
+      </div>
+    </div>
+
+    <!-- Expanded Drawer Canvas -->
+    <div class="scrub-chart-area">
+      <canvas id="scrubChartCanvas"></canvas>
+    </div>
+
+    <!-- Scrub Slider -->
+    <div class="scrub-slider-container">
+      <input type="range" id="elevationScrubber" class="scrub-slider" min="0" max="100" step="0.1" value="0">
+      <div class="scrub-slider-labels">
+        <span>0 km (Start)</span>
+        <span id="scrubSliderMaxLabel">-- km (Finish)</span>
+      </div>
+    </div>
+  </div>
+</div>
+
 
 <!-- Places Along the Way -->
 <div class="card locations-list-card" style="margin: 1.5rem 0; padding: 1.25rem;">
@@ -154,12 +204,12 @@
   <div class="nav-group nav-left">
     {% if prior_stage %}
       <a href="{% url 'stage_detail' prior_stage.id %}" class="btn-nav">
-        ← Stage {{ prior_stage.id }}: {{ prior_stage.stage_name|truncatechars:26 }}
+        ← Stage {{ prior_stage.display_ref }}: {{ prior_stage.stage_name|truncatechars:26 }}
       </a>
     {% endif %}
     {% if alt_prior_stage %}
       <a href="{% url 'stage_detail' alt_prior_stage.id %}" class="btn-nav btn-alt">
-        ⇠ Alt Prior (Stage {{ alt_prior_stage.id }})
+        ⇠ Alt Prior (Stage {{ alt_prior_stage.display_ref }})
       </a>
     {% endif %}
     {% if not prior_stage and not alt_prior_stage %}
@@ -174,12 +224,12 @@
   <div class="nav-group nav-right">
     {% if next_stage %}
       <a href="{% url 'stage_detail' next_stage.id %}" class="btn-nav">
-        Stage {{ next_stage.id }}: {{ next_stage.stage_name|truncatechars:26 }} →
+        Stage {{ next_stage.display_ref }}: {{ next_stage.stage_name|truncatechars:26 }} →
       </a>
     {% endif %}
     {% if alt_next_stage %}
       <a href="{% url 'stage_detail' alt_next_stage.id %}" class="btn-nav btn-alt">
-        Alt Next (Stage {{ alt_next_stage.id }}) ⇢
+        Alt Next (Stage {{ alt_next_stage.display_ref }}) ⇢
       </a>
     {% endif %}
     {% if not next_stage and not alt_next_stage %}
@@ -231,6 +281,186 @@
 
     const yMin = Math.max(0, Math.floor((minEle - 60) / 50) * 50);
     const yMax = Math.ceil((maxEle + 90) / 50) * 50;
+
+    const openBtn = document.getElementById('openScrubModal');
+    const closeBtn = document.getElementById('closeScrubModal');
+    const backdrop = document.getElementById('scrubModalBackdrop');
+    const scrubCanvas = document.getElementById('scrubChartCanvas');
+    const scrubber = document.getElementById('elevationScrubber');
+    const maxLabel = document.getElementById('scrubSliderMaxLabel');
+
+    const hudDist = document.getElementById('hudDistance');
+    const hudAlt = document.getElementById('hudAltitude');
+    const hudGrade = document.getElementById('hudGrade');
+    const hudWp = document.getElementById('hudWaypoint');
+
+    let scrubChartInstance = null;
+    let currentScrubKm = 0;
+
+    if (openBtn && backdrop && scrubCanvas) {
+      maxLabel.textContent = `${maxDist.toFixed(1)} km (Finish)`;
+      scrubber.max = maxDist;
+
+      // Find elevation and grade by linear interpolation
+      function getMetricsAtKm(km) {
+        if (dataPoints.length === 0) return { alt: 0, grade: 0 };
+        
+        let i = 0;
+        while (i < dataPoints.length - 1 && dataPoints[i + 1].x < km) {
+          i++;
+        }
+
+        const p1 = dataPoints[i];
+        const p2 = dataPoints[Math.min(i + 1, dataPoints.length - 1)];
+
+        if (p1.x === p2.x) {
+          return { alt: p1.y, grade: 0 };
+        }
+
+        const ratio = (km - p1.x) / (p2.x - p1.x);
+        const alt = Math.round(p1.y + ratio * (p2.y - p1.y));
+        const runMeters = (p2.x - p1.x) * 1000;
+        const riseMeters = p2.y - p1.y;
+        const grade = runMeters > 0 ? ((riseMeters / runMeters) * 100).toFixed(1) : 0;
+
+        return { alt, grade };
+      }
+
+      function updateHUD(km) {
+        const { alt, grade } = getMetricsAtKm(km);
+        hudDist.textContent = `${km.toFixed(1)} km`;
+        hudAlt.textContent = `${alt} m`;
+        hudGrade.textContent = `${grade > 0 ? '+' : ''}${grade}%`;
+
+        // Check nearest waypoint
+        const nearest = waypoints.reduce((prev, curr) => {
+          return Math.abs(curr.km - km) < Math.abs(prev.km - km) ? curr : prev;
+        }, waypoints[0]);
+
+        if (nearest && Math.abs(nearest.km - km) <= 0.8) {
+          hudWp.textContent = `${nearest.name} (${Math.abs(nearest.km - km) < 0.1 ? 'here' : (nearest.km > km ? 'in ' + (nearest.km - km).toFixed(1) + ' km' : (km - nearest.km).toFixed(1) + ' km past')})`;
+        } else {
+          hudWp.textContent = nearest ? nearest.name : '---';
+        }
+      }
+
+      // Vertical scrubber cursor plugin
+      const scrubberCursorPlugin = {
+        id: 'scrubberCursor',
+        afterDraw(chart) {
+          const { ctx, chartArea: { top, bottom, left, right }, scales: { x, y } } = chart;
+          const xPos = x.getPixelForValue(currentScrubKm);
+
+          if (xPos >= left && xPos <= right) {
+            const { alt } = getMetricsAtKm(currentScrubKm);
+            const yPos = y.getPixelForValue(alt);
+
+            ctx.save();
+            // Solid cursor guide line
+            ctx.beginPath();
+            ctx.strokeStyle = '#d97706';
+            ctx.lineWidth = 2;
+            ctx.moveTo(xPos, top);
+            ctx.lineTo(xPos, bottom);
+            ctx.stroke();
+
+            // Cursor focal dot
+            ctx.beginPath();
+            ctx.arc(xPos, yPos, 6, 0, Math.PI * 2);
+            ctx.fillStyle = '#d97706';
+            ctx.fill();
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 2.5;
+            ctx.stroke();
+            ctx.restore();
+          }
+        }
+      };
+
+      function openDrawer() {
+        backdrop.classList.add('is-open');
+        backdrop.setAttribute('aria-hidden', 'false');
+
+        if (!scrubChartInstance) {
+          scrubChartInstance = new Chart(scrubCanvas.getContext('2d'), {
+            type: 'line',
+            data: {
+              datasets: [{
+                label: 'Elevation (m)',
+                data: dataPoints,
+                fill: 'start',
+                borderColor: '#d97706',
+                backgroundColor: 'rgba(245, 158, 11, 0.18)',
+                borderWidth: 2.5,
+                pointRadius: 0,
+                tension: 0.2,
+              }]
+            },
+            plugins: [waypointPlugin, scrubberCursorPlugin],
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              animation: false,
+              events: ['click', 'touchstart', 'touchmove'],
+              onClick(event) {
+                const rect = scrubCanvas.getBoundingClientRect();
+                const xVal = scrubChartInstance.scales.x.getValueForPixel(event.x);
+                if (xVal !== undefined) {
+                  currentScrubKm = Math.max(0, Math.min(maxDist, xVal));
+                  scrubber.value = currentScrubKm;
+                  updateHUD(currentScrubKm);
+                  scrubChartInstance.draw();
+                }
+              },
+              plugins: { legend: { display: false } },
+              scales: {
+                x: {
+                  type: 'linear',
+                  min: 0,
+                  max: maxDist,
+                  title: { display: true, text: 'Distance (km)', color: '#64748b' },
+                  ticks: { stepSize: 5, color: '#94a3b8', callback: val => val + ' km' },
+                  grid: { color: '#f1f5f9' }
+                },
+                y: {
+                  min: yMin,
+                  max: yMax,
+                  title: { display: true, text: 'Altitude (m)', color: '#64748b' },
+                  ticks: { stepSize: 100, color: '#94a3b8' },
+                  grid: { color: '#e2e8f0' }
+                }
+              }
+            }
+          });
+        }
+
+        currentScrubKm = 0;
+        scrubber.value = 0;
+        updateHUD(0);
+        setTimeout(() => scrubChartInstance.resize(), 50);
+      }
+
+      function closeDrawer() {
+        backdrop.classList.remove('is-open');
+        backdrop.setAttribute('aria-hidden', 'true');
+      }
+
+      openBtn.addEventListener('click', openDrawer);
+      closeBtn.addEventListener('click', closeDrawer);
+      backdrop.addEventListener('click', (e) => {
+        if (e.target === backdrop) closeDrawer();
+      });
+
+      // Scrub Slider event
+      scrubber.addEventListener('input', (e) => {
+        currentScrubKm = parseFloat(e.target.value);
+        updateHUD(currentScrubKm);
+        if (scrubChartInstance) {
+          scrubChartInstance.draw();
+        }
+      });
+    }
+
 
     // Helper: Sync highlights across DOM elements
     window.setStageHighlight = function(locationId) {

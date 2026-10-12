@@ -149,8 +149,8 @@
           {% if a.email %}
             <a href="mailto:{{ a.email }}" class="btn btn-email">✉️ Email</a>
           {% endif %}
-          {% if a.website_url %}
-            <a href="{{ a.website_url }}" target="_blank" rel="noopener" class="btn btn-web">Website</a>
+          {% if a.valid_website_url %}
+            <a href="{{ a.valid_website_url }}" target="_blank" rel="noopener" class="btn btn-web">Website</a>
           {% endif %}
         </div>
       </div>
@@ -194,8 +194,8 @@
           {% if p.email %}
             <a href="mailto:{{ p.email }}" class="btn btn-email">✉️ Email</a>
           {% endif %}
-          {% if p.website_url %}
-            <a href="{{ p.website_url }}" target="_blank" rel="noopener" class="btn btn-web">Website</a>
+          {% if p.valid_website_url %}
+            <a href="{{ p.valid_website_url }}" target="_blank" rel="noopener" class="btn btn-web">Website</a>
           {% endif %}
         </div>
       </div>

@@ -194,6 +194,15 @@ class Albergue(models.Model):
     class Meta:
         managed = False
         db_table = 'albergues'
+        
+    @property
+    def valid_website_url(self):
+        """Returns the website URL only if it starts with http:// or https://, else None."""
+        if self.website_url:
+            url = self.website_url.strip()
+            if url.startswith(('http://', 'https://')):
+                return url
+        return None
 
 
 class PrivateAccomm(models.Model):
@@ -213,6 +222,15 @@ class PrivateAccomm(models.Model):
     class Meta:
         managed = False
         db_table = 'privateAccommDetail'
+        
+    @property
+    def valid_website_url(self):
+        """Returns the website URL only if it starts with http:// or https://, else None."""
+        if self.website_url:
+            url = self.website_url.strip()
+            if url.startswith(('http://', 'https://')):
+                return url
+        return None
 
 
 class Paragraph(models.Model):

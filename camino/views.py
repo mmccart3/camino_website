@@ -4,7 +4,7 @@ import traceback
 from django.shortcuts import render, get_object_or_404
 from .models import (
     Stage, Path, ElevationPoint, MapLocationCoord, Location,
-    Albergue, PrivateAccomm
+    Albergue, PrivateAccomm, TrackPoint
 )
 
 # camino/views.py
@@ -132,9 +132,10 @@ def stage_list(request):
 # camino/views.py
 
 def stage_detail(request, stage_id):
+    # 1. Fetch Stage model instance first
     stage = get_object_or_404(Stage, pk=stage_id)
 
-    # 1. Navigation context
+    # 2. Prior & Next Navigation links
     prior_id = getattr(stage, 'prior_stage', None)
     alt_prior_id = getattr(stage, 'alt_prior_stage', None)
     next_id = getattr(stage, 'next_stage', None)
@@ -145,14 +146,17 @@ def stage_detail(request, stage_id):
     next_stage = Stage.objects.filter(pk=next_id).first() if next_id else None
     alt_next_stage = Stage.objects.filter(pk=alt_next_id).first() if alt_next_id else None
 
-    # 2. Hotspots
+    # 3. Illustrated map hotspots
     hotspots = list(MapLocationCoord.objects.filter(stage_id=stage.id).select_related('location'))
 
-    # 3. Elevation, Waypoints, Timeline & Quick Stats
+    # 4. Process Path, Elevation, Timeline & GPS coordinates
     chart_points = []
     waypoint_markers = []
     stage_locations = []
     elevation_stats = None
+    gps_track = []
+    map_waypoints = []
+    locations_dict = {}
 
     try:
         stage_paths = list(Path.objects.filter(stage_id=stage.id).order_by('pk'))
@@ -162,9 +166,11 @@ def stage_detail(request, stage_id):
             accumulated_distance_m = 0.0
             accumulated_seconds = 0
 
-            # Gather all location IDs along this stage
+            # Gather all locations along paths for this stage
             loc_ids = set()
+            stage_path_ids = []
             for p in stage_paths:
+                stage_path_ids.append(p.pk)
                 if p.origin_loc:
                     loc_ids.add(p.origin_loc)
                 if p.destination_loc:
@@ -199,7 +205,6 @@ def stage_detail(request, stage_id):
                     'has_grocery': bool(loc.has_grocery_store),
                 }
 
-            # Elevation accumulator variables
             total_ascent_m = 0.0
             total_descent_m = 0.0
             prev_elev = None
@@ -216,7 +221,6 @@ def stage_detail(request, stage_id):
                 path_dist = path_obj.distance_metres or 0
                 path_secs = path_obj.time_seconds or (path_dist / 1.16)
 
-                # Record stage start location
                 if idx == 0 and origin_id in locations_dict and origin_id not in seen_locations:
                     seen_locations.add(origin_id)
                     entry = make_location_entry(origin_id, 0.0, 0)
@@ -230,7 +234,6 @@ def stage_detail(request, stage_id):
                             'elevation': round(pts[0]['elevation_metres'])
                         })
 
-                # Profile points & cumulative ascent/descent
                 for pt in pts:
                     elev = pt['elevation_metres']
                     if prev_elev is not None:
@@ -268,13 +271,12 @@ def stage_detail(request, stage_id):
 
                 accumulated_distance_m = seg_end_dist
 
-            # Calculate High/Low points and Difficulty rating
+            # Calculate Elevation Stats
             if all_continuous_points:
                 highest_pt = max(all_continuous_points, key=lambda p: p['elevation_m'])
                 lowest_pt = min(all_continuous_points, key=lambda p: p['elevation_m'])
                 total_km = round(all_continuous_points[-1]['distance_m'] / 1000.0, 1)
 
-                # Difficulty classification
                 gain_per_km = total_ascent_m / total_km if total_km > 0 else 0
                 if total_ascent_m > 750 or gain_per_km > 35:
                     difficulty_label = "Strenuous Mountain Pass"
@@ -305,7 +307,7 @@ def stage_detail(request, stage_id):
                     'difficulty_icon': difficulty_icon,
                 }
 
-                # Downsample to ~160 points for the chart
+                # Downsample points for chart
                 total_pts = len(all_continuous_points)
                 step = max(1, total_pts // 160)
                 sampled_points = all_continuous_points[::step]
@@ -320,9 +322,45 @@ def stage_detail(request, stage_id):
                     for p in sampled_points
                 ]
 
+            # 5. Extract GPS track coordinates for the interactive Leaflet map
+            track_pts = list(
+                TrackPoint.objects.filter(path_id__in=stage_path_ids)
+                .order_by('track_point_id')
+                .values('latitude', 'longitude')
+            )
+            if track_pts:
+                gps_track = [
+                    [float(pt['latitude']), float(pt['longitude'])]
+                    for pt in track_pts
+                    if pt['latitude'] is not None and pt['longitude'] is not None
+                ]
+            else:
+                elev_pts = list(
+                    ElevationPoint.objects.filter(path_id__in=stage_path_ids)
+                    .order_by('sequence')
+                    .values('latitude', 'longitude')
+                )
+                gps_track = [
+                    [float(pt['latitude']), float(pt['longitude'])]
+                    for pt in elev_pts
+                    if pt['latitude'] is not None and pt['longitude'] is not None
+                ]
+
+            # Build waypoint coordinates for Leaflet markers
+            for loc in stage_locations:
+                loc_obj = locations_dict.get(loc['id'])
+                if loc_obj and loc_obj.latitude and loc_obj.longitude:
+                    map_waypoints.append({
+                        'id': loc['id'],
+                        'name': loc['name'],
+                        'lat': float(loc_obj.latitude),
+                        'lng': float(loc_obj.longitude),
+                        'km': loc['distance_km'],
+                    })
+
     except Exception as err:
         traceback.print_exc()
-        print(f"[Warning] Elevation stats error on Stage {stage.id}: {err}")
+        print(f"[Warning] Error assembling stage data for Stage {stage.id}: {err}")
 
     context = {
         'stage': stage,
@@ -336,8 +374,12 @@ def stage_detail(request, stage_id):
         'chart_points_json': json.dumps(chart_points),
         'waypoint_markers_json': json.dumps(waypoint_markers),
         'has_elevation_data': len(chart_points) > 0,
+        'gps_track_json': json.dumps(gps_track),
+        'map_waypoints_json': json.dumps(map_waypoints),
+        'has_gps_track': len(gps_track) > 0,
     }
     return render(request, 'camino/stage_detail.html', context)
+
 
 def location_detail(request, location_id):
     location = get_object_or_404(Location, pk=location_id)

@@ -88,17 +88,20 @@
 
 <!-- Interactive Elevation Profile Card -->
 <div class="card elevation-card">
-  <div class="elevation-header">
-    <h3>Elevation Profile</h3>
-    <span class="elevation-hint">Touch or hover across the curve to inspect altitudes</span>
+  <div class="elevation-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+    <div>
+      <h3 style="margin: 0;">Elevation Profile</h3>
+      <span class="elevation-hint">Touch or hover across the curve to inspect altitudes</span>
+    </div>
+    {% if has_elevation_data %}
+      <button type="button" id="openScrubModal" class="btn" style="background: #1e3a8a; color: #ffffff; cursor: pointer; border: none; margin: 0;">
+        🔍 Explore &amp; Scrub
+      </button>
+    {% endif %}
   </div>
 
   {% if has_elevation_data %}
-          <button type="button" id="openScrubModal" class="btn" style="background: #1e3a8a; color: #ffffff; cursor: pointer; border: none; margin: 0;">
-        🔍 Explore &amp; Scrub
-      </button>
-    <div class="chart-container">
-
+    <div class="chart-container" style="position: relative; height: 260px; width: 100%;">
       <canvas id="elevationChart"></canvas>
     </div>
   {% else %}
@@ -135,7 +138,7 @@
     </div>
 
     <!-- Expanded Drawer Canvas -->
-    <div class="scrub-chart-area">
+    <div class="scrub-chart-area" style="position: relative; height: 240px; width: 100%;">
       <canvas id="scrubChartCanvas"></canvas>
     </div>
 
@@ -149,7 +152,6 @@
     </div>
   </div>
 </div>
-
 
 <!-- Places Along the Way -->
 <div class="card locations-list-card" style="margin: 1.5rem 0; padding: 1.25rem;">
@@ -201,8 +203,23 @@
   </div>
 </div>
 
-<!-- Interactive Map Container -->
-<div class="map-box" style="position: relative; width: 100%; display: block; overflow: hidden; border-radius: 8px; border: 1px solid var(--border);">
+<!-- Map View Selector -->
+<div class="map-view-switcher">
+  <h3 style="margin: 0; color: var(--navy);">Stage Route Map</h3>
+  {% if has_gps_track %}
+    <div class="map-toggle-group">
+      <button type="button" id="btnShowIllustrated" class="map-toggle-btn active">
+        🗺️ Illustrated
+      </button>
+      <button type="button" id="btnShowInteractive" class="map-toggle-btn">
+        🛰️ Interactive GPS
+      </button>
+    </div>
+  {% endif %}
+</div>
+
+<!-- 1. Static Illustrated Map Container -->
+<div id="illustrated-map-container" class="map-box" style="position: relative; width: 100%; display: block; overflow: hidden; border-radius: 8px; border: 1px solid var(--border);">
   <img id="stage-map-img" 
        src="{% if stage.stage_map_url %}{{ stage.stage_map_url }}{% elif stage.map_url_1920 %}{{ stage.map_url_1920 }}{% else %}{{ stage.map_url_1024 }}{% endif %}" 
        alt="{{ stage.stage_name }} Map" 
@@ -219,7 +236,7 @@
               width="{{ spot.w_1920 }}" 
               height="{{ spot.h_1920 }}" 
               class="hotspot" 
-              data-location-id="{{ spot.location_id }}" 
+              data-location-id="{{ spot.location_id }}"
               rx="4">
           <title>{% if spot.location %}{{ spot.location.location_name }}{% else %}Location {{ spot.location_id }}{% endif %}</title>
         </rect>
@@ -228,6 +245,17 @@
     {% endfor %}
   </svg>
 </div>
+
+<!-- 2. Interactive Leaflet Map Container -->
+{% if has_gps_track %}
+  <div id="interactive-map-container" style="display: none; position: relative;">
+    <div id="leaflet-stage-map" style="width: 100%; height: 480px; border-radius: 8px; border: 1px solid var(--border);"></div>
+    <div style="font-size: 0.78rem; color: #64748b; margin-top: 0.4rem; display: flex; justify-content: space-between;">
+      <span>Route track plotted from recorded Camino GPS coordinates.</span>
+      <span>Layer: Topo / Satellite switchable via top-right icon.</span>
+    </div>
+  </div>
+{% endif %}
 
 <p id="debug-info" style="font-size: 0.8rem; color: #64748b; margin-top: 0.5rem;"></p>
 
@@ -270,6 +298,7 @@
   </div>
 </div>
 
+<!-- Illustrated Map Overlay Sizing -->
 <script>
   function syncOverlay() {
     const img = document.getElementById('stage-map-img');
@@ -295,16 +324,109 @@
   }
 </script>
 
+<!-- Leaflet Interactive Map Logic -->
+<script>
+  const gpsTrack = {{ gps_track_json|default:"[]"|safe }};
+  const mapWaypoints = {{ map_waypoints_json|default:"[]"|safe }};
+  let leafletMap = null;
+  let trackPolyline = null;
+
+  const btnIllustrated = document.getElementById('btnShowIllustrated');
+  const btnInteractive = document.getElementById('btnShowInteractive');
+  const illustratedContainer = document.getElementById('illustrated-map-container');
+  const interactiveContainer = document.getElementById('interactive-map-container');
+
+  function initInteractiveMap() {
+    if (leafletMap || !Array.isArray(gpsTrack) || gpsTrack.length === 0) return;
+
+    // Free Esri Topo & Satellite layers (No API keys, no 403 blocks)
+    const topoLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', {
+      maxZoom: 19,
+      attribution: 'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ, TomTom, USGS, NPS'
+    });
+
+    const esriSatellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+      maxZoom: 18,
+      attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping'
+    });
+
+    leafletMap = L.map('leaflet-stage-map', {
+      layers: [topoLayer],
+      zoomSnap: 0.5,
+    });
+
+    const baseMaps = {
+      "Topographic Trail": topoLayer,
+      "Satellite Imagery": esriSatellite,
+    };
+    L.control.layers(baseMaps, null, { position: 'topright' }).addTo(leafletMap);
+
+    trackPolyline = L.polyline(gpsTrack, {
+      color: '#d97706',
+      weight: 5,
+      opacity: 0.88,
+      lineJoin: 'round'
+    }).addTo(leafletMap);
+
+    leafletMap.fitBounds(trackPolyline.getBounds(), { padding: [24, 24] });
+
+    const createVillageIcon = () => L.divIcon({
+      className: 'leaflet-custom-marker',
+      html: `<div style="background:#1e3a8a; color:#fff; border:2px solid #fff; border-radius:50%; width:14px; height:14px; box-shadow:0 0 4px rgba(0,0,0,0.5);"></div>`,
+      iconSize: [14, 14],
+      iconAnchor: [7, 7]
+    });
+
+    mapWaypoints.forEach((wp) => {
+      if (wp.lat && wp.lng) {
+        L.marker([wp.lat, wp.lng], { icon: createVillageIcon() })
+          .addTo(leafletMap)
+          .bindPopup(`
+            <div style="font-family: sans-serif; padding: 2px;">
+              <strong style="color: #1e3a8a; font-size: 1.05rem;">${wp.name}</strong><br>
+              <span style="color: #64748b; font-size: 0.85rem;">${wp.km} km from start</span><br>
+              <a href="/location/${wp.id}/" style="display:inline-block; margin-top:6px; color:#d97706; font-weight:bold; font-size:0.85rem; text-decoration:none;">View accommodations &rarr;</a>
+            </div>
+          `);
+      }
+    });
+  }
+
+  if (btnIllustrated && btnInteractive) {
+    btnIllustrated.addEventListener('click', () => {
+      btnIllustrated.classList.add('active');
+      btnInteractive.classList.remove('active');
+      illustratedContainer.style.display = 'block';
+      if (interactiveContainer) interactiveContainer.style.display = 'none';
+      syncOverlay();
+    });
+
+    btnInteractive.addEventListener('click', () => {
+      btnInteractive.classList.add('active');
+      btnIllustrated.classList.remove('active');
+      illustratedContainer.style.display = 'none';
+      if (interactiveContainer) {
+        interactiveContainer.style.display = 'block';
+        initInteractiveMap();
+        setTimeout(() => leafletMap && leafletMap.invalidateSize(), 50);
+      }
+    });
+  }
+</script>
+
+<!-- Chart.js & Elevation Drawer Logic -->
 {% if has_elevation_data %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="{% static 'camino/chart.umd.min.js' %}"></script>
 <script>
   document.addEventListener('DOMContentLoaded', function() {
     const ctx = document.getElementById('elevationChart');
     if (!ctx) return;
 
-    const dataPoints = {{ chart_points_json|safe }};
-    const waypoints = {{ waypoint_markers_json|safe }};
+    const dataPoints = {{ chart_points_json|default:"[]"|safe }};
+    const waypoints = {{ waypoint_markers_json|default:"[]"|safe }};
     let activeLocationId = null;
+
+    if (!Array.isArray(dataPoints) || dataPoints.length === 0) return;
 
     const elevations = dataPoints.map(p => p.y);
     const minEle = Math.min(...elevations);
@@ -314,207 +436,25 @@
     const yMin = Math.max(0, Math.floor((minEle - 60) / 50) * 50);
     const yMax = Math.ceil((maxEle + 90) / 50) * 50;
 
-    const openBtn = document.getElementById('openScrubModal');
-    const closeBtn = document.getElementById('closeScrubModal');
-    const backdrop = document.getElementById('scrubModalBackdrop');
-    const scrubCanvas = document.getElementById('scrubChartCanvas');
-    const scrubber = document.getElementById('elevationScrubber');
-    const maxLabel = document.getElementById('scrubSliderMaxLabel');
-
-    const hudDist = document.getElementById('hudDistance');
-    const hudAlt = document.getElementById('hudAltitude');
-    const hudGrade = document.getElementById('hudGrade');
-    const hudWp = document.getElementById('hudWaypoint');
-
-    let scrubChartInstance = null;
-    let currentScrubKm = 0;
-
-    if (openBtn && backdrop && scrubCanvas) {
-      maxLabel.textContent = `${maxDist.toFixed(1)} km (Finish)`;
-      scrubber.max = maxDist;
-
-      // Find elevation and grade by linear interpolation
-      function getMetricsAtKm(km) {
-        if (dataPoints.length === 0) return { alt: 0, grade: 0 };
-        
-        let i = 0;
-        while (i < dataPoints.length - 1 && dataPoints[i + 1].x < km) {
-          i++;
-        }
-
-        const p1 = dataPoints[i];
-        const p2 = dataPoints[Math.min(i + 1, dataPoints.length - 1)];
-
-        if (p1.x === p2.x) {
-          return { alt: p1.y, grade: 0 };
-        }
-
-        const ratio = (km - p1.x) / (p2.x - p1.x);
-        const alt = Math.round(p1.y + ratio * (p2.y - p1.y));
-        const runMeters = (p2.x - p1.x) * 1000;
-        const riseMeters = p2.y - p1.y;
-        const grade = runMeters > 0 ? ((riseMeters / runMeters) * 100).toFixed(1) : 0;
-
-        return { alt, grade };
-      }
-
-      function updateHUD(km) {
-        const { alt, grade } = getMetricsAtKm(km);
-        hudDist.textContent = `${km.toFixed(1)} km`;
-        hudAlt.textContent = `${alt} m`;
-        hudGrade.textContent = `${grade > 0 ? '+' : ''}${grade}%`;
-
-        // Check nearest waypoint
-        const nearest = waypoints.reduce((prev, curr) => {
-          return Math.abs(curr.km - km) < Math.abs(prev.km - km) ? curr : prev;
-        }, waypoints[0]);
-
-        if (nearest && Math.abs(nearest.km - km) <= 0.8) {
-          hudWp.textContent = `${nearest.name} (${Math.abs(nearest.km - km) < 0.1 ? 'here' : (nearest.km > km ? 'in ' + (nearest.km - km).toFixed(1) + ' km' : (km - nearest.km).toFixed(1) + ' km past')})`;
-        } else {
-          hudWp.textContent = nearest ? nearest.name : '---';
-        }
-      }
-
-      // Vertical scrubber cursor plugin
-      const scrubberCursorPlugin = {
-        id: 'scrubberCursor',
-        afterDraw(chart) {
-          const { ctx, chartArea: { top, bottom, left, right }, scales: { x, y } } = chart;
-          const xPos = x.getPixelForValue(currentScrubKm);
-
-          if (xPos >= left && xPos <= right) {
-            const { alt } = getMetricsAtKm(currentScrubKm);
-            const yPos = y.getPixelForValue(alt);
-
-            ctx.save();
-            // Solid cursor guide line
-            ctx.beginPath();
-            ctx.strokeStyle = '#d97706';
-            ctx.lineWidth = 2;
-            ctx.moveTo(xPos, top);
-            ctx.lineTo(xPos, bottom);
-            ctx.stroke();
-
-            // Cursor focal dot
-            ctx.beginPath();
-            ctx.arc(xPos, yPos, 6, 0, Math.PI * 2);
-            ctx.fillStyle = '#d97706';
-            ctx.fill();
-            ctx.strokeStyle = '#ffffff';
-            ctx.lineWidth = 2.5;
-            ctx.stroke();
-            ctx.restore();
-          }
-        }
-      };
-
-      function openDrawer() {
-        backdrop.classList.add('is-open');
-        backdrop.setAttribute('aria-hidden', 'false');
-
-        if (!scrubChartInstance) {
-          scrubChartInstance = new Chart(scrubCanvas.getContext('2d'), {
-            type: 'line',
-            data: {
-              datasets: [{
-                label: 'Elevation (m)',
-                data: dataPoints,
-                fill: 'start',
-                borderColor: '#d97706',
-                backgroundColor: 'rgba(245, 158, 11, 0.18)',
-                borderWidth: 2.5,
-                pointRadius: 0,
-                tension: 0.2,
-              }]
-            },
-            plugins: [waypointPlugin, scrubberCursorPlugin],
-            options: {
-              responsive: true,
-              maintainAspectRatio: false,
-              animation: false,
-              events: ['click', 'touchstart', 'touchmove'],
-              onClick(event) {
-                const rect = scrubCanvas.getBoundingClientRect();
-                const xVal = scrubChartInstance.scales.x.getValueForPixel(event.x);
-                if (xVal !== undefined) {
-                  currentScrubKm = Math.max(0, Math.min(maxDist, xVal));
-                  scrubber.value = currentScrubKm;
-                  updateHUD(currentScrubKm);
-                  scrubChartInstance.draw();
-                }
-              },
-              plugins: { legend: { display: false } },
-              scales: {
-                x: {
-                  type: 'linear',
-                  min: 0,
-                  max: maxDist,
-                  title: { display: true, text: 'Distance (km)', color: '#64748b' },
-                  ticks: { stepSize: 5, color: '#94a3b8', callback: val => val + ' km' },
-                  grid: { color: '#f1f5f9' }
-                },
-                y: {
-                  min: yMin,
-                  max: yMax,
-                  title: { display: true, text: 'Altitude (m)', color: '#64748b' },
-                  ticks: { stepSize: 100, color: '#94a3b8' },
-                  grid: { color: '#e2e8f0' }
-                }
-              }
-            }
-          });
-        }
-
-        currentScrubKm = 0;
-        scrubber.value = 0;
-        updateHUD(0);
-        setTimeout(() => scrubChartInstance.resize(), 50);
-      }
-
-      function closeDrawer() {
-        backdrop.classList.remove('is-open');
-        backdrop.setAttribute('aria-hidden', 'true');
-      }
-
-      openBtn.addEventListener('click', openDrawer);
-      closeBtn.addEventListener('click', closeDrawer);
-      backdrop.addEventListener('click', (e) => {
-        if (e.target === backdrop) closeDrawer();
-      });
-
-      // Scrub Slider event
-      scrubber.addEventListener('input', (e) => {
-        currentScrubKm = parseFloat(e.target.value);
-        updateHUD(currentScrubKm);
-        if (scrubChartInstance) {
-          scrubChartInstance.draw();
-        }
-      });
-    }
-
-
     // Helper: Sync highlights across DOM elements
     window.setStageHighlight = function(locationId) {
       if (activeLocationId === locationId) return;
       activeLocationId = locationId;
 
-      // 1. Highlight timeline rows
       document.querySelectorAll('.waypoint-row').forEach(row => {
         row.classList.toggle('is-highlighted', row.dataset.locationId === String(locationId));
       });
 
-      // 2. Highlight SVG map hotspots
       document.querySelectorAll('#hotspot-svg rect.hotspot').forEach(rect => {
         rect.classList.toggle('is-highlighted', rect.dataset.locationId === String(locationId));
       });
 
-      // 3. Re-render chart markers
       if (window.elevationChartInstance) {
         window.elevationChartInstance.draw();
       }
     };
 
+    // Shared Waypoint Plugin (Defined first so both charts can use it safely)
     const waypointPlugin = {
       id: 'waypointMarkers',
       afterDraw(chart) {
@@ -529,7 +469,7 @@
             const isMatch = (wp.location_id && String(wp.location_id) === String(activeLocationId)) ||
                             (!wp.location_id && activeLocationId === wp.name);
 
-            // 1. Dashed drop line
+            // Dashed drop line
             ctx.beginPath();
             ctx.setLineDash(isMatch ? [] : [3, 3]);
             ctx.strokeStyle = isMatch ? '#d97706' : 'rgba(100, 116, 139, 0.45)';
@@ -538,7 +478,7 @@
             ctx.lineTo(xPos, bottom);
             ctx.stroke();
 
-            // 2. Point marker
+            // Point marker
             ctx.setLineDash([]);
             ctx.beginPath();
             ctx.arc(xPos, yPos, isMatch ? 7 : 4, 0, Math.PI * 2);
@@ -548,7 +488,7 @@
             ctx.lineWidth = isMatch ? 2.5 : 1.5;
             ctx.stroke();
 
-            // 3. Label
+            // Label
             ctx.font = isMatch ? 'bold 12px sans-serif' : 'bold 10px sans-serif';
             ctx.fillStyle = isMatch ? '#d97706' : '#1e293b';
 
@@ -568,6 +508,7 @@
       }
     };
 
+    // Primary Elevation Chart
     window.elevationChartInstance = new Chart(ctx, {
       type: 'line',
       data: {
@@ -640,13 +581,185 @@
       }
     });
 
-    // Wire up Timeline row events
+    // Modal Drawer Logic
+    const openBtn = document.getElementById('openScrubModal');
+    const closeBtn = document.getElementById('closeScrubModal');
+    const backdrop = document.getElementById('scrubModalBackdrop');
+    const scrubCanvas = document.getElementById('scrubChartCanvas');
+    const scrubber = document.getElementById('elevationScrubber');
+    const maxLabel = document.getElementById('scrubSliderMaxLabel');
+
+    const hudDist = document.getElementById('hudDistance');
+    const hudAlt = document.getElementById('hudAltitude');
+    const hudGrade = document.getElementById('hudGrade');
+    const hudWp = document.getElementById('hudWaypoint');
+
+    let scrubChartInstance = null;
+    let currentScrubKm = 0;
+
+    if (openBtn && backdrop && scrubCanvas && scrubber) {
+      maxLabel.textContent = `${maxDist.toFixed(1)} km (Finish)`;
+      scrubber.max = maxDist;
+
+      function getMetricsAtKm(km) {
+        if (dataPoints.length === 0) return { alt: 0, grade: 0 };
+        
+        let i = 0;
+        while (i < dataPoints.length - 1 && dataPoints[i + 1].x < km) {
+          i++;
+        }
+
+        const p1 = dataPoints[i];
+        const p2 = dataPoints[Math.min(i + 1, dataPoints.length - 1)];
+
+        if (p1.x === p2.x) {
+          return { alt: p1.y, grade: 0 };
+        }
+
+        const ratio = (km - p1.x) / (p2.x - p1.x);
+        const alt = Math.round(p1.y + ratio * (p2.y - p1.y));
+        const runMeters = (p2.x - p1.x) * 1000;
+        const riseMeters = p2.y - p1.y;
+        const grade = runMeters > 0 ? ((riseMeters / runMeters) * 100).toFixed(1) : 0;
+
+        return { alt, grade };
+      }
+
+      function updateHUD(km) {
+        const { alt, grade } = getMetricsAtKm(km);
+        hudDist.textContent = `${km.toFixed(1)} km`;
+        hudAlt.textContent = `${alt} m`;
+        hudGrade.textContent = `${grade > 0 ? '+' : ''}${grade}%`;
+
+        const nearest = waypoints.reduce((prev, curr) => {
+          return Math.abs(curr.km - km) < Math.abs(prev.km - km) ? curr : prev;
+        }, waypoints[0]);
+
+        if (nearest && Math.abs(nearest.km - km) <= 0.8) {
+          hudWp.textContent = `${nearest.name} (${Math.abs(nearest.km - km) < 0.1 ? 'here' : (nearest.km > km ? 'in ' + (nearest.km - km).toFixed(1) + ' km' : (km - nearest.km).toFixed(1) + ' km past')})`;
+        } else {
+          hudWp.textContent = nearest ? nearest.name : '---';
+        }
+      }
+
+      const scrubberCursorPlugin = {
+        id: 'scrubberCursor',
+        afterDraw(chart) {
+          const { ctx, chartArea: { top, bottom, left, right }, scales: { x, y } } = chart;
+          const xPos = x.getPixelForValue(currentScrubKm);
+
+          if (xPos >= left && xPos <= right) {
+            const { alt } = getMetricsAtKm(currentScrubKm);
+            const yPos = y.getPixelForValue(alt);
+
+            ctx.save();
+            ctx.beginPath();
+            ctx.strokeStyle = '#d97706';
+            ctx.lineWidth = 2;
+            ctx.moveTo(xPos, top);
+            ctx.lineTo(xPos, bottom);
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.arc(xPos, yPos, 6, 0, Math.PI * 2);
+            ctx.fillStyle = '#d97706';
+            ctx.fill();
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 2.5;
+            ctx.stroke();
+            ctx.restore();
+          }
+        }
+      };
+
+      function openDrawer() {
+        backdrop.classList.add('is-open');
+        backdrop.setAttribute('aria-hidden', 'false');
+
+        if (!scrubChartInstance) {
+          scrubChartInstance = new Chart(scrubCanvas.getContext('2d'), {
+            type: 'line',
+            data: {
+              datasets: [{
+                label: 'Elevation (m)',
+                data: dataPoints,
+                fill: 'start',
+                borderColor: '#d97706',
+                backgroundColor: 'rgba(245, 158, 11, 0.18)',
+                borderWidth: 2.5,
+                pointRadius: 0,
+                tension: 0.2,
+              }]
+            },
+            plugins: [waypointPlugin, scrubberCursorPlugin],
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              animation: false,
+              events: ['click', 'touchstart', 'touchmove'],
+              onClick(event) {
+                const xVal = scrubChartInstance.scales.x.getValueForPixel(event.x);
+                if (xVal !== undefined) {
+                  currentScrubKm = Math.max(0, Math.min(maxDist, xVal));
+                  scrubber.value = currentScrubKm;
+                  updateHUD(currentScrubKm);
+                  scrubChartInstance.draw();
+                }
+              },
+              plugins: { legend: { display: false } },
+              scales: {
+                x: {
+                  type: 'linear',
+                  min: 0,
+                  max: maxDist,
+                  title: { display: true, text: 'Distance (km)', color: '#64748b' },
+                  ticks: { stepSize: 5, color: '#94a3b8', callback: val => val + ' km' },
+                  grid: { color: '#f1f5f9' }
+                },
+                y: {
+                  min: yMin,
+                  max: yMax,
+                  title: { display: true, text: 'Altitude (m)', color: '#64748b' },
+                  ticks: { stepSize: 100, color: '#94a3b8' },
+                  grid: { color: '#e2e8f0' }
+                }
+              }
+            }
+          });
+        }
+
+        currentScrubKm = 0;
+        scrubber.value = 0;
+        updateHUD(0);
+        setTimeout(() => scrubChartInstance.resize(), 50);
+      }
+
+      function closeDrawer() {
+        backdrop.classList.remove('is-open');
+        backdrop.setAttribute('aria-hidden', 'true');
+      }
+
+      openBtn.addEventListener('click', openDrawer);
+      closeBtn.addEventListener('click', closeDrawer);
+      backdrop.addEventListener('click', (e) => {
+        if (e.target === backdrop) closeDrawer();
+      });
+
+      scrubber.addEventListener('input', (e) => {
+        currentScrubKm = parseFloat(e.target.value);
+        updateHUD(currentScrubKm);
+        if (scrubChartInstance) {
+          scrubChartInstance.draw();
+        }
+      });
+    }
+
+    // Wire up Timeline and Hotspot events
     document.querySelectorAll('.waypoint-row').forEach(row => {
       row.addEventListener('mouseenter', () => setStageHighlight(row.dataset.locationId));
       row.addEventListener('mouseleave', () => setStageHighlight(null));
     });
 
-    // Wire up Map Hotspot events
     document.querySelectorAll('#hotspot-svg rect.hotspot').forEach(rect => {
       rect.addEventListener('mouseenter', () => setStageHighlight(rect.dataset.locationId));
       rect.addEventListener('mouseleave', () => setStageHighlight(null));

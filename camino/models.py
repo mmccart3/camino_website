@@ -1,5 +1,43 @@
 # camino/models.py
 from django.db import models
+from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
+
+BOOKING_AFFILIATE_PARAMS = {
+    'aid': '818289',
+    'label': 'affnetcj-15734710_pub-8073556_site-101884570_pname-MM3+Enterprise+Limited_clkid-_cjevent-5b29e765ba1911f180aa00a10a18b8f7',
+    'utm_source': 'affnetcj',
+    'utm_medium': 'bannerindex',
+    'utm_campaign': 'fr',
+    'utm_term': 'index-15734710',
+}
+
+
+def attach_booking_affiliate(url_string):
+    """Validates the URL protocol and appends affiliate tracking parameters."""
+    if not url_string:
+        return None
+
+    clean = str(url_string).strip()
+    if not clean.lower().startswith(('http://', 'https://')):
+        return None
+
+    # Parse and merge existing query parameters with affiliate parameters
+    parsed = urlparse(clean)
+    query_params = parse_qs(parsed.query, keep_blank_values=True)
+
+    # Flatten single-value lists from parse_qs and merge affiliate data
+    merged_params = {k: v[0] if isinstance(v, list) and len(v) == 1 else v for k, v in query_params.items()}
+    merged_params.update(BOOKING_AFFILIATE_PARAMS)
+
+    new_query = urlencode(merged_params)
+    return urlunparse((
+        parsed.scheme,
+        parsed.netloc,
+        parsed.path,
+        parsed.params,
+        new_query,
+        parsed.fragment
+    ))
 
 class Path(models.Model):
     path_id = models.IntegerField(db_column='pathID', primary_key=True)
@@ -203,6 +241,15 @@ class Albergue(models.Model):
             if url.startswith(('http://', 'https://')):
                 return url
         return None
+    
+    @property
+    def valid_booking_url(self):
+        """Returns the booking URL only if it starts with http:// or https://."""
+        if self.booking_url:
+            clean = str(self.booking_url).strip().lower()
+            if clean.startswith(('http://', 'https://')):
+                return attach_booking_affiliate(self.booking_url)
+        return None
 
 
 class PrivateAccomm(models.Model):
@@ -230,6 +277,15 @@ class PrivateAccomm(models.Model):
             url = self.website_url.strip()
             if url.startswith(('http://', 'https://')):
                 return url
+        return None
+    
+    @property
+    def valid_booking_url(self):
+        """Returns the booking URL only if it starts with http:// or https://."""
+        if self.booking_url:
+            clean = str(self.booking_url).strip().lower()
+            if clean.startswith(('http://', 'https://')):
+                return attach_booking_affiliate(self.booking_url)
         return None
 
 

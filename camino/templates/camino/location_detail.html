@@ -136,10 +136,9 @@
         {% endif %}
 
         <!-- Action Links -->
-        <div class="accomm-actions">
-          {% if a.booking_url %}
-            <a href="{{ a.booking_url }}" target="_blank" rel="noopener" class="btn btn-booking">Book on Booking.com</a>
-          {% endif %}
+          {% if a.valid_booking_url %}
+            <a href="{{ a.valid_booking_url }}" target="_blank" rel="noopener" class="btn btn-booking">Booking.com</a>
+          {% endif %}        <div class="accomm-actions">
           {% if a.whatsapp %}
             <a href="https://wa.me/{{ a.whatsapp|cut:'+'|cut:' ' }}" target="_blank" rel="noopener" class="btn btn-wa">WhatsApp</a>
           {% endif %}
@@ -182,8 +181,8 @@
 
         <!-- Action Links -->
         <div class="accomm-actions">
-          {% if p.booking_url %}
-            <a href="{{ p.booking_url }}" target="_blank" rel="noopener" class="btn btn-booking">Book on Booking.com</a>
+          {% if p.valid_booking_url %}
+            <a href="{{ p.valid_booking_url }}" target="_blank" rel="noopener" class="btn btn-booking">Booking.com</a>
           {% endif %}
           {% if p.whatsapp %}
             <a href="https://wa.me/{{ p.whatsapp|cut:'+'|cut:' ' }}" target="_blank" rel="noopener" class="btn btn-wa">WhatsApp</a>

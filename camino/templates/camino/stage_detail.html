@@ -44,15 +44,47 @@
 
 <h2>Stage {{ stage.display_ref }}: {{ stage.stage_name }}</h2>
 
-<div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
-  <p style="margin: 0;">
+<div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+  <p style="margin: 0; font-size: 1.05rem;">
     <strong>Distance:</strong> {{ stage.distance_km }} km |   
     <strong>Est. Time:</strong> {{ stage.time_minutes|format_duration }}
   </p>
-  <button onclick="window.print()" class="btn" style="background: #e2e8f0; color: #1e293b; cursor: pointer; border: none;">
-    &#128424; Print / Save PDF
+  <button onclick="window.print()" class="btn" style="background: #e2e8f0; color: #1e293b; cursor: pointer; border: none; margin: 0;">
+    🖨️ Print / Save PDF
   </button>
 </div>
+
+<!-- Quick-Stats Strip -->
+{% if elevation_stats %}
+  <div class="stage-stats-strip">
+    <div class="stat-item">
+      <span class="stat-label">Total Ascent</span>
+      <span class="stat-val ascent">▲ +{{ elevation_stats.ascent_m }} <small>m</small></span>
+    </div>
+
+    <div class="stat-item">
+      <span class="stat-label">Total Descent</span>
+      <span class="stat-val descent">▼ -{{ elevation_stats.descent_m }} <small>m</small></span>
+    </div>
+
+    <div class="stat-item">
+      <span class="stat-label">Highest Point</span>
+      <span class="stat-val">{{ elevation_stats.highest_m }} <small>m ({{ elevation_stats.highest_km }} km)</small></span>
+    </div>
+
+    <div class="stat-item">
+      <span class="stat-label">Lowest Point</span>
+      <span class="stat-val">{{ elevation_stats.lowest_m }} <small>m ({{ elevation_stats.lowest_km }} km)</small></span>
+    </div>
+
+    <div class="stat-item">
+      <span class="stat-label">Terrain Rating</span>
+      <span class="difficulty-pill {{ elevation_stats.difficulty_badge }}">
+        {{ elevation_stats.difficulty_icon }} {{ elevation_stats.difficulty_label }}
+      </span>
+    </div>
+  </div>
+{% endif %}
 
 <!-- Interactive Elevation Profile Card -->
 <div class="card elevation-card">

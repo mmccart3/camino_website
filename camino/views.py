@@ -129,6 +129,8 @@ def stage_list(request):
     return render(request, 'camino/stage_list.html', {'stage_groups': stage_groups})
 
 
+# camino/views.py
+
 def stage_detail(request, stage_id):
     stage = get_object_or_404(Stage, pk=stage_id)
 
@@ -146,10 +148,11 @@ def stage_detail(request, stage_id):
     # 2. Hotspots
     hotspots = list(MapLocationCoord.objects.filter(stage_id=stage.id).select_related('location'))
 
-    # 3. Elevation, Waypoints, and Waypoint Timeline
+    # 3. Elevation, Waypoints, Timeline & Quick Stats
     chart_points = []
     waypoint_markers = []
     stage_locations = []
+    elevation_stats = None
 
     try:
         stage_paths = list(Path.objects.filter(stage_id=stage.id).order_by('pk'))
@@ -167,7 +170,6 @@ def stage_detail(request, stage_id):
                 if p.destination_loc:
                     loc_ids.add(p.destination_loc)
 
-            # Query location objects and lodging existence
             locations_dict = {loc.pk: loc for loc in Location.objects.filter(pk__in=loc_ids)}
             albergue_loc_ids = set(Albergue.objects.filter(location_id__in=loc_ids).values_list('location_id', flat=True))
             private_loc_ids = set(PrivateAccomm.objects.filter(location_id__in=loc_ids).values_list('location_id', flat=True))
@@ -197,6 +199,11 @@ def stage_detail(request, stage_id):
                     'has_grocery': bool(loc.has_grocery_store),
                 }
 
+            # Elevation accumulator variables
+            total_ascent_m = 0.0
+            total_descent_m = 0.0
+            prev_elev = None
+
             for idx, path_obj in enumerate(stage_paths):
                 pts = list(
                     ElevationPoint.objects.filter(path=path_obj)
@@ -217,16 +224,26 @@ def stage_detail(request, stage_id):
                         stage_locations.append(entry)
                     if pts:
                         waypoint_markers.append({
+                            'location_id': origin_id,
                             'name': entry['name'],
                             'km': 0.0,
                             'elevation': round(pts[0]['elevation_metres'])
                         })
 
-                # Profile data
+                # Profile points & cumulative ascent/descent
                 for pt in pts:
+                    elev = pt['elevation_metres']
+                    if prev_elev is not None:
+                        diff = elev - prev_elev
+                        if diff > 0:
+                            total_ascent_m += diff
+                        else:
+                            total_descent_m += abs(diff)
+                    prev_elev = elev
+
                     all_continuous_points.append({
                         'distance_m': accumulated_distance_m + pt['distance_along_path_metres'],
-                        'elevation_m': pt['elevation_metres']
+                        'elevation_m': elev
                     })
 
                 seg_end_dist = (
@@ -243,6 +260,7 @@ def stage_detail(request, stage_id):
                         stage_locations.append(entry)
                     if pts:
                         waypoint_markers.append({
+                            'location_id': dest_id,
                             'name': entry['name'],
                             'km': round(seg_end_dist / 1000.0, 1),
                             'elevation': round(pts[-1]['elevation_metres'])
@@ -250,9 +268,45 @@ def stage_detail(request, stage_id):
 
                 accumulated_distance_m = seg_end_dist
 
-            # Downsample to ~160 points for performance
-            total_pts = len(all_continuous_points)
-            if total_pts > 0:
+            # Calculate High/Low points and Difficulty rating
+            if all_continuous_points:
+                highest_pt = max(all_continuous_points, key=lambda p: p['elevation_m'])
+                lowest_pt = min(all_continuous_points, key=lambda p: p['elevation_m'])
+                total_km = round(all_continuous_points[-1]['distance_m'] / 1000.0, 1)
+
+                # Difficulty classification
+                gain_per_km = total_ascent_m / total_km if total_km > 0 else 0
+                if total_ascent_m > 750 or gain_per_km > 35:
+                    difficulty_label = "Strenuous Mountain Pass"
+                    difficulty_badge = "badge-strenuous"
+                    difficulty_icon = "⛰️"
+                elif total_ascent_m > 400 or total_descent_m > 500:
+                    difficulty_label = "Moderate / Rolling Hills"
+                    difficulty_badge = "badge-moderate"
+                    difficulty_icon = "🥾"
+                elif total_descent_m > 400 and total_ascent_m < 200:
+                    difficulty_label = "Continuous Descent"
+                    difficulty_badge = "badge-descent"
+                    difficulty_icon = "📉"
+                else:
+                    difficulty_label = "Mild / Relatively Flat"
+                    difficulty_badge = "badge-easy"
+                    difficulty_icon = "🌱"
+
+                elevation_stats = {
+                    'ascent_m': int(round(total_ascent_m)),
+                    'descent_m': int(round(total_descent_m)),
+                    'highest_m': int(round(highest_pt['elevation_m'])),
+                    'highest_km': round(highest_pt['distance_m'] / 1000.0, 1),
+                    'lowest_m': int(round(lowest_pt['elevation_m'])),
+                    'lowest_km': round(lowest_pt['distance_m'] / 1000.0, 1),
+                    'difficulty_label': difficulty_label,
+                    'difficulty_badge': difficulty_badge,
+                    'difficulty_icon': difficulty_icon,
+                }
+
+                # Downsample to ~160 points for the chart
+                total_pts = len(all_continuous_points)
                 step = max(1, total_pts // 160)
                 sampled_points = all_continuous_points[::step]
                 if all_continuous_points[-1] not in sampled_points:
@@ -268,7 +322,7 @@ def stage_detail(request, stage_id):
 
     except Exception as err:
         traceback.print_exc()
-        print(f"[Warning] Elevation/timeline error on Stage {stage.id}: {err}")
+        print(f"[Warning] Elevation stats error on Stage {stage.id}: {err}")
 
     context = {
         'stage': stage,
@@ -278,12 +332,12 @@ def stage_detail(request, stage_id):
         'alt_next_stage': alt_next_stage,
         'hotspots': hotspots,
         'stage_locations': stage_locations,
+        'elevation_stats': elevation_stats,
         'chart_points_json': json.dumps(chart_points),
         'waypoint_markers_json': json.dumps(waypoint_markers),
         'has_elevation_data': len(chart_points) > 0,
     }
     return render(request, 'camino/stage_detail.html', context)
-
 
 def location_detail(request, location_id):
     location = get_object_or_404(Location, pk=location_id)

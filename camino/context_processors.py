@@ -2,5 +2,5 @@
 
 def version_context(request):
     return {
-        'APP_VERSION': 'v1.2.10'
+        'APP_VERSION': 'v1.2.11'
     }

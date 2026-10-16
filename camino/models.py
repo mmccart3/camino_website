@@ -11,6 +11,13 @@ BOOKING_AFFILIATE_PARAMS = {
     'utm_term': 'index-15734710',
 }
 
+COUNTRY_CODE_CHOICES = [
+    ('+34', '+34 (Spain)'),
+    ('+33', '+33 (France)'),
+    ('+351', '+351 (Portugal)'),
+    ('+44', '+44 (UK)'),
+]
+
 
 def attach_booking_affiliate(url_string):
     """Validates the URL protocol and appends affiliate tracking parameters."""
@@ -155,6 +162,9 @@ class Location(models.Model):
     class Meta:
         managed = False
         db_table = 'locations'
+    
+    def __str__(self):
+        return self.location_name
 
 
 class MapLocationCoord(models.Model):
@@ -210,15 +220,32 @@ class Albergue(models.Model):
     name = models.CharField(db_column='albergueName', max_length=64)
     address = models.CharField(db_column='albergueStreetAdress', max_length=255, null=True)
     beds = models.IntegerField(db_column='numberOfBeds', null=True)
+    dorms = models.IntegerField(
+        null=True,
+        blank=True,
+        db_column='numberOfDorms',
+        verbose_name="Number of Dorms"
+    )
     rate_1p_min = models.DecimalField(db_column='onedPersonRateMin', max_digits=5, decimal_places=2, null=True)
     rate_1p_max = models.DecimalField(db_column='onedPersonRateMax', max_digits=5, decimal_places=2, null=True)
     rate_notes = models.CharField(db_column='rateNotes', max_length=255, null=True)
     kitchen = models.BooleanField(db_column='kitchenFacilitiesAvailable', default=False)
     washer = models.BooleanField(db_column='washingMachineAvailable', default=False)
+    dryer = models.BooleanField(db_column='dryingMachineAvailable', default=False)
+    latitude = models.FloatField(null=True, blank=True, db_column='gps_lat')
+    longitude = models.FloatField(null=True, blank=True, db_column='gps_lng')
     communal_meal = models.BooleanField(db_column='communalMealAvailable', default=False)
     opening_period = models.CharField(db_column='openingPeriod', max_length=255, null=True)
     check_in_times = models.TextField(db_column='checkInTimes', null=True)
     email = models.CharField(db_column='email', max_length=64, null=True)
+    country_code = models.CharField(
+        max_length=6,
+        choices=COUNTRY_CODE_CHOICES,
+        default='+34',
+        blank=True,
+        null=True,
+        db_column='tel1CountryCode'  # adjust if SQLite column is named differently
+    )
     phone = models.CharField(db_column='tel1PhoneNumber', max_length=32, null=True)
     whatsapp = models.CharField(db_column='whatsAppNumber', max_length=32, null=True)
     website_url = models.CharField(db_column='albergueWebsiteURL', max_length=255, null=True)
@@ -228,6 +255,12 @@ class Albergue(models.Model):
     pic2_url = models.CharField(db_column='alberguepic2URL', max_length=255, null=True, blank=True)
     pic3_url = models.CharField(db_column='alberguepic3URL', max_length=255, null=True, blank=True)
     pic4_url = models.CharField(db_column='alberguepic4URL', max_length=255, null=True, blank=True)
+    privateRoomsAvailable = models.BooleanField(
+        default=False,
+        null=True,
+        blank=True,
+        db_column='privateRoomsAvailable'
+    )
 
     class Meta:
         managed = False
@@ -261,8 +294,18 @@ class PrivateAccomm(models.Model):
     rate_2p_min = models.DecimalField(db_column='twoPersonRateMin', max_digits=5, decimal_places=2, null=True)
     rate_notes = models.CharField(db_column='rateNotes', max_length=255, null=True)
     email = models.CharField(db_column='email', max_length=64, null=True)
+    country_code = models.CharField(
+        max_length=6,
+        choices=COUNTRY_CODE_CHOICES,
+        default='+34',
+        blank=True,
+        null=True,
+        db_column='tel1CountryCode'  # adjust if SQLite column is named differently
+    )
     phone = models.CharField(db_column='tel1PhoneNumber', max_length=32, null=True)
     whatsapp = models.CharField(db_column='whatsAppNumber', max_length=32, null=True)
+    latitude = models.FloatField(null=True, blank=True, db_column='gps_lat')
+    longitude = models.FloatField(null=True, blank=True, db_column='gps_lng')
     website_url = models.CharField(db_column='privateAccommWebsiteURL', max_length=255, null=True)
     booking_url = models.CharField(db_column='privateAccommBookingDotComURL', max_length=255, null=True)
 

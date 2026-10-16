@@ -21,6 +21,7 @@ from django.urls import path, include
 
 urlpatterns = [
     path('', include('camino.urls')),
+    path('editor/', include('data_editor.urls')),
 ]
 
 # urlpatterns = [

@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Camino Data Editor</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; background: #f8fafc; color: #1e293b; margin: 0; padding: 2rem; }
+    .container { max-width: 1200px; margin: 0 auto; background: #ffffff; border-radius: 8px; border: 1px solid #e2e8f0; padding: 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+    .tabs { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; border-bottom: 2px solid #e2e8f0; padding-bottom: 0.5rem; }
+    .tab-btn { padding: 0.5rem 1rem; border-radius: 6px; text-decoration: none; font-weight: 600; color: #64748b; background: #f1f5f9; }
+    .tab-btn.active { background: #1e3a8a; color: #ffffff; }
+    .filter-bar { display: flex; gap: 0.75rem; margin-bottom: 1rem; align-items: center; flex-wrap: wrap; }
+    .filter-bar input, .filter-bar select { padding: 0.45rem 0.75rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.9rem; }
+    table { width: 100%; border-collapse: collapse; margin-top: 1rem; font-size: 0.9rem; }
+    th, td { text-align: left; padding: 0.65rem 0.75rem; border-bottom: 1px solid #e2e8f0; }
+    th { background: #f8fafc; color: #475569; font-weight: 600; }
+    tr:hover { background: #f1f5f9; }
+    .btn-edit { background: #d97706; color: #ffffff; padding: 0.25rem 0.6rem; border-radius: 4px; text-decoration: none; font-weight: 600; font-size: 0.8rem; }
+    .btn-new { background: #15803d; color: #ffffff; text-decoration: none; padding: 0.45rem 1rem; border-radius: 6px; font-weight: bold; margin-left: auto; }
+    .badge-ok { color: #15803d; font-weight: bold; }
+    .badge-none { color: #94a3b8; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h2>🛠️ Camino Stage Data Editor</h2>
+  
+  <div class="tabs">
+    <a href="?tab=albergues" class="tab-btn {% if tab == 'albergues' %}active{% endif %}">Albergues</a>
+    <a href="?tab=private" class="tab-btn {% if tab == 'private' %}active{% endif %}">Private Accomm</a>
+    <a href="?tab=paragraphs" class="tab-btn {% if tab == 'paragraphs' %}active{% endif %}">Paragraphs</a>
+  </div>
+
+  <form method="get" class="filter-bar">
+    <input type="hidden" name="tab" value="{{ tab }}">
+    <input type="text" name="q" placeholder="Search name or text..." value="{{ query }}">
+    <select name="location">
+      <option value="">-- All Locations --</option>
+      {% for loc in locations %}
+        <option value="{{ loc.id }}" {% if selected_location == loc.id %}selected{% endif %}>{{ loc.location_name }}</option>
+      {% endfor %}
+    </select>
+    <button type="submit" style="background: #1e3a8a; color: #fff; border: none; padding: 0.45rem 1rem; border-radius: 6px; cursor: pointer;">Filter</button>
+    {% if query or selected_location %}
+      <a href="?tab={{ tab }}" style="color: #64748b; font-size: 0.85rem; text-decoration: none;">Clear</a>
+    {% endif %}
+
+    {% if tab == 'albergues' %}
+      <a href="{% url 'editor_create_item' 'albergue' %}{% if selected_location %}?location={{ selected_location }}{% endif %}" class="btn-new">+ New Albergue</a>
+    {% elif tab == 'private' %}
+      <a href="{% url 'editor_create_item' 'private' %}{% if selected_location %}?location={{ selected_location }}{% endif %}" class="btn-new">+ New Private Accomm</a>
+    {% elif tab == 'paragraphs' %}
+      <a href="{% url 'editor_create_item' 'paragraph' %}{% if selected_location %}?location={{ selected_location }}{% endif %}" class="btn-new">+ New Paragraph</a>
+    {% endif %}
+  </form>
+
+  <table>
+    <thead>
+      {% if tab == 'paragraphs' %}
+        <tr>
+          <th style="width: 60px;">ID</th>
+          <th style="width: 180px;">Location</th>
+          <th style="width: 140px;">Type</th>
+          <th>Text Preview</th>
+          <th style="width: 80px;">Action</th>
+        </tr>
+      {% else %}
+        <tr>
+          <th>ID</th>
+          <th>Name</th>
+          <th>Location</th>
+          <th>Phone</th>
+          <th>WhatsApp</th>
+          <th>Website</th>
+          <th>Booking.com</th>
+          <th>Action</th>
+        </tr>
+      {% endif %}
+    </thead>
+    <tbody>
+      {% for item in items %}
+        <tr>
+          {% if tab == 'paragraphs' %}
+            <td>{{ item.id }}</td>
+            <td><strong>{{ item.location.location_name|default:"-" }}</strong></td>
+            <td><code>{{ item.type|default:"-" }}</code></td>
+            <td>{{ item.text|truncatechars:120 }}</td>
+            <td><a href="{% url 'editor_edit_item' 'paragraph' item.id %}" class="btn-edit">Edit</a></td>
+          {% else %}
+            <td>{{ item.id }}</td>
+            <td><strong>{{ item.name }}</strong></td>
+            <td>{{ item.location.location_name }}</td>
+            <td>{{ item.phone|default:"-" }}</td>
+            <td>{{ item.whatsapp|default:"-" }}</td>
+            <td>{% if item.website_url %}<span class="badge-ok">✓</span>{% else %}<span class="badge-none">-</span>{% endif %}</td>
+            <td>{% if item.booking_url %}<span class="badge-ok">✓</span>{% else %}<span class="badge-none">-</span>{% endif %}</td>
+            <td>
+              {% if tab == 'albergues' %}
+                <a href="{% url 'editor_edit_item' 'albergue' item.id %}" class="btn-edit">Edit</a>
+              {% else %}
+                <a href="{% url 'editor_edit_item' 'private' item.id %}" class="btn-edit">Edit</a>
+              {% endif %}
+            </td>
+          {% endif %}
+        </tr>
+      {% empty %}
+        <tr>
+          <td colspan="{% if tab == 'paragraphs' %}5{% else %}8{% endif %}" style="text-align: center; color: #64748b; padding: 2rem;">
+            No records found.
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+</body>
+</html>

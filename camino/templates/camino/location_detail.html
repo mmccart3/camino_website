@@ -200,6 +200,31 @@
       </div>
     </div>
   {% endfor %}
+
+  {% if location.latitude and location.longitude %}
+<div class="map-container" style="margin: 1.5rem 0; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.1);">
+  <iframe
+    width="100%"
+    height="600"
+    frameborder="0"
+    style="border:0; display:block;"
+    src="https://maps.google.com/maps?q={{ location.latitude }},{{ location.longitude }}&hl=en&z=17&output=embed"
+    allowfullscreen
+    loading="lazy"
+    referrerpolicy="no-referrer-when-downgrade">
+  </iframe>
+  
+  <div style="background: #f8fafc; padding: 0.6rem 1rem; border-top: 1px solid #e2e8f0; font-size: 0.85rem; display: flex; justify-content: space-between; align-items: center;">
+    <span style="color: #64748b;">Coordinates: {{ location.latitude|floatformat:5 }}, {{ location.longitude|floatformat:5 }}</span>
+    <a href="https://www.google.com/maps/search/?api=1&query={{ location.latitude }},{{ location.longitude }}" 
+       target="_blank" 
+       rel="noopener"
+       style="color: #2563eb; text-decoration: none; font-weight: 600;">
+       Open in Google Maps App &nearr;
+    </a>
+  </div>
+</div>
+{% endif %}
 </div>
 
 <script>
@@ -228,6 +253,14 @@
       });
     });
   });
+
+const map = L.map('location-map').setView([lat, lng], 19);
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom: 19,
+  attribution: '&copy; OpenStreetMap contributors'
+}).addTo(map);
+
 </script>
 
 {% endblock %}

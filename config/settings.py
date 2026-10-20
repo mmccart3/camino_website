@@ -15,7 +15,7 @@ from pathlib import Path
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-APP_VERSION = "v1.2.12"  # Update this as you deploy new iterations
+APP_VERSION = "v1.2.13"  # Update this as you deploy new iterations
 
 # Read secret key and debug status from environment
 SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-dev-fallback-key')

@@ -6,6 +6,7 @@ from django.templatetags.static import static
 from django.views.generic import TemplateView
 from django.http import HttpResponse, JsonResponse
 from django.conf import settings
+from django.contrib import admin
 import os
 
 def service_worker(request):
@@ -66,4 +67,13 @@ urlpatterns = [
     path('location/<int:location_id>/', views.location_detail, name='location_detail'),
     path('favicon.ico', RedirectView.as_view(url=static('camino/img/app_icon.jpg'), permanent=True)),
     path('sw.js', service_worker, name='service_worker'),
+    # path('admin/', admin.site.urls),
+    # path('', include('camino.urls')),
  ]
+
+
+# The editor endpoints exist ONLY in development
+if settings.DEBUG:
+    urlpatterns += [
+        path('editor/', include('data_editor.urls')),
+    ]

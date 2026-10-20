@@ -19,8 +19,8 @@ APP_VERSION = "v1.2.14"  # Update this as you deploy new iterations
 
 # Read secret key and debug status from environment
 SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-dev-fallback-key')
-DEBUG = True
-# DEBUG = os.environ.get('DEBUG', 'False') == 'True'
+# DEBUG = True
+DEBUG = os.environ.get('DEBUG', 'False') == 'True'
 
 ALLOWED_HOSTS = ['*']
 CSRF_TRUSTED_ORIGINS = [
@@ -37,8 +37,11 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'camino',
-    'data_editor',
 ]
+
+# Only load data_editor in local/development environments
+if DEBUG:
+    INSTALLED_APPS.append('data_editor')
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',

@@ -17,13 +17,17 @@ Including another URLconf
 # from django.contrib import admin
 # from django.urls import path
 # config/urls.py
+from django.conf import settings
+from django.contrib import admin
 from django.urls import path, include
 
 urlpatterns = [
+    path('admin/', admin.site.urls),
     path('', include('camino.urls')),
-    path('editor/', include('data_editor.urls')),
 ]
 
-# urlpatterns = [
-#     path('admin/', admin.site.urls),
-# ]
+# The editor endpoints exist ONLY in development
+if settings.DEBUG:
+    urlpatterns += [
+        path('editor/', include('data_editor.urls')),
+    ]

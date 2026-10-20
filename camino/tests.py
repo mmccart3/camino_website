@@ -39,6 +39,9 @@ class SeoHelperTests(SimpleTestCase):
         self.assertEqual(seo.telephone('+34', '0034948123456'), '+34948123456')
         self.assertEqual(seo.telephone('+34', '+33 5 59 37'), '+3355937')
         self.assertIsNone(seo.telephone('+34', ''))
+        # The database stores country codes as numbers as well as text.
+        self.assertEqual(seo.telephone(34, '948 12 34 56'), '+34948123456')
+        self.assertEqual(seo.telephone(None, 948123456), '+34948123456')
 
     def test_price_range(self):
         self.assertEqual(seo.price_range(Decimal('10.00'), Decimal('15')), '€10–€15')

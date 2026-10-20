@@ -100,8 +100,9 @@ def telephone(country_code, number):
         return cleaned
     if cleaned.startswith('00'):
         return '+' + cleaned[2:]
-    code = (country_code or '+34').strip()
-    return code + cleaned.lstrip('0')
+    # The database may hold the code as a number (34) or text ('+34').
+    digits = re.sub(r'\D', '', str(country_code or '34')) or '34'
+    return '+' + digits + cleaned.lstrip('0')
 
 
 def breadcrumb(items):
@@ -129,8 +130,9 @@ def stay_entry(stay, kind, location_name, url):
     phone = telephone(getattr(stay, 'country_code', None), getattr(stay, 'phone', None))
     if phone:
         entry['telephone'] = phone
-    if getattr(stay, 'email', None) and '@' in stay.email:
-        entry['email'] = stay.email.strip()
+    email = str(getattr(stay, 'email', None) or '').strip()
+    if '@' in email:
+        entry['email'] = email
     if getattr(stay, 'latitude', None) and getattr(stay, 'longitude', None):
         entry['geo'] = {
             '@type': 'GeoCoordinates',
@@ -200,8 +202,13 @@ def location_seo(location, albergues, private_accomm, parent_stage, origin, cano
     crumbs.append((name, canonical))
 
     graph = [breadcrumb(crumbs)]
-    graph += [stay_entry(a, 'albergue', name, canonical) for a in albergues]
-    graph += [stay_entry(p, 'private', name, canonical) for p in private_accomm]
+    # Search-engine data must never break the page: skip any entry with unexpected data.
+    for kind, stays in (('albergue', albergues), ('private', private_accomm)):
+        for stay in stays:
+            try:
+                graph.append(stay_entry(stay, kind, name, canonical))
+            except Exception:
+                continue
 
     image = None
     for a in albergues:

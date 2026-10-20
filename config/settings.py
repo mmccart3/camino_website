@@ -15,12 +15,16 @@ from pathlib import Path
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-APP_VERSION = "v1.2.14"  # Update this as you deploy new iterations
+APP_VERSION = "v1.2.16"  # Update this as you deploy new iterations
 
 # Read secret key and debug status from environment
 SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-dev-fallback-key')
 # DEBUG = True
 DEBUG = os.environ.get('DEBUG', 'False') == 'True'
+
+# Public address of the site, e.g. https://example.com (no trailing slash).
+# Used for canonical links, share previews and the sitemap. Set it in production.
+SITE_URL = os.environ.get('SITE_URL', '').rstrip('/')
 
 ALLOWED_HOSTS = ['*']
 CSRF_TRUSTED_ORIGINS = [
@@ -57,7 +61,6 @@ MIDDLEWARE = [
 # Static files settings
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
-SSTATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 STORAGES = {
     "default": {
@@ -136,7 +139,6 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/6.1/howto/static-files/
 
-STATIC_URL = 'static/'
 
 
 # Email
@@ -148,3 +150,13 @@ MAILERS = {
     },
 }
 
+
+# Leaflet is loaded from unpkg. The offline service worker saves these files.
+LEAFLET_VERSION = '1.9.4'
+LEAFLET_BASE_URL = f'https://unpkg.com/leaflet@{LEAFLET_VERSION}/dist'
+LEAFLET_CSS_URL = f'{LEAFLET_BASE_URL}/leaflet.css'
+LEAFLET_JS_URL = f'{LEAFLET_BASE_URL}/leaflet.js'
+LEAFLET_IMAGE_URLS = [
+    f'{LEAFLET_BASE_URL}/images/{name}'
+    for name in ('layers.png', 'layers-2x.png', 'marker-icon.png', 'marker-icon-2x.png', 'marker-shadow.png')
+]

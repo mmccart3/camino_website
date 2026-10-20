@@ -1,0 +1,53 @@
+{% extends 'camino/base.html' %}
+
+{% block content %}
+<div style="text-align: center; margin-bottom: 1.25rem;">
+  <h2 style="margin-bottom: 0.25rem;">{% if query %}Results for “{{ query }}”{% else %}Search the guide{% endif %}</h2>
+</div>
+
+<div class="town-search">
+  <form action="{% url 'search' %}" method="get" role="search">
+    <label for="q" class="visually-hidden">Find a town or stage</label>
+    <input type="search" id="q" name="q" value="{{ query }}" placeholder="Find a town, e.g. Pamplona" maxlength="80">
+    <button type="submit">Search</button>
+  </form>
+</div>
+
+{% if query %}
+  {% if town_results %}
+    <h3>Towns</h3>
+    <ul class="town-list">
+      {% for town in town_results %}
+        <li>
+          <a href="{% url 'location_detail' town.id %}">
+            <span>{{ town.location_name }}</span>
+            <span class="suggest-note">{% if town.stays %}{{ town.stays }} to stay{% endif %}</span>
+          </a>
+        </li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+
+  {% if stage_results %}
+    <h3>Stages</h3>
+    <ul class="town-list">
+      {% for stage in stage_results %}
+        <li>
+          <a href="{% url 'stage_detail' stage.id %}">
+            <span>Stage {{ stage.display_ref }}: {{ stage.stage_name }}</span>
+            <span class="suggest-note">{{ stage.distance_km }} km</span>
+          </a>
+        </li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+
+  {% if not town_results and not stage_results %}
+    <p style="text-align: center; color: #475569;">
+      Nothing matches “{{ query }}”. Check the spelling, or <a href="{% url 'towns' %}">browse all towns</a>.
+    </p>
+  {% endif %}
+{% else %}
+  <p style="text-align: center;"><a href="{% url 'towns' %}">Browse all towns</a></p>
+{% endif %}
+{% endblock %}

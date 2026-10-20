@@ -1,4 +1,5 @@
 {% extends 'camino/base.html' %}
+{% load static %}
 {% load camino_tags %}
 
 
@@ -9,6 +10,21 @@
     Select a stage to view waypoint timelines, elevation charts, and accommodations.
   </p>
 </div>
+
+<div class="town-search">
+  <form id="town-search-form" action="{% url 'search' %}" method="get" role="search" autocomplete="off">
+    <label for="town-search-input" class="visually-hidden">Find a town or stage</label>
+    <input type="search" id="town-search-input" name="q" placeholder="Find a town, e.g. Pamplona" maxlength="80"
+           role="combobox" aria-expanded="false" aria-controls="town-suggestions" aria-autocomplete="list">
+    <button type="submit">Search</button>
+  </form>
+  <ul id="town-suggestions" role="listbox" aria-label="Matching towns" hidden></ul>
+  <p class="pack-note" style="text-align:center; margin: 0.6rem 0 0;">
+    Walking without signal? <a href="{% url 'offline_pack' %}">Save the guide for offline use</a>.
+  </p>
+</div>
+{{ town_index|json_script:"town-index-data" }}
+<script src="{% static 'camino/js/search.js' %}" defer></script>
 
 <div class="stage-list-container">
   {% for group in stage_groups %}

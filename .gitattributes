@@ -1,0 +1,6 @@
+* text=auto
+*.sqlite binary
+*.jpg binary
+*.png binary
+*.ttf binary
+*.map binary

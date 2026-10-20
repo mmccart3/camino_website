@@ -1,0 +1,38 @@
+{% extends 'camino/base.html' %}
+{% load static %}
+
+{% block content %}
+<div style="text-align: center; margin-bottom: 1.25rem;">
+  <h2 style="margin-bottom: 0.25rem;">All towns and villages</h2>
+  <p style="color: #64748b; font-size: 0.95rem; margin-top: 0;">
+    {{ town_count }} places on the Camino Francés, from Saint-Jean-Pied-de-Port to Santiago.
+  </p>
+</div>
+
+<div class="town-search town-filter">
+  <label for="town-filter-input" class="visually-hidden">Filter towns</label>
+  <input type="search" id="town-filter-input" placeholder="Type to filter, e.g. Logroño" autocomplete="off">
+</div>
+
+<p id="town-filter-empty" hidden style="text-align: center; color: #64748b;">
+  No town matches that. Check the spelling, or <a href="{% url 'stage_list' %}">browse the stages</a>.
+</p>
+
+{% for letter, group in groups %}
+  <section class="town-group" aria-labelledby="letter-{{ letter }}">
+    <h3 id="letter-{{ letter }}">{{ letter }}</h3>
+    <ul class="town-list">
+      {% for town in group %}
+        <li class="town-item" data-norm="{{ town.norm }}">
+          <a href="{% url 'location_detail' town.id %}">
+            <span>{{ town.location_name }}</span>
+            <span class="suggest-note">{% if town.stays %}{{ town.stays }} to stay{% endif %}</span>
+          </a>
+        </li>
+      {% endfor %}
+    </ul>
+  </section>
+{% endfor %}
+
+<script src="{% static 'camino/js/search.js' %}" defer></script>
+{% endblock %}

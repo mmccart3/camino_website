@@ -1,0 +1,30 @@
+{% extends 'camino/base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="card pack-card" id="pack-root" data-version="{{ APP_VERSION }}">
+  <h2 style="margin-top: 0;">Save the guide for offline use</h2>
+  <p>
+    Download every stage and town page to this device so you can read prices, opening dates and
+    contact details with no signal. Do this on Wi-Fi before you set off.
+  </p>
+  <label style="display: flex; gap: 0.5rem; align-items: flex-start;">
+    <input type="checkbox" id="pack-images" checked style="margin-top: 0.3rem;">
+    <span>Include the stage map pictures <span class="pack-note">(bigger download)</span></span>
+  </label>
+
+  <div class="pack-actions">
+    <button type="button" id="pack-start">Save for offline</button>
+    <button type="button" id="pack-remove" class="btn-secondary" hidden>Remove saved copy</button>
+  </div>
+  <progress id="pack-progress" value="0" max="1" hidden></progress>
+  <p id="pack-status" role="status" aria-live="polite">Checking…</p>
+
+  <p class="pack-note">
+    Maps: the walking route is drawn from saved data, but background map tiles are only available
+    offline for areas you have already looked at while online. Prices and opening times can change,
+    so call ahead when you have a signal. Saved pages stay on this device only.
+  </p>
+</div>
+<script src="{% static 'camino/js/offline-pack.js' %}" defer></script>
+{% endblock %}

@@ -1,7 +1,16 @@
 # camino/views.py
 import json
 import traceback
-from django.shortcuts import render, get_object_or_404
+from xml.sax.saxutils import escape
+
+from django.conf import settings
+from django.db.models import Count
+from django.http import HttpResponse, JsonResponse
+from django.shortcuts import render, get_object_or_404, redirect
+from django.templatetags.static import static
+from django.urls import reverse
+
+from . import seo
 from .models import (
     Stage, Path, ElevationPoint, MapLocationCoord, Location,
     Albergue, PrivateAccomm, TrackPoint
@@ -124,9 +133,222 @@ def get_stage_groups():
 
     return grouped_stages
 
+def towns_with_counts():
+    """Every location with the number of places to stay, A to Z."""
+    towns = list(
+        Location.objects.annotate(
+            n_albergues=Count('albergues', distinct=True),
+            n_private=Count('private_accomm', distinct=True),
+        ).order_by('location_name')
+    )
+    for town in towns:
+        town.stays = (town.n_albergues or 0) + (town.n_private or 0)
+    return towns
+
+
+def town_index_payload(towns):
+    """Small JSON-friendly list used by the in-page town search (works offline)."""
+    return [
+        {
+            'id': t.id,
+            'name': t.location_name,
+            'norm': seo.normalise(t.location_name),
+            'url': reverse('location_detail', args=[t.id]),
+            'stays': t.stays,
+        }
+        for t in towns
+    ]
+
+
 def stage_list(request):
     stage_groups = get_stage_groups()
-    return render(request, 'camino/stage_list.html', {'stage_groups': stage_groups})
+    context = {
+        'stage_groups': stage_groups,
+        'town_index': town_index_payload(towns_with_counts()),
+        'seo': seo.home_seo(seo.site_origin(request)),
+    }
+    return render(request, 'camino/stage_list.html', context)
+
+
+def towns(request):
+    items = towns_with_counts()
+    groups = {}
+    for town in items:
+        town.norm = seo.normalise(town.location_name)
+        letter = (town.norm[:1] or '#').upper()
+        groups.setdefault(letter, []).append(town)
+    context = {
+        'groups': sorted(groups.items()),
+        'town_count': len(items),
+        'seo': {
+            'title': seo.compose_title('All Camino Francés towns and villages'),
+            'description': seo.clip(
+                f'Find any of the {len(items)} towns and villages on the Camino Francés and see '
+                'where pilgrims can sleep, eat and shop.'
+            ),
+        },
+    }
+    return render(request, 'camino/towns.html', context)
+
+
+def search(request):
+    query = request.GET.get('q', '').strip()[:80]
+    town_results, stage_results = [], []
+    if query:
+        needle = seo.normalise(query)
+        for town in towns_with_counts():
+            name = seo.normalise(town.location_name)
+            if needle in name:
+                town_results.append((0 if name.startswith(needle) else 1, name, town))
+        town_results = [t for _, _, t in sorted(town_results, key=lambda row: (row[0], row[1]))]
+        stage_results = [
+            s for s in Stage.objects.order_by('id') if needle in seo.normalise(s.stage_name)
+        ]
+        if len(town_results) == 1 and not stage_results:
+            return redirect('location_detail', location_id=town_results[0].id)
+    context = {
+        'query': query,
+        'town_results': town_results,
+        'stage_results': stage_results,
+        'seo': {
+            'title': seo.compose_title(f'Search: {query}' if query else 'Search the guide'),
+            'description': 'Search towns and stages on the Camino Francés.',
+            'noindex': True,
+        },
+    }
+    return render(request, 'camino/search_results.html', context)
+
+
+def offline(request):
+    return render(request, 'camino/offline.html', {
+        'seo': {'title': seo.compose_title("You're offline"), 'noindex': True},
+    })
+
+
+def offline_pack(request):
+    return render(request, 'camino/offline_pack.html', {
+        'seo': {
+            'title': seo.compose_title('Save the guide for offline use'),
+            'description': 'Download every stage and town page to your phone so the guide works without a signal.',
+        },
+    })
+
+
+def offline_pack_json(request):
+    """Lists everything the offline pack should save. Fetched by the pack page."""
+    page_urls = ['/', reverse('towns'), reverse('offline_pack'), reverse('offline')]
+    stages = list(Stage.objects.order_by('id'))
+    page_urls += [reverse('stage_detail', args=[s.id]) for s in stages]
+    page_urls += [
+        reverse('location_detail', args=[pk])
+        for pk in Location.objects.order_by('id').values_list('id', flat=True)
+    ]
+    images = []
+    for stage in stages:
+        url = stage.stage_map_url or stage.map_url_1920 or stage.map_url_1024
+        if url and url.startswith('http') and url not in images:
+            images.append(url)
+    response = JsonResponse({
+        'version': settings.APP_VERSION,
+        'cache': 'camino-pack',
+        'pages': page_urls,
+        'images': images,
+    })
+    response['Cache-Control'] = 'no-store'
+    return response
+
+
+def manifest(request):
+    data = {
+        'id': '/',
+        'name': 'Saint Jean to Santiago: Camino Francés guide',
+        'short_name': 'Camino Guide',
+        'description': 'Stages, maps, elevation profiles and places to stay on the Camino Francés.',
+        'start_url': '/',
+        'scope': '/',
+        'display': 'standalone',
+        'background_color': '#00336d',
+        'theme_color': '#1e3a8a',
+        'lang': 'en',
+        'categories': ['travel', 'navigation'],
+        'icons': [
+            {'src': static('camino/img/icon-192.png'), 'sizes': '192x192', 'type': 'image/png', 'purpose': 'any'},
+            {'src': static('camino/img/icon-512.png'), 'sizes': '512x512', 'type': 'image/png', 'purpose': 'any'},
+            {'src': static('camino/img/icon-maskable-512.png'), 'sizes': '512x512', 'type': 'image/png', 'purpose': 'maskable'},
+        ],
+        'shortcuts': [
+            {'name': 'Find a town', 'url': reverse('towns')},
+            {'name': 'Save for offline', 'url': reverse('offline_pack')},
+        ],
+    }
+    response = JsonResponse(data, content_type='application/manifest+json')
+    response['Cache-Control'] = 'public, max-age=3600'
+    return response
+
+
+def service_worker(request):
+    """Serves sw.js with the release version and core file list filled in.
+
+    The version changes whenever APP_VERSION changes, which is what makes browsers
+    install the new worker and clear the old caches.
+    """
+    path = settings.BASE_DIR / 'camino' / 'static' / 'camino' / 'js' / 'sw.js'
+    source = path.read_text(encoding='utf-8')
+    precache = [
+        '/',
+        reverse('towns'),
+        reverse('offline'),
+        reverse('offline_pack'),
+        static('camino/js/pwa.js'),
+        static('camino/js/search.js'),
+        static('camino/js/offline-pack.js'),
+        static('camino/chart.umd.min.js'),
+        static('camino/fonts/Fiesta.ttf'),
+        static('camino/img/icon-192.png'),
+        static('camino/img/favicon-48.png'),
+        settings.LEAFLET_CSS_URL,
+        settings.LEAFLET_JS_URL,
+    ] + settings.LEAFLET_IMAGE_URLS
+    source = source.replace('__VERSION__', settings.APP_VERSION)
+    source = source.replace('__PRECACHE__', json.dumps(precache))
+    response = HttpResponse(source, content_type='application/javascript; charset=utf-8')
+    response['Cache-Control'] = 'no-cache'
+    response['Service-Worker-Allowed'] = '/'
+    return response
+
+
+def robots_txt(request):
+    origin = seo.site_origin(request)
+    body = (
+        'User-agent: *\n'
+        'Allow: /\n'
+        'Disallow: /search/\n'
+        'Disallow: /offline-pack.json\n'
+        f'Sitemap: {origin}/sitemap.xml\n'
+    )
+    return HttpResponse(body, content_type='text/plain; charset=utf-8')
+
+
+def sitemap_xml(request):
+    origin = seo.site_origin(request)
+    paths = ['/', reverse('towns'), reverse('offline_pack')]
+    paths += [reverse('stage_detail', args=[s.id]) for s in Stage.objects.order_by('id')]
+    towns_qs = Location.objects.annotate(
+        n_albergues=Count('albergues', distinct=True),
+        n_private=Count('private_accomm', distinct=True),
+        n_paragraphs=Count('paragraphs', distinct=True),
+    ).order_by('id')
+    paths += [
+        reverse('location_detail', args=[t.id])
+        for t in towns_qs
+        if (t.n_albergues or 0) + (t.n_private or 0) + (t.n_paragraphs or 0) > 0
+    ]
+    rows = ''.join(f'<url><loc>{escape(origin + path)}</loc></url>' for path in paths)
+    xml = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + rows + '</urlset>'
+    )
+    return HttpResponse(xml, content_type='application/xml; charset=utf-8')
 
 
 # camino/views.py
@@ -378,6 +600,8 @@ def stage_detail(request, stage_id):
         'map_waypoints_json': json.dumps(map_waypoints),
         'has_gps_track': len(gps_track) > 0,
     }
+    origin = seo.site_origin(request)
+    context['seo'] = seo.stage_seo(stage, origin, origin + request.path)
     return render(request, 'camino/stage_detail.html', context)
 
 
@@ -409,4 +633,10 @@ def location_detail(request, location_id):
         'private_accomm': private_accomm,
         'paragraphs': paragraphs,
     }
+    origin = seo.site_origin(request)
+    stage_url = reverse('stage_detail', args=[parent_stage.id]) if parent_stage else None
+    context['seo'] = seo.location_seo(
+        location, albergues, private_accomm, parent_stage, origin, origin + request.path, stage_url
+    )
+    context['stay_count'] = len(albergues) + len(private_accomm)
     return render(request, 'camino/location_detail.html', context)

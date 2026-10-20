@@ -4,23 +4,41 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Camino de Santiago Accommodations</title>
+    <title>{% block title %}{% if seo.title %}{{ seo.title }}{% else %}{{ DEFAULT_TITLE }} | {{ SITE_NAME }}{% endif %}{% endblock %}</title>
+    <meta name="description" content="{% block description %}{% if seo.description %}{{ seo.description }}{% else %}{{ DEFAULT_DESCRIPTION }}{% endif %}{% endblock %}">
+    {% if seo.noindex %}<meta name="robots" content="noindex,follow">{% else %}<link rel="canonical" href="{{ CANONICAL_URL }}">{% endif %}
+
+    <!-- Link previews (WhatsApp, Facebook, X, search results) -->
+    <meta property="og:site_name" content="{{ SITE_NAME }}">
+    <meta property="og:type" content="website">
+    <meta property="og:locale" content="en_GB">
+    <meta property="og:url" content="{{ CANONICAL_URL }}">
+    <meta property="og:title" content="{% if seo.title %}{{ seo.title }}{% else %}{{ DEFAULT_TITLE }}{% endif %}">
+    <meta property="og:description" content="{% if seo.description %}{{ seo.description }}{% else %}{{ DEFAULT_DESCRIPTION }}{% endif %}">
+    <meta property="og:image" content="{% if seo.image %}{{ seo.image }}{% else %}{{ OG_DEFAULT_IMAGE }}{% endif %}">
+    {% if not seo.image %}<meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">{% endif %}
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="{% if seo.title %}{{ seo.title }}{% else %}{{ DEFAULT_TITLE }}{% endif %}">
+    <meta name="twitter:description" content="{% if seo.description %}{{ seo.description }}{% else %}{{ DEFAULT_DESCRIPTION }}{% endif %}">
+    <meta name="twitter:image" content="{% if seo.image %}{{ seo.image }}{% else %}{{ OG_DEFAULT_IMAGE }}{% endif %}">
+    {% if seo.jsonld %}<script type="application/ld+json">{{ seo.jsonld|safe }}</script>{% endif %}
 
     <!-- PWA & Mobile Web Capabilities -->
-<link rel="manifest" href="{% static 'camino/manifest.json' %}">
+<link rel="manifest" href="{% url 'manifest' %}">
 <meta name="theme-color" content="#1e3a8a">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Camino Guide">
 
     <!-- Favicon & Mobile Touch Icons -->
-<link rel="icon" type="image/jpeg" href="{% static 'camino/img/app_icon.jpg' %}?v=2">
-<link rel="shortcut icon" type="image/jpeg" href="{% static 'camino/img/app_icon.jpg' %}?v=2">
-<link rel="apple-touch-icon" href="{% static 'camino/img/app_icon.jpg' %}">
+<link rel="icon" type="image/png" sizes="48x48" href="{% static 'camino/img/favicon-48.png' %}">
+<link rel="icon" type="image/png" sizes="192x192" href="{% static 'camino/img/icon-192.png' %}">
+<link rel="apple-touch-icon" href="{% static 'camino/img/apple-touch-icon.png' %}">
 
 <!-- Leaflet.js Interactive Mapping -->
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<link rel="stylesheet" href="{{ LEAFLET_CSS_URL }}" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+<script src="{{ LEAFLET_JS_URL }}" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 
     <style>
 @font-face {
@@ -106,15 +124,6 @@
         text-transform: uppercase;
         letter-spacing: 0.05em;
         text-align: center;
-      }
-      /* Keep the version pill aligned neatly on the right */
-      .header-version {
-        grid-column: 3;
-        justify-self: end;
-        font-size: 0.8rem;
-        background: rgba(255, 255, 255, 0.15);
-        padding: 0.2rem 0.5rem;
-        border-radius: 4px;
       }
       main {
         max-width: 1040px;
@@ -1159,18 +1168,124 @@
   }
 }
 
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+/* Site navigation, search and towns list */
+.site-nav {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.25rem 1.25rem;
+  padding: 0.5rem 1rem;
+  background: #172b69;
+  font-size: 0.9rem;
+}
+.site-nav a { color: #e2e8f0; text-decoration: none; font-weight: 600; padding: 0.25rem 0; }
+.site-nav a:hover, .site-nav a:focus-visible { color: #fde68a; text-decoration: underline; }
+.footer-links { display: flex; justify-content: center; flex-wrap: wrap; gap: 0.25rem 1.25rem; }
+.footer-links a { color: var(--navy); font-weight: 600; }
+
+.town-search { position: relative; max-width: 520px; margin: 0 auto 1.75rem; }
+.town-search form { display: flex; gap: 0.5rem; }
+.town-search input[type="search"], .town-filter input[type="search"] {
+  flex: 1;
+  min-width: 0;
+  padding: 0.7rem 0.9rem;
+  font-size: 1rem;
+  border: 1px solid #94a3b8;
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+}
+.town-search button, .pack-actions button {
+  padding: 0.7rem 1.1rem;
+  font-size: 1rem;
+  font-weight: 600;
+  border: none;
+  border-radius: 8px;
+  background: var(--navy);
+  color: #fff;
+  cursor: pointer;
+}
+.town-search button:hover, .pack-actions button:hover { background: #172b69; }
+.pack-actions button:disabled { opacity: 0.6; cursor: default; }
+.pack-actions .btn-secondary { background: #e2e8f0; color: #1e293b; }
+#town-suggestions {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  margin: 0.25rem 0 0;
+  padding: 0.25rem;
+  list-style: none;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.15);
+}
+#town-suggestions a {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.55rem 0.7rem;
+  border-radius: 6px;
+  color: var(--text);
+  text-decoration: none;
+}
+#town-suggestions li.is-active a, #town-suggestions a:hover { background: #eff6ff; }
+.suggest-note { font-size: 0.8rem; color: #64748b; }
+.town-group h3 { margin: 1.25rem 0 0.4rem; color: var(--navy); }
+.town-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 0.4rem 1rem; }
+.town-list a { display: flex; justify-content: space-between; gap: 0.5rem; padding: 0.5rem 0.7rem; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; color: var(--text); text-decoration: none; }
+.town-list a:hover { border-color: var(--gold); }
+.town-list [hidden], .town-group[hidden] { display: none; }
+
+/* Update prompt and offline notice */
+.update-banner, .offline-bar {
+  position: fixed;
+  left: 0.75rem;
+  right: 0.75rem;
+  bottom: 0.75rem;
+  z-index: 3000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 0.7rem 1rem;
+  border-radius: 10px;
+  background: #0f172a;
+  color: #fff;
+  font-size: 0.92rem;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+}
+.update-banner[hidden], .offline-bar[hidden] { display: none; }
+.offline-bar { bottom: auto; top: 0.75rem; background: #92400e; }
+.update-banner button { padding: 0.4rem 0.8rem; border: none; border-radius: 6px; font-weight: 600; background: #fde68a; color: #1e293b; cursor: pointer; }
+.update-banner .update-later { background: transparent; color: #e2e8f0; text-decoration: underline; }
+
+/* Offline pack page */
+.pack-card { max-width: 640px; margin: 0 auto; }
+.pack-actions { display: flex; flex-wrap: wrap; gap: 0.6rem; margin: 1rem 0; }
+#pack-progress { width: 100%; height: 14px; }
+.pack-note { font-size: 0.88rem; color: #475569; }
+
     </style>
   </head>
 
-<script>
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('/sw.js')
-        .then((reg) => console.log('Camino PWA Service Worker registered:', reg.scope))
-        .catch((err) => console.warn('Service Worker registration failed:', err));
-    });
-  }
-</script>
+<script src="{% static 'camino/js/pwa.js' %}" defer></script>
 
   <body>
   <header>
@@ -1179,15 +1294,18 @@
 
     <!-- Centered Brand -->
     <a href="{% url 'stage_list' %}" class="brand-container">
-      <img src="{% static 'camino/img/app_icon.jpg' %}" alt="Saint Jean to Santiago Icon" class="brand-icon">
+      <img src="{% static 'camino/img/icon-192.png' %}" alt="" width="44" height="44" class="brand-icon">
       <div class="brand-text">
         <span class="brand-title">Saint Jean to Santiago</span>
         <span class="brand-subtitle">Camino Accommodation Guide</span>
       </div>
     </a>
-  <!-- Right-aligned Version Tag -->
-  <span class="header-version">{{ APP_VERSION }}</span>
   </header>
+  <nav class="site-nav" aria-label="Main">
+    <a href="{% url 'stage_list' %}">Stages</a>
+    <a href="{% url 'towns' %}">Towns</a>
+    <a href="{% url 'offline_pack' %}">Save for offline</a>
+  </nav>
   
   <main>
     {% block content %}{% endblock %}
@@ -1197,6 +1315,11 @@
     <div class="footer-content">
       <div class="footer-brand">
         Saint Jean to Santiago &bull; Camino Accommodation Guide &bull; {{ APP_VERSION }}
+      </div>
+      <div class="footer-links">
+        <a href="{% url 'stage_list' %}">Stages</a>
+        <a href="{% url 'towns' %}">Towns</a>
+        <a href="{% url 'offline_pack' %}">Save for offline</a>
       </div>
       
       <div class="disclaimer-box">

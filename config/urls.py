@@ -21,13 +21,17 @@ from django.conf import settings
 from django.contrib import admin
 from django.urls import path, include
 
+handler404 = 'camino.views.not_found'
+handler500 = 'camino.views.server_error'
+
 urlpatterns = [
-    path('admin/', admin.site.urls),
     path('', include('camino.urls')),
 ]
 
-# The editor endpoints exist ONLY in development
+# The Django admin and the data editor exist ONLY on a developer's own computer
+# (DEBUG on). They are not routed in production.
 if settings.DEBUG:
     urlpatterns += [
+        path('admin/', admin.site.urls),
         path('editor/', include('data_editor.urls')),
     ]

@@ -10,26 +10,90 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.1/ref/settings/
 """
 import os
+import sys
 from pathlib import Path
+
+from django.core.exceptions import ImproperlyConfigured
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-APP_VERSION = "v1.2.16"  # Update this as you deploy new iterations
+APP_VERSION = "v1.2.18"  # Update this as you deploy new iterations
 
-# Read secret key and debug status from environment
-SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-dev-fallback-key')
-# DEBUG = True
+# ---------------------------------------------------------------------------
+# Environment-driven settings
+#
+#   DEBUG          "True" only on your own computer. Anything else means production.
+#   SECRET_KEY     Required in production (a long random string).
+#   SITE_URL       Public address, e.g. https://saintjeantosantiago.com (no trailing slash).
+#   ALLOWED_HOSTS  Optional, comma separated. Defaults to the live domain and Railway.
+#   HSTS_SECONDS   Optional. How long browsers must insist on HTTPS (default 3600).
+# ---------------------------------------------------------------------------
+def load_dotenv(path):
+    """Loads KEY=VALUE lines from a local .env file (if there is one) into the environment.
+
+    Real environment variables always win, so production (Railway) is unaffected: the .env
+    file is git-ignored and is never deployed.
+    """
+    try:
+        lines = path.read_text(encoding='utf-8').splitlines()
+    except OSError:
+        return
+    for line in lines:
+        line = line.strip()
+        if not line or line.startswith('#') or '=' not in line:
+            continue
+        key, value = line.split('=', 1)
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in '"\'':
+            value = value[1:-1]
+        os.environ.setdefault(key.strip(), value)
+
+
+load_dotenv(BASE_DIR / '.env')
+
 DEBUG = os.environ.get('DEBUG', 'False') == 'True'
+TESTING = 'test' in sys.argv  # python manage.py test
+
+SECRET_KEY = os.environ.get('SECRET_KEY', '')
+if not SECRET_KEY:
+    if DEBUG or TESTING:
+        SECRET_KEY = 'django-insecure-local-development-only'
+    else:
+        raise ImproperlyConfigured(
+            'The SECRET_KEY environment variable is required when DEBUG is not "True".'
+        )
 
 # Public address of the site, e.g. https://example.com (no trailing slash).
 # Used for canonical links, share previews and the sitemap. Set it in production.
 SITE_URL = os.environ.get('SITE_URL', '').rstrip('/')
 
-ALLOWED_HOSTS = ['*']
+_default_hosts = ['saintjeantosantiago.com', 'www.saintjeantosantiago.com', '.up.railway.app', 'healthcheck.railway.app']
+if DEBUG:
+    _default_hosts = ['localhost', '127.0.0.1', '[::1]'] + _default_hosts
+ALLOWED_HOSTS = [h.strip() for h in os.environ.get('ALLOWED_HOSTS', '').split(',') if h.strip()] or _default_hosts
+
 CSRF_TRUSTED_ORIGINS = [
+    'https://saintjeantosantiago.com',
+    'https://www.saintjeantosantiago.com',
     'https://*.up.railway.app',
 ]
+
+# ---------------------------------------------------------------------------
+# HTTPS and browser protections (production only)
+# ---------------------------------------------------------------------------
+# Leaflet map tiles require a Referer header, so send the origin to other sites.
+SECURE_REFERRER_POLICY = 'strict-origin-when-cross-origin'
+X_FRAME_OPTIONS = 'DENY'
+
+if not DEBUG:
+    # Railway ends HTTPS in front of the app and says so in this header.
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SECURE_SSL_REDIRECT = not TESTING
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    # Start small. Raise to 31536000 (one year) once everything works over HTTPS.
+    SECURE_HSTS_SECONDS = int(os.environ.get('HSTS_SECONDS', '3600'))
 
 # Application definition
 

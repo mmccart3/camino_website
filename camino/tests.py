@@ -8,15 +8,19 @@ and the SimpleTestCase tests never touch the database. LiveDatabaseSmokeTests is
 unittest case that only performs GET requests against the real camino.sqlite.
 """
 import json
+import os
 import re
 import unittest
 from decimal import Decimal
 from types import SimpleNamespace
 
 from django.conf import settings
-from django.test import Client, SimpleTestCase
+from django.http import Http404, HttpResponse
+from django.test import Client, RequestFactory, SimpleTestCase, override_settings
 
-from . import seo
+from data_editor.security import local_only
+
+from . import seo, views
 
 
 class SeoHelperTests(SimpleTestCase):
@@ -121,6 +125,42 @@ class PwaEndpointTests(SimpleTestCase):
         self.assertIn(f'data-version="{settings.APP_VERSION}"', html)
         self.assertIn('rel="canonical"', html)
         self.assertIn('property="og:title"', html)
+
+
+class SecurityTests(SimpleTestCase):
+    def test_not_found_page_is_friendly_and_not_indexed(self):
+        response = self.client.get('/no-such-page/')
+        self.assertEqual(response.status_code, 404)
+        html = response.content.decode()
+        self.assertIn('Page not found', html)
+        self.assertIn('noindex', html)
+
+    def test_server_error_page_is_plain(self):
+        response = views.server_error(RequestFactory().get('/'))
+        self.assertEqual(response.status_code, 500)
+        self.assertIn('Something went wrong', response.content.decode())
+
+    def test_wildcard_host_is_not_allowed(self):
+        self.assertNotIn('*', settings.ALLOWED_HOSTS)
+
+    @unittest.skipIf(os.environ.get('DEBUG') == 'True', 'admin and editor are routed when DEBUG=True')
+    def test_admin_and_editor_are_not_routed_in_production(self):
+        for path in ('/admin/', '/editor/'):
+            self.assertEqual(self.client.get(path).status_code, 404, path)
+
+    def test_local_only_guard(self):
+        @local_only
+        def view(request):
+            return HttpResponse('ok')
+
+        factory = RequestFactory()
+        with override_settings(DEBUG=True):
+            self.assertEqual(view(factory.get('/', REMOTE_ADDR='127.0.0.1')).status_code, 200)
+            with self.assertRaises(Http404):
+                view(factory.get('/', REMOTE_ADDR='203.0.113.5'))
+        with override_settings(DEBUG=False):
+            with self.assertRaises(Http404):
+                view(factory.get('/', REMOTE_ADDR='127.0.0.1'))
 
 
 class LiveDatabaseSmokeTests(unittest.TestCase):

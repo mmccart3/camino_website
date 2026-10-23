@@ -4,7 +4,9 @@ from django.contrib import messages
 from django.db.models import Max
 from camino.models import Albergue, PrivateAccomm, Paragraph, Location
 from .forms import AlbergueForm, PrivateAccommForm, ParagraphForm
+from .security import local_only
 
+@local_only
 def editor_dashboard(request):
     tab = request.GET.get('tab', 'albergues')
     query = request.GET.get('q', '').strip()
@@ -49,6 +51,7 @@ def editor_dashboard(request):
 
 # data_editor/views.py
 
+@local_only
 def create_item(request, model_name):
     models_map = {
         'albergue': (Albergue, AlbergueForm, 'albergues'),
@@ -89,6 +92,7 @@ def create_item(request, model_name):
     })
 
 
+@local_only
 def edit_item(request, model_name, pk):
     models_map = {
         'albergue': (Albergue, AlbergueForm, 'albergues'),

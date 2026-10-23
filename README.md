@@ -66,3 +66,21 @@ The underlying `camino.sqlite` database powers the application via the following
 * **Search:** the home page suggests towns as you type (works offline); `/towns/` lists every town; `/search/?q=` is the no-JavaScript fallback.
 * **Tests:** `python manage.py test camino` (the last test class reads the real `camino.sqlite`, read-only).
 
+---
+
+## Environment variables and security
+
+| Variable | Where | Purpose |
+| --- | --- | --- |
+| `SECRET_KEY` | Production (required) | Long random string. The app refuses to start without it when `DEBUG` is not `True`. |
+| `SITE_URL` | Production | Public address, e.g. `https://saintjeantosantiago.com`. |
+| `DEBUG` | Your computer only | Set `$env:DEBUG = "True"` locally to serve static files and enable the Django admin and `/editor/`. Never set it on Railway. |
+| `ALLOWED_HOSTS` | Optional | Comma-separated hosts. Defaults to the live domain, `www.`, and `*.up.railway.app`. |
+| `HSTS_SECONDS` | Optional | Defaults to 3600. Raise to 31536000 once HTTPS is confirmed everywhere. |
+| `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` | Local, for `sync_albergue_photos` | Photo upload credentials. Never commit them. |
+
+Production serves HTTPS only (HTTP is redirected), uses secure cookies, and does not route `/admin/` or `/editor/`. The editor also answers 404 to anything other than the local computer.
+
+Generate a key with: `python -c "import secrets; print(secrets.token_urlsafe(64))"`
+
+For local development, copy `.env.example` to `.env` (git-ignored). Settings read it automatically, so `python manage.py runserver` works without setting environment variables. Production uses Railway's variables instead, and uses a different `SECRET_KEY`.

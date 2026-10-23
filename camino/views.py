@@ -5,7 +5,7 @@ from xml.sax.saxutils import escape
 
 from django.conf import settings
 from django.db.models import Count
-from django.http import HttpResponse, JsonResponse
+from django.http import HttpResponse, HttpResponseServerError, JsonResponse
 from django.shortcuts import render, get_object_or_404, redirect
 from django.templatetags.static import static
 from django.urls import reverse
@@ -640,3 +640,23 @@ def location_detail(request, location_id):
     )
     context['stay_count'] = len(albergues) + len(private_accomm)
     return render(request, 'camino/location_detail.html', context)
+
+
+def not_found(request, exception=None):
+    """Friendly 404 page that search engines are told not to index."""
+    context = {'seo': {'title': seo.compose_title('Page not found'), 'noindex': True}}
+    return render(request, 'camino/404.html', context, status=404)
+
+
+def server_error(request):
+    """Plain 500 page. It uses no templates or database so it cannot fail itself."""
+    html = (
+        '<!doctype html><html lang="en"><head><meta charset="utf-8">'
+        '<meta name="viewport" content="width=device-width, initial-scale=1">'
+        '<meta name="robots" content="noindex"><title>Something went wrong</title></head>'
+        '<body style="font-family:system-ui,sans-serif;max-width:32rem;margin:15vh auto;padding:0 1rem;text-align:center;color:#1e293b">'
+        '<h1>Something went wrong</h1>'
+        '<p>Sorry, the guide hit a problem. Please try again in a moment.</p>'
+        '<p><a href="/" style="color:#1e3a8a">Back to the stages</a></p></body></html>'
+    )
+    return HttpResponseServerError(html)

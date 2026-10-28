@@ -151,6 +151,9 @@
           {% if a.valid_website_url %}
             <a href="{{ a.valid_website_url }}" target="_blank" rel="noopener" class="btn btn-web">Website</a>
           {% endif %}
+          {% if a.google_maps_url %}
+            <a href="{{ a.google_maps_url }}" target="_blank" rel="noopener" class="btn btn-map" aria-label="Show {{ a.name }} on Google Maps">📍 Google Maps</a>
+          {% endif %}
         </div>
       </div>
     </div>
@@ -195,6 +198,9 @@
           {% endif %}
           {% if p.valid_website_url %}
             <a href="{{ p.valid_website_url }}" target="_blank" rel="noopener" class="btn btn-web">Website</a>
+          {% endif %}
+          {% if p.google_maps_url %}
+            <a href="{{ p.google_maps_url }}" target="_blank" rel="noopener" class="btn btn-map" aria-label="Show {{ p.name }} on Google Maps">📍 Google Maps</a>
           {% endif %}
         </div>
       </div>

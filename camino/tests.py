@@ -21,6 +21,7 @@ from django.test import Client, RequestFactory, SimpleTestCase, override_setting
 from data_editor.security import local_only
 
 from . import seo, views
+from .models import Albergue, PrivateAccomm, google_maps_url
 
 
 class SeoHelperTests(SimpleTestCase):
@@ -163,6 +164,25 @@ class SecurityTests(SimpleTestCase):
                 view(factory.get('/', REMOTE_ADDR='127.0.0.1'))
 
 
+class GoogleMapsLinkTests(SimpleTestCase):
+    def test_valid_coordinates_give_a_pin_link(self):
+        self.assertEqual(
+            google_maps_url(42.8782, -8.5448),
+            'https://www.google.com/maps/search/?api=1&query=42.878200,-8.544800',
+        )
+
+    def test_missing_or_placeholder_coordinates_give_no_link(self):
+        for lat, lng in [(None, None), (42.8, None), (None, -8.5), ('', ''), ('x', 'y'),
+                         (0, 0), (0.00001, 0.00001), (91, 0), (0, 181)]:
+            self.assertIsNone(google_maps_url(lat, lng), (lat, lng))
+
+    def test_albergue_and_private_accommodation_expose_the_link(self):
+        for model in (Albergue, PrivateAccomm):
+            place = model(latitude=42.8782, longitude=-8.5448)
+            self.assertIn('query=42.878200,-8.544800', place.google_maps_url)
+            self.assertIsNone(model(latitude=None, longitude=None).google_maps_url)
+
+
 class LiveDatabaseSmokeTests(unittest.TestCase):
     """Read-only GET requests against the real camino.sqlite."""
 
@@ -216,3 +236,20 @@ class LiveDatabaseSmokeTests(unittest.TestCase):
             titles.setdefault(title, []).append(path)
         duplicates = {t: p for t, p in titles.items() if len(p) > 1}
         self.assertEqual(duplicates, {}, 'Pages share a title')
+
+    def test_accommodation_cards_link_to_google_maps(self):
+        pack = json.loads(self.get('/offline-pack.json'))
+        link = re.compile(
+            r'<a href="(https://www\.google\.com/maps/search/\?api=1&amp;query=-?\d+\.\d{6},-?\d+\.\d{6})"'
+            r' target="_blank" rel="noopener" class="btn btn-map"'
+        )
+        found = 0
+        for path in pack['pages']:
+            if not path.startswith('/location/'):
+                continue
+            html = self.get(path)
+            cards = html.count('class="accomm-card"')
+            links = len(link.findall(html))
+            self.assertLessEqual(links, cards, path)
+            found += links
+        self.assertGreater(found, 100)

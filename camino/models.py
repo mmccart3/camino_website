@@ -19,6 +19,23 @@ COUNTRY_CODE_CHOICES = [
 ]
 
 
+def google_maps_url(latitude, longitude):
+    """Google Maps link that drops a pin on the given coordinates, or None.
+
+    Missing, non-numeric, out-of-range and placeholder (0, 0 / tiny) coordinates give None,
+    so a card never links to a pin in the Atlantic Ocean.
+    """
+    try:
+        lat, lng = float(latitude), float(longitude)
+    except (TypeError, ValueError):
+        return None
+    if not (-90 <= lat <= 90 and -180 <= lng <= 180):
+        return None
+    if abs(lat) < 0.001 and abs(lng) < 0.001:
+        return None
+    return f'https://www.google.com/maps/search/?api=1&query={lat:.6f},{lng:.6f}'
+
+
 def attach_booking_affiliate(url_string):
     """Validates the URL protocol and appends affiliate tracking parameters."""
     if not url_string:
@@ -267,6 +284,11 @@ class Albergue(models.Model):
         db_table = 'albergues'
         
     @property
+    def google_maps_url(self):
+        """Link that opens this accommodation's GPS position in Google Maps, or None."""
+        return google_maps_url(self.latitude, self.longitude)
+
+    @property
     def valid_website_url(self):
         """Returns the website URL only if it starts with http:// or https://, else None."""
         if self.website_url:
@@ -313,6 +335,11 @@ class PrivateAccomm(models.Model):
         managed = False
         db_table = 'privateAccommDetail'
         
+    @property
+    def google_maps_url(self):
+        """Link that opens this accommodation's GPS position in Google Maps, or None."""
+        return google_maps_url(self.latitude, self.longitude)
+
     @property
     def valid_website_url(self):
         """Returns the website URL only if it starts with http:// or https://, else None."""

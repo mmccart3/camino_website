@@ -105,6 +105,7 @@ class PwaEndpointTests(SimpleTestCase):
         urls = json.loads(match.group(1))
         self.assertIn('/offline/', urls)
         self.assertIn('/', urls)
+        self.assertTrue(any(u.endswith('whatsapp-logo-green.svg') for u in urls))  # logo works offline
 
     def test_robots_points_to_sitemap(self):
         response = self.client.get('/robots.txt')
@@ -252,4 +253,22 @@ class LiveDatabaseSmokeTests(unittest.TestCase):
             links = len(link.findall(html))
             self.assertLessEqual(links, cards, path)
             found += links
+        self.assertGreater(found, 100)
+
+    def test_whatsapp_buttons_use_the_logo(self):
+        logo = settings.BASE_DIR / 'camino' / 'static' / 'camino' / 'img' / 'whatsapp-logo-green.svg'
+        self.assertTrue(logo.exists())
+        pack = json.loads(self.get('/offline-pack.json'))
+        button = re.compile(
+            r'<a href="https://wa\.me/\d+" target="_blank" rel="noopener" class="btn btn-wa"'
+            r' aria-label="Message [^"]+ on WhatsApp"><img src="[^"]*whatsapp-logo-green\.svg"'
+            r' alt="" width="86" height="20"></a>'
+        )
+        found = 0
+        for path in pack['pages']:
+            if not path.startswith('/location/'):
+                continue
+            html = self.get(path)
+            self.assertEqual(html.count('https://wa.me/'), len(button.findall(html)), path)
+            found += len(button.findall(html))
         self.assertGreater(found, 100)

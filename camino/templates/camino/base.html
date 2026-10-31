@@ -163,8 +163,20 @@
         color: white;
       }
       .btn-wa {
-        background: #25d366;
-        color: white;
+        /* The official logo is green, so the button is white with a light border. */
+        background: #fff;
+        border: 1px solid #cbd5e1;
+        display: inline-flex;
+        align-items: center;
+      }
+      .btn-wa img {
+        display: block;
+        height: 20px;
+        width: auto;
+      }
+      .btn-wa:hover,
+      .btn-wa:focus-visible {
+        border-color: #25d366;
       }
       .btn-phone {
         background: #334155;

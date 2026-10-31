@@ -307,6 +307,7 @@ def service_worker(request):
         static('camino/img/icon-192.png'),
         static('camino/img/favicon-48.png'),
         static('camino/img/whatsapp-logo-green.svg'),
+        static('camino/img/google-maps-pin.png'),
         settings.LEAFLET_CSS_URL,
         settings.LEAFLET_JS_URL,
     ] + settings.LEAFLET_IMAGE_URLS

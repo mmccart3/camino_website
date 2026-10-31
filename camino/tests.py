@@ -21,7 +21,7 @@ from django.test import Client, RequestFactory, SimpleTestCase, override_setting
 from data_editor.security import local_only
 
 from . import seo, views
-from .models import Albergue, PrivateAccomm, google_maps_url
+from .models import Albergue, PrivateAccomm, clean_email, google_maps_url
 
 
 class SeoHelperTests(SimpleTestCase):
@@ -106,6 +106,7 @@ class PwaEndpointTests(SimpleTestCase):
         self.assertIn('/offline/', urls)
         self.assertIn('/', urls)
         self.assertTrue(any(u.endswith('whatsapp-logo-green.svg') for u in urls))  # logo works offline
+        self.assertTrue(any(u.endswith('google-maps-pin.png') for u in urls))  # pin works offline
 
     def test_robots_points_to_sitemap(self):
         response = self.client.get('/robots.txt')
@@ -182,6 +183,33 @@ class GoogleMapsLinkTests(SimpleTestCase):
             place = model(latitude=42.8782, longitude=-8.5448)
             self.assertIn('query=42.878200,-8.544800', place.google_maps_url)
             self.assertIsNone(model(latitude=None, longitude=None).google_maps_url)
+
+
+class EmailLinkTests(SimpleTestCase):
+    def test_placeholders_and_blanks_give_no_email(self):
+        for value in (None, '', '   ', 'NULL', 'null', 'None', 'n/a'):
+            self.assertIsNone(clean_email(value), value)
+
+    def test_real_addresses_are_kept(self):
+        self.assertEqual(clean_email(' info@example.com '), 'info@example.com')
+
+    def test_models_expose_valid_email(self):
+        for model in (Albergue, PrivateAccomm):
+            self.assertEqual(model(email='a@b.es').valid_email, 'a@b.es')
+            self.assertIsNone(model(email='NULL').valid_email)
+            self.assertIsNone(model(email=None).valid_email)
+
+
+class AccommodationButtonAssetTests(SimpleTestCase):
+    def test_icon_sprite_has_the_three_icons(self):
+        from django.template.loader import render_to_string
+        sprite = render_to_string('camino/_icons.html')
+        for symbol in ('i-phone', 'i-email', 'i-language'):
+            self.assertIn(f'<symbol id="{symbol}" viewBox="0 0 24 24"><path d="M', sprite)
+
+    def test_google_maps_pin_is_a_png(self):
+        pin = settings.BASE_DIR / 'camino' / 'static' / 'camino' / 'img' / 'google-maps-pin.png'
+        self.assertEqual(pin.read_bytes()[:8], b'\x89PNG\r\n\x1a\n')
 
 
 class LiveDatabaseSmokeTests(unittest.TestCase):
@@ -272,3 +300,52 @@ class LiveDatabaseSmokeTests(unittest.TestCase):
             self.assertEqual(html.count('https://wa.me/'), len(button.findall(html)), path)
             found += len(button.findall(html))
         self.assertGreater(found, 100)
+
+    def test_card_buttons_sit_in_one_actions_row(self):
+        pack = json.loads(self.get('/offline-pack.json'))
+        checked = 0
+        for path in pack['pages']:
+            if not path.startswith('/location/'):
+                continue
+            html = self.get(path)
+            for card in html.split('class="accomm-card"')[1:]:
+                first_button = card.find('class="btn ')
+                if first_button == -1:
+                    continue
+                row = card.find('class="accomm-actions"')
+                self.assertNotEqual(row, -1, path)
+                self.assertLess(row, first_button, path)  # no button outside the row
+                self.assertEqual(card.count('class="accomm-actions"'), 1, path)
+                checked += 1
+        self.assertGreater(checked, 100)
+
+    def test_no_email_button_points_at_a_placeholder(self):
+        pack = json.loads(self.get('/offline-pack.json'))
+        found = 0
+        for path in pack['pages']:
+            if not path.startswith('/location/'):
+                continue
+            html = self.get(path)
+            self.assertNotIn('mailto:NULL', html, path)
+            for address in re.findall(r'href="mailto:([^"]*)"', html):
+                self.assertIn('@', address, path)
+                found += 1
+        self.assertGreater(found, 100)
+
+    def test_albergues_with_private_rooms_appear_under_the_private_filter(self):
+        pack = json.loads(self.get('/offline-pack.json'))
+        with_rooms = 0
+        for path in pack['pages']:
+            if not path.startswith('/location/'):
+                continue
+            html = self.get(path)
+            for card in html.split('class="accomm-card"')[1:]:
+                if 'data-type="albergue"' not in card[:200]:
+                    continue
+                self.assertIn('data-private-rooms="', card, path)
+                has_rooms = 'data-private-rooms="1"' in card
+                self.assertEqual(has_rooms, 'Private rooms</span>' in card, path)
+                with_rooms += has_rooms
+        self.assertGreater(with_rooms, 50)
+        template = (settings.BASE_DIR / 'camino' / 'templates' / 'camino' / 'location_detail.html').read_text(encoding='utf-8')
+        self.assertIn("card.dataset.privateRooms === '1'", template)

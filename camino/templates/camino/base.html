@@ -191,8 +191,26 @@
         color: white;
       }
       .btn-map {
-        background: #0f766e;
-        color: white;
+        /* The multicolour pin needs a white button. */
+        background: #fff;
+        color: #1f1f1f;
+        border: 1px solid #cbd5e1;
+      }
+      .btn-map:hover,
+      .btn-map:focus-visible {
+        border-color: #1a73e8;
+      }
+      .btn-map img {
+        display: block;
+        height: 26px;
+        width: auto;
+        flex: none;
+      }
+      .btn-icon {
+        width: 1.25rem;
+        height: 1.25rem;
+        flex: none;
+        fill: currentColor;
       }
       {% comment %} .hotspot {
         fill: rgba(217, 119, 6, 0.25);
@@ -750,12 +768,41 @@
 }
 
 .accomm-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
+  /* Every button is the same size; rows wrap as the card narrows. */
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(8.75rem, 1fr));
+  gap: 0.5rem;
   border-top: 1px solid var(--border);
   padding-top: 0.85rem;
   margin-top: 0.5rem;
+}
+.accomm-actions .btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 2.6rem;
+  margin: 0;
+  padding: 0 0.6rem;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.accomm-actions .btn span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.accomm-actions .btn-wa,
+.accomm-actions .btn-map {
+  border-color: #cbd5e1;
+}
+.accomm-actions .btn:focus-visible {
+  outline: 2px solid #0f172a;
+  outline-offset: 2px;
 }
 
 /* Elevation Scrub Drawer & Modal */
@@ -1341,6 +1388,9 @@
       <div class="disclaimer-box">
         <p style="margin: 0 0 0.4rem 0;">
           <strong>Affiliate Disclosure:</strong> Some lodging links on this guide are affiliate links through Booking.com. If you book an accommodation through these links, we may earn a small referral commission at no additional cost to you, which helps support maintenance of this guide.
+        </p>
+        <p style="margin: 0 0 0.4rem 0;">
+          <strong>Credits:</strong> Phone, email and website icons are <a href="https://fonts.google.com/icons" target="_blank" rel="noopener">Material Icons</a> by Google, licensed under <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a> (converted to SVG). Google Maps and WhatsApp names and logos are trademarks of their owners.
         </p>
         <p style="margin: 0;">
           <strong>Privacy &amp; Cookies:</strong> This website only uses strictly necessary functional cookies required for core site operation and security. We do not track or profile personal browsing behavior.

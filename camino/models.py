@@ -19,6 +19,12 @@ COUNTRY_CODE_CHOICES = [
 ]
 
 
+def clean_email(value):
+    """The e-mail address, or None for blanks and placeholders such as the text 'NULL'."""
+    email = str(value or '').strip()
+    return email if '@' in email else None
+
+
 def google_maps_url(latitude, longitude):
     """Google Maps link that drops a pin on the given coordinates, or None.
 
@@ -284,6 +290,11 @@ class Albergue(models.Model):
         db_table = 'albergues'
         
     @property
+    def valid_email(self):
+        """E-mail address to link to, or None when the record has none."""
+        return clean_email(self.email)
+
+    @property
     def google_maps_url(self):
         """Link that opens this accommodation's GPS position in Google Maps, or None."""
         return google_maps_url(self.latitude, self.longitude)
@@ -335,6 +346,11 @@ class PrivateAccomm(models.Model):
         managed = False
         db_table = 'privateAccommDetail'
         
+    @property
+    def valid_email(self):
+        """E-mail address to link to, or None when the record has none."""
+        return clean_email(self.email)
+
     @property
     def google_maps_url(self):
         """Link that opens this accommodation's GPS position in Google Maps, or None."""

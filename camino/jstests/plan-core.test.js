@@ -131,3 +131,20 @@ test('moving and removing days', () => {
   assert.strictEqual(P.moveDay(s, 0, -1), s);
   assert.deepStrictEqual(P.removeDay(s, 0).days.map(d => d.stage), [1]);
 });
+
+test('a day can be inserted anywhere, and the choices follow the place before it', () => {
+  const base = plan();                                  // Alpha to Bravo, Bravo to Charlie
+  const without = P.removeDay(base, 0);                 // the first day removed
+  assert.deepStrictEqual(P.nextOptions(without, data, 0), { mode: 'start', stages: [1, 2] });
+  const back = P.addStage(without, 1, 0);               // put it back at the start
+  assert.deepStrictEqual(back.days.map(d => d.stage), [1, 3]);
+  assert.strictEqual(P.layout(back, data).days[1].warning, '');
+  const middle = P.addRest(base, 1);                    // a rest day between the two stages
+  assert.deepStrictEqual(middle.days.map(d => d.t), ['s', 'r', 's']);
+  assert.strictEqual(P.layout(middle, data).days[1].end.name, 'Bravo');
+  assert.deepStrictEqual(P.nextOptions(base, data, 1).stages, [3]);   // after day 1 only Bravo onward
+  const travel = P.addTravel(base, data, 1);
+  assert.strictEqual(travel.days[1].from, 'Bravo');
+  assert.strictEqual(P.addStage(base, 2).days.length, 3);              // no position still means the end
+  assert.ok(P.layout(P.addStage(base, 2, 1), data).days[1].warning);  // a stage that does not connect is flagged
+});

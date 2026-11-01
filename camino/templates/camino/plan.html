@@ -19,6 +19,7 @@
   <noscript><p class="plan-warning">The planner needs JavaScript. Please turn it on for this site.</p></noscript>
   <p class="plan-error plan-fatal" role="alert" hidden>The planner could not load the guide data. Please reload the page.</p>
   <p class="plan-warning" id="plan-notice" role="status" hidden></p>
+  <p class="plan-undo" id="plan-undo" hidden><span id="plan-undo-text"></span><button type="button" class="plan-btn" id="plan-undo-btn">Undo</button></p>
   <p class="visually-hidden" id="plan-live" aria-live="polite"></p>
 
   <section class="plan-card" aria-labelledby="plan-details-title">
@@ -47,6 +48,10 @@
   <section class="plan-card plan-add" aria-labelledby="plan-add-title">
     <h3 id="plan-add-title" tabindex="-1">Day 1</h3>
     <p class="plan-hint" id="plan-add-lead" hidden></p>
+    <div class="plan-field plan-where" id="plan-add-where-row" hidden>
+      <label for="plan-add-where">Where should the new day go?</label>
+      <select id="plan-add-where" class="plan-input" data-focus="add-where"></select>
+    </div>
     <div class="plan-field plan-start-picker" id="plan-start-picker-label">
       <label for="plan-start-picker">Starting somewhere else on the Camino?</label>
       <select id="plan-start-picker" class="plan-input"></select>
@@ -56,6 +61,14 @@
       <button type="button" class="plan-btn" id="plan-add-rest" data-focus="add-rest">Add a rest day</button>
       <button type="button" class="plan-btn" id="plan-add-travel" data-focus="add-travel">Add a travel day</button>
     </div>
+    <details class="plan-any">
+      <summary>Choose any stage</summary>
+      <p class="plan-hint">Pick any stage in the guide. If it does not start where the day before ended, that day is flagged so you can fix the order.</p>
+      <div class="plan-any-row">
+        <select id="plan-any-stage" class="plan-input" aria-label="Any stage in the guide"></select>
+        <button type="button" class="plan-btn plan-btn-primary" id="plan-any-add">Add this stage</button>
+      </div>
+    </details>
   </section>
 
   <section class="plan-card plan-send" aria-labelledby="plan-send-title">

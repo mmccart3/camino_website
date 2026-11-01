@@ -26,7 +26,7 @@
   var STAY_NAMES = { a: 'Albergue', p: 'Hotel or guesthouse', c: 'Your own choice' };
 
   var storageWorks = true;
-  var ui = { startPlace: null, stayIndex: -1 };
+  var ui = { startPlace: null, stayIndex: -1, insertAt: null, undo: null };
   var state = loadState();
 
   function $(id) { return document.getElementById(id); }
@@ -99,7 +99,8 @@
 
   // ------------------------------------------------------------------ drawing the page
 
-  function update(next, focusKey, message) {
+  function update(next, focusKey, message, undoText) {
+    ui.undo = undoText ? { state: state, text: undoText } : null;
     state = next;
     ui.notice = '';
     saveState();
@@ -112,6 +113,8 @@
   function edit(next, index) {
     state = next;
     ui.notice = '';
+    ui.undo = null;
+    renderUndo();
     saveState();
     var layout = Plan.layout(state, data), items = $('plan-days').children;
     for (var k = index; k < state.days.length; k += 1) {
@@ -128,6 +131,7 @@
     var keep = focusKey || (document.activeElement && document.activeElement.getAttribute &&
       document.activeElement.getAttribute('data-focus'));
     renderNotice();
+    renderUndo();
     renderFields();
     renderSummary();
     renderDays();
@@ -146,6 +150,12 @@
     var box = $('plan-notice');
     box.textContent = messages.join(' ');
     box.hidden = !messages.length;
+  }
+
+  function renderUndo() {
+    var box = $('plan-undo');
+    box.hidden = !ui.undo;
+    $('plan-undo-text').textContent = ui.undo ? ui.undo.text + ' ' : '';
   }
 
   function renderFields() {
@@ -228,7 +238,7 @@
       info.date ? el('span', { 'class': 'plan-day-date', text: formatDate(info.date) }) : null,
       info.type === 's' && KIND_LABELS[info.stage.kind] ? chip(KIND_LABELS[info.stage.kind], info.stage.kind) : null
     ]);
-    var body = [head, el('h4', { 'class': 'plan-day-title', text: dayTitle(info) })];
+    var body = [head, el('h4', { 'class': 'plan-day-title', tabindex: '-1', 'data-focus': 'day-' + i + '-title', text: dayTitle(info) })];
 
     if (info.type === 's') {
       body.push(el('p', { 'class': 'plan-day-meta', text: Plan.formatKm(info.metres) + ' on foot, about ' + Plan.formatDuration(info.seconds) }));
@@ -267,6 +277,7 @@
     }
     actions.appendChild(button('Move up', 'up', { 'data-focus': 'day-' + i + '-up', disabled: i === 0, 'aria-label': 'Move day ' + no + ' earlier' }));
     actions.appendChild(button('Move down', 'down', { 'data-focus': 'day-' + i + '-down', disabled: i === count - 1, 'aria-label': 'Move day ' + no + ' later' }));
+    actions.appendChild(button('Add a day after', 'insert', { 'data-focus': 'day-' + i + '-insert', 'aria-label': 'Add a day after day ' + no }));
     actions.appendChild(button('Remove day', 'remove', { 'data-focus': 'day-' + i + '-remove', 'class': 'plan-btn plan-btn-danger', 'aria-label': 'Remove day ' + no }));
     body.push(actions);
 
@@ -292,47 +303,81 @@
       'data-focus': 'add-stage-' + id }, pieces)]);
   }
 
-  function renderAdd() {
-    var count = state.days.length, next = Plan.nextOptions(state, data);
-    var stages = next.stages, heading, lead = '';
-    if (count === 0 && ui.startPlace) stages = Plan.stagesStartingAt(ui.startPlace, data);
+  function insertPoint() {
+    var at = ui.insertAt;
+    return (at === null || at >= state.days.length) ? null : at;
+  }
 
-    if (count === 0) {
-      heading = 'Day 1: where does your walk begin?';
-      lead = 'Pick your first stage. If you arrive by plane or train first, add a travel day instead.';
+  function renderAdd() {
+    var count = state.days.length, at = insertPoint();
+    var position = at === null ? count : at;           // number of days before the new one
+    var next = Plan.nextOptions(state, data, at);
+    var stages = next.stages, heading, lead = '';
+    var atStart = position === 0;
+    if (atStart && ui.startPlace) stages = Plan.stagesStartingAt(ui.startPlace, data);
+
+    if (atStart) {
+      heading = 'Day 1' + (count ? ' (new)' : '') + ': where does your walk begin?';
+      lead = count ? 'This day will go at the start of your plan.'
+        : 'Pick your first stage. If you arrive by plane or train first, add a travel day instead.';
     } else if (next.mode === 'finished') {
-      heading = 'Day ' + (count + 1);
+      heading = 'Day ' + (position + 1) + (at === null ? '' : ' (new)');
       lead = 'Your plan reaches ' + next.place.name + ', the end of the guide. You can still add a rest day or a journey home.';
     } else if (next.mode === 'elsewhere') {
-      heading = 'Day ' + (count + 1);
-      lead = 'Your last day ended at ' + next.place.name + ', which is not in the guide. Add a travel day to reach the Camino, or pick a stage from the start.';
+      heading = 'Day ' + (position + 1) + (at === null ? '' : ' (new)');
+      lead = 'The day before ends at ' + next.place.name + ', which is not in the guide. Add a travel day to reach the Camino, or pick a stage from the start.';
     } else if (next.mode === 'start') {
-      heading = 'Day ' + (count + 1);
+      heading = 'Day ' + (position + 1) + (at === null ? '' : ' (new)');
       lead = 'Finish the day above first, or pick a stage from the start of the guide.';
     } else {
-      heading = 'Day ' + (count + 1) + ': from ' + next.place.name;
+      heading = 'Day ' + (position + 1) + (at === null ? '' : ' (new)') + ': from ' + next.place.name;
       lead = stages.length > 1 ? 'There is more than one way to go.' : '';
     }
     $('plan-add-title').textContent = heading;
     $('plan-add-lead').textContent = lead;
     $('plan-add-lead').hidden = !lead;
 
+    // Where the new day goes
+    var where = $('plan-add-where');
+    where.innerHTML = '';
+    where.appendChild(el('option', { value: 'end', text: 'At the end' }));
+    if (count) where.appendChild(el('option', { value: '0', text: 'At the start' }));
+    Plan.layout(state, data).days.forEach(function (info, i) {
+      if (i < count - 1) where.appendChild(el('option', { value: String(i + 1), text: 'After day ' + (i + 1) + ': ' + shortTitle(info) }));
+    });
+    where.value = at === null ? 'end' : String(at);
+    $('plan-add-where-row').hidden = count === 0;
+
     var picker = $('plan-start-picker');
-    picker.hidden = count !== 0;
-    if (count === 0 && !picker.options.length) {
+    picker.hidden = !atStart;
+    if (!picker.options.length) {
       Plan.startPlaces(data).forEach(function (p) {
         picker.appendChild(el('option', { value: String(p.id), text: p.name }));
       });
       picker.insertBefore(el('option', { value: '', text: 'The usual start' }), picker.firstChild);
     }
-    if (count === 0) picker.value = ui.startPlace ? String(ui.startPlace) : '';
-    $('plan-start-picker-label').hidden = count !== 0;
+    if (atStart) picker.value = ui.startPlace ? String(ui.startPlace) : '';
+    $('plan-start-picker-label').hidden = !atStart;
 
     var list = $('plan-next');
     list.innerHTML = '';
     stages.forEach(function (id) { list.appendChild(stageOption(id)); });
     list.hidden = !stages.length;
-    $('plan-add-rest').disabled = count === 0;
+    $('plan-add-rest').disabled = atStart;
+
+    // Any stage in the guide
+    var any = $('plan-any-stage');
+    if (!any.options.length) {
+      Plan.stageIds(data).forEach(function (id) {
+        var s = data.stages[id];
+        any.appendChild(el('option', { value: String(id), text: s.name + ' (' + Plan.formatKm(s.m) + ')' }));
+      });
+    }
+  }
+
+  function shortTitle(info) {
+    var t = dayTitle(info);
+    return t.length > 38 ? t.slice(0, 36) + '…' : t;
   }
 
   function renderSend() {
@@ -482,22 +527,49 @@
     renderAdd();
   });
 
+  // Adds a day at the chosen place and moves to it: the end keeps offering the next stage,
+  // an insertion in the middle shows the new day.
+  function added(next, at, message) {
+    var position = at === null ? next.days.length - 1 : at;
+    ui.startPlace = null;
+    ui.insertAt = null;
+    var following = at === null ? Plan.nextOptions(next, data).stages : [];
+    var focus = following.length ? 'add-stage-' + following[0] : (at === null ? 'add-rest' : 'day-' + position + '-title');
+    update(next, focus, message + ' as day ' + (position + 1) + '.');
+  }
+
+  $('plan-add-where').addEventListener('change', function (e) {
+    ui.insertAt = e.target.value === 'end' ? null : Number(e.target.value);
+    ui.startPlace = null;
+    renderAdd();
+    $('plan-add-where').focus();
+  });
+
   $('plan-add-rest').addEventListener('click', function () {
-    update(Plan.addRest(state), 'add-rest', 'Rest day added as day ' + (state.days.length + 1) + '.');
+    var at = insertPoint();
+    added(Plan.addRest(state, at), at, 'Rest day added');
   });
   $('plan-add-travel').addEventListener('click', function () {
-    var next = Plan.addTravel(state, data), i = next.days.length - 1;
-    update(next, 'day-' + i + (next.days[i].from ? '-to' : '-from'), 'Travel day added as day ' + next.days.length + '.');
+    var at = insertPoint(), next = Plan.addTravel(state, data, at), i = at === null ? next.days.length - 1 : at;
+    ui.insertAt = null;
+    update(next, 'day-' + i + (next.days[i].from ? '-to' : '-from'), 'Travel day added as day ' + (i + 1) + '.');
+  });
+  $('plan-any-add').addEventListener('click', function () {
+    var id = Number($('plan-any-stage').value), at = insertPoint();
+    if (!data.stages[id]) return;
+    added(Plan.addStage(state, id, at), at, 'Added ' + data.stages[id].name);
+  });
+  $('plan-undo-btn').addEventListener('click', function () {
+    if (!ui.undo) return;
+    var back = ui.undo.state;
+    update(back, 'add-rest', 'Undone.');
   });
 
   $('plan-next').addEventListener('click', function (e) {
     var target = e.target.closest ? e.target.closest('[data-act="add-stage"]') : null;
     if (!target) return;
-    var id = Number(target.getAttribute('data-stage'));
-    ui.startPlace = null;
-    var next = Plan.addStage(state, id);
-    var following = Plan.nextOptions(next, data).stages;
-    update(next, following.length ? 'add-stage-' + following[0] : 'add-rest', 'Added day ' + next.days.length + ': ' + data.stages[id].name + '.');
+    var id = Number(target.getAttribute('data-stage')), at = insertPoint();
+    added(Plan.addStage(state, id, at), at, 'Added ' + data.stages[id].name);
   });
 
   function dayIndex(node) {
@@ -512,7 +584,17 @@
     if (i < 0) return;
     if (act === 'up') update(Plan.moveDay(state, i, -1), i > 1 ? 'day-' + (i - 1) + '-up' : 'day-' + (i - 1) + '-down', 'Day moved earlier.');
     else if (act === 'down') update(Plan.moveDay(state, i, 1), i + 1 < state.days.length - 1 ? 'day-' + (i + 1) + '-down' : 'day-' + (i + 1) + '-up', 'Day moved later.');
-    else if (act === 'remove') update(Plan.removeDay(state, i), state.days.length > 1 ? 'day-' + Math.min(i, state.days.length - 2) + '-remove' : 'add-rest', 'Day ' + (i + 1) + ' removed.');
+    else if (act === 'insert') {
+      ui.insertAt = i + 1;
+      ui.startPlace = null;
+      renderAdd();
+      announce('Choose the day to add after day ' + (i + 1) + '.');
+      $('plan-add-title').focus();
+    } else if (act === 'remove') {
+      var gone = dayTitle(Plan.layout(state, data).days[i]);
+      update(Plan.removeDay(state, i), state.days.length > 1 ? 'day-' + Math.min(i, state.days.length - 2) + '-remove' : 'add-rest',
+        'Day ' + (i + 1) + ' removed.', 'Removed day ' + (i + 1) + ' (' + gone + ').');
+    }
     else if (act === 'stay') openStay(i);
     else if (act === 'stay-clear') update(Plan.setStay(state, i, null, data), 'day-' + i + '-stay', 'Stay removed.');
   });
@@ -555,6 +637,7 @@
   $('plan-reset-confirm').addEventListener('click', function () {
     closeDialog($('plan-reset-dialog'));
     ui.startPlace = null;
+    ui.insertAt = null;
     ui.notice = '';
     say('', false);
     update(Plan.newState(data), 'plan-name', 'Plan cleared.');

@@ -213,8 +213,16 @@
     }).map(function (id) { return { id: id, name: data.places[id] }; });
   }
 
-  // What can be added next: the stages that begin where the last day ended.
-  function nextOptions(state, data) {
+  // The state as it stands just before day number `at` (0 = the start); used when a day is inserted.
+  function before(state, at) {
+    if (at === undefined || at === null || at >= state.days.length) return state;
+    return { days: state.days.slice(0, Math.max(0, at)), pace: state.pace, startDate: state.startDate };
+  }
+
+  // What can be added next: the stages that begin where the day before the new one ended.
+  // `at` is where the new day will go; leave it out to add to the end.
+  function nextOptions(state, data, at) {
+    state = before(state, at);
     if (!state.days.length) return { mode: 'start', stages: startOptions(data) };
     var end = layout(state, data).end;
     if (!end) return { mode: 'start', stages: startOptions(data) };
@@ -245,18 +253,19 @@
 
   function withDays(state, fn) { var s = clone(state); fn(s.days); return s; }
 
-  function addStage(state, stageId) {
+  function insertDay(state, at, day) {
     if (state.days.length >= MAX_DAYS) return state;
-    return withDays(state, function (d) { d.push({ t: 's', stage: stageId, stay: null }); });
+    return withDays(state, function (d) {
+      var i = (at === undefined || at === null || at > d.length) ? d.length : Math.max(0, at);
+      d.splice(i, 0, day);
+    });
   }
-  function addRest(state) {
-    if (state.days.length >= MAX_DAYS) return state;
-    return withDays(state, function (d) { d.push({ t: 'r', stay: null }); });
-  }
-  function addTravel(state, data) {
-    if (state.days.length >= MAX_DAYS) return state;
-    var end = layout(state, data).end;
-    return withDays(state, function (d) { d.push({ t: 't', from: end ? end.name : '', to: '', stay: null }); });
+  // The three adders take an optional `at`: the position the new day should take (default: the end).
+  function addStage(state, stageId, at) { return insertDay(state, at, { t: 's', stage: stageId, stay: null }); }
+  function addRest(state, at) { return insertDay(state, at, { t: 'r', stay: null }); }
+  function addTravel(state, data, at) {
+    var end = layout(before(state, at), data).end;
+    return insertDay(state, at, { t: 't', from: end ? end.name : '', to: '', stay: null });
   }
   function removeDay(state, i) { return withDays(state, function (d) { d.splice(i, 1); }); }
   function moveDay(state, i, by) {

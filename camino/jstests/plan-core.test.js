@@ -7,6 +7,11 @@ const assert = require('node:assert');
 const P = require('../static/camino/js/plan-core.js');
 
 const FLAT = Math.exp(-2.25 * 0.07);
+
+// A tiny guide: Alpha (1) to Bravo (2) by the main road through Midway (4) or by the hills, then Bravo to Charlie (3).
+//   path 11  Alpha to Midway   stage 1      path 13  Alpha to Bravo   stage 2 (the hills)
+//   path 12  Midway to Bravo   stage 1      path 14  Bravo to Charlie stage 3
+// Each path row: [id, origin, destination, stage, distance, weighted, first distance, first weighted, shape].
 const data = {
   v: 1, guide: '0123456789abcdef', flat: FLAT, pace: { default: 4.2, min: 2, max: 6 },
   sections: [{ n: 1, stages: [1, 2] }, { n: 2, stages: [3] }],
@@ -15,8 +20,17 @@ const data = {
     '2': { ref: '2', name: 'Alpha to Bravo via the hills', start: 1, finish: 2, m: 21000, w: 29000, paths: [13], section: 1, kind: 'mountain' },
     '3': { ref: '3', name: 'Bravo to Charlie', start: 2, finish: 3, m: 15000, w: 16000, paths: [14], section: 2, kind: 'main' }
   },
-  places: { '1': 'St Jean Pied de Port', '2': 'Bravo', '3': 'Charlie' },
-  stays: [[0, 100, 2, 'Albergue Bravo'], [1, 200, 2, 'Hotel Bravo'], [0, 300, 3, 'Albergue Charlie']],
+  places: { '1': 'St Jean Pied de Port', '2': 'Bravo', '3': 'Charlie', '4': 'Midway', '5': 'A fountain' },
+  routes: {
+    paths: [
+      [11, 1, 4, 1, 9050, 11060, 50, 60, 'aaaa'],
+      [12, 4, 2, 1, 11000, 14000, 40, 45, 'bbbb'],
+      [13, 1, 2, 2, 21050, 29050, 50, 50, 'cccc'],
+      [14, 2, 3, 3, 15060, 16070, 60, 70, 'dddd']
+    ],
+    next: { '11': [[12, 1]], '12': [[14, 0]], '13': [[14, 0]] }
+  },
+  stays: [[0, 100, 2, 'Albergue Bravo'], [1, 200, 2, 'Hotel Bravo'], [0, 300, 3, 'Albergue Charlie'], [0, 400, 4, 'Albergue Midway']],
   skipped: []
 };
 const NOW = '2026-11-01T12:00:00.000000Z';
@@ -34,22 +48,84 @@ test('walking time follows the app: weighted distance, flat factor, pace, whole 
   assert.ok(P.walkingSeconds(25000, 3.5, FLAT) > P.walkingSeconds(25000, 4.2, FLAT));
 });
 
-test('first choices are stages that start where no other stage finishes', () => {
-  assert.deepStrictEqual(P.nextOptions(P.newState(data), data), { mode: 'start', stages: [1, 2] });
-  assert.deepStrictEqual(P.startPlaces(data).map(p => p.name), ['St Jean Pied de Port', 'Bravo']);
+test('a chain of paths adds every point except the first of the day and of a path that starts another stage', () => {
+  assert.deepStrictEqual(P.chainTotals([11], data), { metres: 9000, weighted: 11000, from: 1, to: 4 });
+  assert.strictEqual(P.chainTotals([11, 12], data).metres, 20000);          // same stage: the join counts
+  assert.strictEqual(P.chainTotals([12], data).metres, 10960);               // alone, its first point adds nothing
+  assert.strictEqual(P.chainTotals([12, 14], data).metres, 10960 + 15000);   // another stage: 14's first point adds nothing
+  assert.strictEqual(P.chainTotals([11, 14], data), null);                   // the paths do not join
+  assert.strictEqual(P.chainTotals([11, 11], data), null);
+  assert.strictEqual(P.chainTotals([99], data), null);
 });
 
-test('next choices come from where the last day ended, and the end of the guide is recognised', () => {
-  const afterOne = P.addStage(P.newState(data), 2);
-  const n = P.nextOptions(afterOne, data);
-  assert.strictEqual(n.mode, 'next'); assert.deepStrictEqual(n.stages, [3]); assert.strictEqual(n.place.name, 'Bravo');
-  assert.strictEqual(P.nextOptions(plan(), data).mode, 'finished');
+test('every guidebook stage adds up to the figures stored for it', () => {
+  for (const id of Object.keys(data.stages)) {
+    const t = P.chainTotals(data.stages[id].paths, data);
+    assert.ok(Math.abs(t.metres - data.stages[id].m) < 0.001, id);
+    assert.ok(Math.abs(t.weighted - data.stages[id].w) < 0.001, id);
+  }
+});
+
+test('routes between two places follow whole stages; a stage that is exactly the chain is a stage day', () => {
+  assert.deepStrictEqual(P.routesBetween(1, 2, data).routes, [[11, 12], [13]]);
+  assert.deepStrictEqual(P.routesBetween(4, 3, data).routes, [[12, 14]]);
+  assert.deepStrictEqual(P.routesBetween(1, 3, data).routes, [[11, 12, 14], [13, 14]]);
+  assert.deepStrictEqual(P.routesBetween(3, 1, data).routes, []);
+  assert.deepStrictEqual(P.routesBetween(2, 2, data).routes, []);
+  assert.strictEqual(P.stageForChain([11, 12], data), 1);
+  assert.strictEqual(P.stageForChain([11], data), null);
+  assert.strictEqual(P.addRoute(P.newState(data), [11, 12], data).days[0].t, 's');
+  assert.strictEqual(P.addRoute(P.newState(data), [11], data).days[0].t, 'c');
+});
+
+test('alternative routes are named by what tells them apart', () => {
+  const found = P.routesBetween(1, 2, data).routes;                       // the road, and the hills
+  assert.deepStrictEqual(P.routeLabels(found, data), ['Main route', 'Via the hills']);
+  assert.deepStrictEqual(P.routeLabels([found[0]], data), ['Alpha to Bravo']);  // one route keeps its full name
+  const to3 = P.routesBetween(1, 3, data).routes;                         // both go on to Charlie
+  assert.deepStrictEqual(P.routeLabels(to3, data).length, 2);
+  assert.notStrictEqual(P.routeLabels(to3, data)[0], P.routeLabels(to3, data)[1]);
+});
+
+test('stops are towns only, nearest first, each with its routes and shortest distance', () => {
+  const stops = P.stopsFrom(1, data, 60000);
+  assert.deepStrictEqual(stops.map(s => s.name), ['Midway', 'Bravo', 'Charlie']);
+  assert.deepStrictEqual(stops.map(s => s.metres), [9000, 20000, 35000]);
+  assert.strictEqual(stops[1].routes.length, 2);                              // by the road or by the hills
+  assert.deepStrictEqual(P.stopsFrom(1, data, 15000).map(s => s.name), ['Midway']);
+  assert.deepStrictEqual(P.stopsFrom(3, data, 60000), []);                    // nothing beyond the end
+  assert.ok(!P.stopsFrom(1, data, 60000).some(s => s.name === 'A fountain')); // not a place to stay
+});
+
+test('where a day starts: where the last ended if that is on the route, otherwise the visitor picks', () => {
+  assert.deepStrictEqual(P.startFor(P.newState(data), data, null, null).fixed, false);
+  assert.strictEqual(P.startFor(P.newState(data), data, null, null).name, 'St Jean Pied de Port');
+  const afterOne = P.addRoute(P.newState(data), [11], data);
+  const s = P.startFor(afterOne, data, null, null);
+  assert.deepStrictEqual([s.fixed, s.name], [true, 'Midway']);
+  const away = P.setTravel(P.addTravel(P.newState(data), data), 0, { from: 'Home', to: 'Biarritz' });
+  assert.deepStrictEqual([P.startFor(away, data, null, 4).fixed, P.startFor(away, data, null, 4).name], [false, 'Midway']);
+  assert.strictEqual(P.startFor(plan(), data, 1, null).name, 'Bravo');        // inserting after day 1
 });
 
 test('a day that starts somewhere else than the last ended gets a warning, not a failure', () => {
-  let s = P.addStage(P.addStage(P.newState(data), 3), 1);
+  const s = P.addStage(P.addStage(P.newState(data), 3), 1);
+  assert.match(P.layout(s, data).days[1].warning, /starts at St Jean Pied de Port, but the day before ended at Charlie/);
+});
+
+test('the visitor\'s own stage: distance, time, warning and the way the file records it', () => {
+  let s = P.setMeta(P.addRoute(P.newState(data), [11], data), { pace: 3.5, startDate: '2027-04-10' }, data);
+  s = P.addRoute(s, [12], data);
   const l = P.layout(s, data);
-  assert.match(l.days[1].warning, /starts at St Jean Pied de Port, but the day before ended at Charlie/);
+  assert.deepStrictEqual([l.days[0].start.name, l.days[0].end.name, l.days[0].metres], ['St Jean Pied de Port', 'Midway', 9000]);
+  assert.strictEqual(l.days[0].seconds, P.walkingSeconds(11000, 3.5, FLAT));
+  assert.strictEqual(l.days[1].warning, '');
+  assert.strictEqual(P.totals(s, data).walking, 2);
+  const doc = P.buildFile(s, data, NOW);
+  assert.deepStrictEqual(P.checkFile(doc), []);
+  const day = doc.plans[0].days[0];
+  assert.deepStrictEqual([day.start_id, day.end_id, day.metres], [1, 4, 9000]);
+  assert.deepStrictEqual(JSON.parse(day.route).paths, [11]);
 });
 
 test('rest and travel days', () => {
@@ -64,7 +140,6 @@ test('rest and travel days', () => {
   assert.strictEqual(P.layout(t, data).end.id, 1); // forgiving match to a place in the guide
   t = P.setTravel(t, 2, { to: 'Biarritz' });
   assert.ok(P.layout(t, data).end.id < 0);
-  assert.strictEqual(P.nextOptions(t, data).mode, 'elsewhere');
 });
 
 test('same start and finish means another route for the same stage', () => {
@@ -110,10 +185,13 @@ test('the import checks catch what the app would refuse', () => {
   assert.ok(P.checkFile({ format: 'other' }).length);
 });
 
-test('saved plans are cleaned: unknown stages dropped, values kept in range', () => {
-  const raw = { name: 'x'.repeat(200), startDate: '2027-02-31', pace: 99, days: [{ t: 's', stage: 1 }, { t: 's', stage: 77 }, { t: 'nope' }, null] };
+test('saved plans are cleaned: unknown stages and broken routes dropped, values kept in range', () => {
+  const raw = { name: 'x'.repeat(200), startDate: '2027-02-31', pace: 99, days: [
+    { t: 's', stage: 1 }, { t: 's', stage: 77 }, { t: 'nope' }, null,
+    { t: 'c', paths: [11] }, { t: 'c', paths: [11, 14] }, { t: 'c', paths: 'x' }] };
   const s = P.clean(raw, data);
-  assert.strictEqual(s.days.length, 1); assert.strictEqual(s.name.length, 80);
+  assert.deepStrictEqual(s.days.map(d => d.t), ['s', 'c']);
+  assert.strictEqual(s.name.length, 80);
   assert.strictEqual(s.startDate, ''); assert.strictEqual(s.pace, 4.2);
 });
 
@@ -132,17 +210,14 @@ test('moving and removing days', () => {
   assert.deepStrictEqual(P.removeDay(s, 0).days.map(d => d.stage), [1]);
 });
 
-test('a day can be inserted anywhere, and the choices follow the place before it', () => {
+test('a day can be inserted anywhere', () => {
   const base = plan();                                  // Alpha to Bravo, Bravo to Charlie
-  const without = P.removeDay(base, 0);                 // the first day removed
-  assert.deepStrictEqual(P.nextOptions(without, data, 0), { mode: 'start', stages: [1, 2] });
-  const back = P.addStage(without, 1, 0);               // put it back at the start
+  const back = P.addStage(P.removeDay(base, 0), 1, 0);  // the first day taken out and put back at the start
   assert.deepStrictEqual(back.days.map(d => d.stage), [1, 3]);
   assert.strictEqual(P.layout(back, data).days[1].warning, '');
   const middle = P.addRest(base, 1);                    // a rest day between the two stages
   assert.deepStrictEqual(middle.days.map(d => d.t), ['s', 'r', 's']);
   assert.strictEqual(P.layout(middle, data).days[1].end.name, 'Bravo');
-  assert.deepStrictEqual(P.nextOptions(base, data, 1).stages, [3]);   // after day 1 only Bravo onward
   const travel = P.addTravel(base, data, 1);
   assert.strictEqual(travel.days[1].from, 'Bravo');
   assert.strictEqual(P.addStage(base, 2).days.length, 3);              // no position still means the end

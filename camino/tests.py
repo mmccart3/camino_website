@@ -263,6 +263,8 @@ class LiveDatabaseSmokeTests(unittest.TestCase):
         self.assertEqual(len(data['stages']), Stage.objects.count())
         self.assertRegex(data['guide'], r'^[0-9a-f]{16}$')
         self.assertGreater(len(data['stays']), 100)
+        self.assertGreater(len(data['routes']['paths']), 200)  # the walking routes between towns
+        self.assertTrue(all(str(row[1]) in data['places'] and str(row[2]) in data['places'] for row in data['routes']['paths']))
         self.assertNotIn('<', match.group(1))  # nothing in the data can end the script tag
 
     def test_towns_page_lists_towns(self):

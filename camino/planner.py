@@ -111,7 +111,8 @@ def _usable(point):
 def stage_totals(stage, paths, points_by_path, locations):
     """Distance (metres) and weighted distance for one guidebook stage, as the app saves it.
 
-    Returns {'paths': [ids in walking order], 'metres': float, 'weighted': float}.
+    Returns {'paths': [ids in walking order], 'metres': float, 'weighted': float,
+    'ordered': [(path, its ordered track points)]}.
     Raises RouteData when the app could not plan across the stage.
     """
     tracks = {}
@@ -167,7 +168,56 @@ def stage_totals(stage, paths, points_by_path, locations):
                 metres += point['d3']
                 weighted += point['w']
             previous = point
-    return {'paths': [p['id'] for p in ordered], 'metres': metres, 'weighted': weighted}
+    return {'paths': [p['id'] for p in ordered], 'metres': metres, 'weighted': weighted,
+            'ordered': [(p, tracks[p['id']]) for p in ordered]}
+
+
+# --- walking between any two places (WalkingDayPlanner.routes and _calculate) --------------------
+
+def path_shape(rows):
+    """A short code for a path's line on the map. Two paths with the same code are the same walk,
+    so the page can offer it once (the app does the same when it lists routes)."""
+    coords = []
+    for p in rows:
+        c = f"{p['lat']:.6f},{p['lon']:.6f}"
+        if not coords or coords[-1] != c:
+            coords.append(c)
+    return hashlib.sha1(';'.join(coords).encode()).hexdigest()[:8]
+
+
+def build_route_graph(legs):
+    """What the page needs to join paths into a day of the visitor's own, as the app does.
+
+    legs: [(path, ordered track points)] for every path of every plannable stage.
+    Returns {'paths': [[id, origin, dest, stage, distance, weighted, first distance, first weighted, shape]],
+             'next':  {path id: [[next path id, 1 if it continues the same track else 0]]}}.
+
+    A day over several paths adds every point's distance, except that the first point of the day,
+    and the first point of a path that starts a different stage's track, add nothing. So a path's
+    contribution is its whole total minus its first point unless it continues the track before it.
+    """
+    out, info, by_origin = [], {}, {}
+    for path, rows in legs:
+        first, last = rows[0], rows[-1]
+        out.append([path['id'], path['origin'], path['dest'], path['stage'],
+                    round(sum(p['d3'] for p in rows), 6), round(sum(p['w'] for p in rows), 6),
+                    round(first['d3'], 6), round(first['w'], 6), path_shape(rows)])
+        info[path['id']] = (path, first, last)
+        by_origin.setdefault(path['origin'], []).append(path['id'])
+    following = {}
+    for pid, (path, first, last) in info.items():
+        joins = []
+        for other in by_origin.get(path['dest'], []):
+            other_path, other_first, _ = info[other]
+            same_stage = other_path['stage'] == path['stage']
+            if haversine(_position(last), _position(other_first)) > MAX_JOIN_GAP:
+                continue
+            if same_stage and other_first['prev'] != last['id']:
+                continue
+            joins.append([other, 1 if same_stage else 0])
+        if joins:
+            following[str(pid)] = joins
+    return {'paths': out, 'next': following}
 
 
 # --- the JSON the page loads -----------------------------------------------------------------
@@ -189,13 +239,14 @@ def build_planner_data(stages, paths, points_by_path, locations, stays, sections
     by_stage = {}
     for path in paths:
         by_stage.setdefault(path['stage'], []).append(path)
-    out_stages, skipped = {}, []
+    out_stages, skipped, legs = {}, [], []
     for stage in sorted(stages, key=lambda s: s['id']):
         try:
             totals = stage_totals(stage, by_stage.get(stage['id'], []), points_by_path, locations)
         except RouteData as error:
             skipped.append({'stage': stage['id'], 'reason': str(error)})
             continue
+        legs.extend(totals['ordered'])
         out_stages[str(stage['id'])] = {
             'ref': stage['ref'] or str(stage['id']),
             'name': stage['name'],
@@ -224,9 +275,11 @@ def build_planner_data(stages, paths, points_by_path, locations, stays, sections
             entry['section'], entry['kind'] = next_n, 'main'
             clean_sections.append({'n': next_n, 'stages': [int(sid_text)]})
             next_n += 1
-    finish_ids = {s['finish'] for s in out_stages.values()}
-    used_places = {s['start'] for s in out_stages.values()} | finish_ids
-    out_stays = [[kind, ident, loc, name] for (kind, ident, loc, name) in stays if loc in finish_ids]
+    routes = build_route_graph(legs)
+    used_places = {s['start'] for s in out_stages.values()} | {s['finish'] for s in out_stages.values()}
+    for row in routes['paths']:
+        used_places.update((row[1], row[2]))
+    out_stays = [[kind, ident, loc, name] for (kind, ident, loc, name) in stays if loc in used_places]
     out_stays.sort(key=lambda s: (s[2], s[0], (s[3] or '').lower(), s[1]))
     places = {str(i): locations[i][0] for i in used_places if i in locations}
     return {
@@ -237,6 +290,7 @@ def build_planner_data(stages, paths, points_by_path, locations, stays, sections
         'sections': sorted(clean_sections, key=lambda s: s['n']),
         'stages': out_stages,
         'places': places,
+        'routes': routes,
         'stays': out_stays,
         'skipped': skipped,
     }

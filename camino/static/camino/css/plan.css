@@ -159,6 +159,34 @@
 .plan-option-meta { font-size: 0.88rem; color: #475569; }
 .plan-add-other { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem; }
 
+/* Places to stop */
+.plan-stops-title { margin: 1rem 0 0.5rem; font-size: 1rem; color: var(--navy, #1e3a8a); }
+.plan-stops { list-style: none; margin: 0 0 0.75rem; padding: 0; display: grid; gap: 0.5rem; }
+.plan-stops:empty { display: none; }
+.plan-stop {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.15rem 0.75rem;
+  align-items: center;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.65rem 0.9rem;
+  text-align: left;
+  font: inherit;
+  color: var(--text, #1e293b);
+  background: #fff;
+  border: 1px solid #94a3b8;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.plan-stop:hover { background: #f8fafc; border-color: var(--navy, #1e3a8a); }
+.plan-stop:focus-visible { outline: 3px solid #f59e0b; outline-offset: 2px; }
+.plan-stop-name { font-weight: 700; color: var(--navy, #1e3a8a); }
+.plan-stop-meta { grid-column: 1; font-size: 0.88rem; color: #475569; }
+.plan-stop-tags { grid-column: 2; grid-row: 1 / span 2; display: flex; flex-direction: column; align-items: flex-end; gap: 0.25rem; }
+.plan-stop-routes { list-style: none; margin: 0.4rem 0 0.2rem 0.75rem; padding: 0 0 0 0.75rem; display: grid; gap: 0.4rem; border-left: 3px solid var(--gold, #d97706); }
+.plan-chip-stage { background: #fef3c7; color: #78350f; }
+
 /* Undo, where the new day goes, any stage */
 .plan-undo { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin: 0 0 1rem; padding: 0.5rem 0.75rem; background: #e0f2fe; color: #0c4a6e; border-left: 4px solid #0284c7; border-radius: 6px; font-size: 0.92rem; }
 .plan-where { margin: 0.9rem 0; }

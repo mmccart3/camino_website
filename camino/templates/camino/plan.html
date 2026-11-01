@@ -52,18 +52,21 @@
       <label for="plan-add-where">Where should the new day go?</label>
       <select id="plan-add-where" class="plan-input" data-focus="add-where"></select>
     </div>
-    <div class="plan-field plan-start-picker" id="plan-start-picker-label">
-      <label for="plan-start-picker">Starting somewhere else on the Camino?</label>
-      <select id="plan-start-picker" class="plan-input"></select>
+    <div class="plan-field plan-from" id="plan-from-row" hidden>
+      <label for="plan-from">Starting from</label>
+      <select id="plan-from" class="plan-input" data-focus="from"></select>
     </div>
-    <ul id="plan-next" class="plan-options"></ul>
+    <h4 class="plan-stops-title" id="plan-stops-title" tabindex="-1">Where will you stop?</h4>
+    <p class="plan-hint" id="plan-stops-empty" hidden></p>
+    <ul id="plan-stops" class="plan-stops"></ul>
+    <button type="button" class="plan-btn plan-btn-quiet" id="plan-stops-more" hidden>Show places further ahead</button>
     <div class="plan-add-other">
       <button type="button" class="plan-btn" id="plan-add-rest" data-focus="add-rest">Add a rest day</button>
       <button type="button" class="plan-btn" id="plan-add-travel" data-focus="add-travel">Add a travel day</button>
     </div>
     <details class="plan-any">
-      <summary>Choose any stage</summary>
-      <p class="plan-hint">Pick any stage in the guide. If it does not start where the day before ended, that day is flagged so you can fix the order.</p>
+      <summary>Choose a whole guidebook stage</summary>
+      <p class="plan-hint">Pick any stage from the guide, wherever it starts. If it does not start where the day before ended, that day is flagged so you can fix the order.</p>
       <div class="plan-any-row">
         <select id="plan-any-stage" class="plan-input" aria-label="Any stage in the guide"></select>
         <button type="button" class="plan-btn plan-btn-primary" id="plan-any-add">Add this stage</button>

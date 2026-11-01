@@ -100,13 +100,22 @@ For local development, copy `.env.example` to `.env` (git-ignored). Settings rea
 
 ## Itinerary planner
 
-`/plan/` lets a visitor build an itinerary (stages, rest days, travel days, places to stay) and download a
+`/plan/` lets a visitor build an itinerary (walking days, rest days, travel days, places to stay) and download a
 file that the Saint Jean to Santiago app opens with Settings, Backup and restore, Restore backup. Nothing
 is sent to the server: the plan is kept in the visitor's browser.
 
+A walking day is added by choosing where to stop: the page lists the towns ahead (anywhere with a place
+to stay, or a guidebook stage start or finish), nearest first, with the distance and time. A day can end
+in between the guidebook's stage ends. Where there are several routes to a town (for example the Napoleon
+and Valcarlos routes out of Saint Jean) the visitor picks one. A day that happens to match a guidebook stage
+is saved as that stage. The page works out each day the way the app does, so the file opens with the same
+figures.
+
 - `camino/planner.py` works out each stage's distance and walking time from the track points, using the
-  same arithmetic as the app, and builds the data embedded in the page. `camino/test_planner.py` checks it
-  against the stored stage distances and times.
+  same arithmetic as the app, and builds the data embedded in the page, including a graph of how the
+  paths join (`routes`) so the page can build a day between any two towns. `camino/test_planner.py` checks
+  it against the stored stage distances and times, and that walking every stage through the graph gives
+  the same figures.
 - `camino/static/camino/js/plan-core.js` holds the planner's rules and the file builder;
   `plan.js` draws the page. Tests for the rules: `node --test` (Node 18 or newer).
 - The file format is described in the app project's `docs/itinerary_exchange_format.md`.

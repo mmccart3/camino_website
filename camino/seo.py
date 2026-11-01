@@ -176,6 +176,23 @@ def stage_seo(stage, origin, canonical):
     }
 
 
+def plan_seo(origin):
+    return {
+        'title': compose_title('Plan your Camino Francés itinerary'),
+        'description': clip(
+            'Plan your Camino Francés day by day: choose stages, rest days and places to stay, '
+            'see distances and walking times, then send the itinerary to the free app.'
+        ),
+        'jsonld': json_ld({
+            '@context': 'https://schema.org',
+            '@graph': [breadcrumb([
+                ('Stages', origin + '/'),
+                ('Plan your Camino', origin + '/plan/'),
+            ])],
+        }),
+    }
+
+
 def location_seo(location, albergues, private_accomm, parent_stage, origin, canonical, stage_url=None):
     albergues = list(albergues)
     private_accomm = list(private_accomm)

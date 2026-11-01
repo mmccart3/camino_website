@@ -56,8 +56,8 @@ self.addEventListener('fetch', (event) => {
 
   if (url.origin === self.location.origin) {
     const path = url.pathname;
-    // Never keep anything from the data editor, the admin, or the worker itself.
-    if (path === '/sw.js' || path.startsWith('/editor/') || path.startsWith('/admin/') || path === '/offline-pack.json') return;
+    // Never keep the worker itself or the offline pack list.
+    if (path === '/sw.js' || path === '/offline-pack.json') return;
     if (request.mode === 'navigate' || (request.headers.get('accept') || '').includes('text/html')) {
       event.respondWith(networkFirstPage(event, request));
     } else if (path.startsWith('/static/')) {

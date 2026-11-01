@@ -40,6 +40,19 @@ The underlying `camino.sqlite` database powers the application via the following
 
 ---
 
+## Updating the data
+
+The website only reads `camino.sqlite`. It has no login, admin or editing pages, so data is changed in the database itself with [DBeaver Community Edition](https://dbeaver.io/) (New Database Connection, SQLite, choose the file).
+
+1. **The app's database is the master copy**: `assets/database/camino.sqlite` in the `camino_app` project. Take a copy of the file, then make your edits there in DBeaver and commit them (leave auto-commit on, or press Commit).
+2. **Disconnect** the connection in DBeaver so the file is not locked.
+3. **Copy the changes into the website** with the sync script in the app project (standard-library Python, nothing to install):
+   `python tool/sync_website_database.py --app assets/database/camino.sqlite --website <this project>/camino.sqlite --out <new file> --report-dir docs/website_sync`
+   It builds a new file and a report of every row it changed or dropped. Read the report, then copy the new file over `camino.sqlite` here.
+4. Run `python manage.py test camino`, commit `camino.sqlite` and push.
+
+Edits made directly in this project's `camino.sqlite` are replaced the next time the sync runs, unless the same edit is also made in the app database. The file still holds some unused Django tables (`auth_*`, `django_*`); they are harmless and the sync leaves them alone.
+
 ## Getting Started Locally
 
 ### Prerequisites
@@ -74,13 +87,28 @@ The underlying `camino.sqlite` database powers the application via the following
 | --- | --- | --- |
 | `SECRET_KEY` | Production (required) | Long random string. The app refuses to start without it when `DEBUG` is not `True`. |
 | `SITE_URL` | Production | Public address, e.g. `https://saintjeantosantiago.com`. |
-| `DEBUG` | Your computer only | Set `$env:DEBUG = "True"` locally to serve static files and enable the Django admin and `/editor/`. Never set it on Railway. |
+| `DEBUG` | Your computer only | Set `$env:DEBUG = "True"` locally to serve static files. Never set it on Railway. |
 | `ALLOWED_HOSTS` | Optional | Comma-separated hosts. Defaults to the live domain, `www.`, and `*.up.railway.app`. |
 | `HSTS_SECONDS` | Optional | Defaults to 3600. Raise to 31536000 once HTTPS is confirmed everywhere. |
 | `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` | Local, for `sync_albergue_photos` | Photo upload credentials. Never commit them. |
 
-Production serves HTTPS only (HTTP is redirected), uses secure cookies, and does not route `/admin/` or `/editor/`. The editor also answers 404 to anything other than the local computer.
+Production serves HTTPS only (HTTP is redirected) and uses secure cookies. The site has no login, admin or editing pages at all; it only reads the database.
 
 Generate a key with: `python -c "import secrets; print(secrets.token_urlsafe(64))"`
 
 For local development, copy `.env.example` to `.env` (git-ignored). Settings read it automatically, so `python manage.py runserver` works without setting environment variables. Production uses Railway's variables instead, and uses a different `SECRET_KEY`.
+
+## Itinerary planner
+
+`/plan/` lets a visitor build an itinerary (stages, rest days, travel days, places to stay) and download a
+file that the Saint Jean to Santiago app opens with Settings, Backup and restore, Restore backup. Nothing
+is sent to the server: the plan is kept in the visitor's browser.
+
+- `camino/planner.py` works out each stage's distance and walking time from the track points, using the
+  same arithmetic as the app, and builds the data embedded in the page. `camino/test_planner.py` checks it
+  against the stored stage distances and times.
+- `camino/static/camino/js/plan-core.js` holds the planner's rules and the file builder;
+  `plan.js` draws the page. Tests for the rules: `node --test` (Node 18 or newer).
+- The file format is described in the app project's `docs/itinerary_exchange_format.md`.
+- Change the guide data (stages, paths, track points) and the page picks it up when the database file
+  changes. Remember to run the app's sync script first, so the website and the app agree.

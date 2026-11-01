@@ -17,21 +17,13 @@ Including another URLconf
 # from django.contrib import admin
 # from django.urls import path
 # config/urls.py
-from django.conf import settings
-from django.contrib import admin
 from django.urls import path, include
 
 handler404 = 'camino.views.not_found'
 handler500 = 'camino.views.server_error'
 
+# The site is read-only: there is no login, admin or editing page. The data is
+# changed by editing the SQLite database directly (DBeaver), see the README.
 urlpatterns = [
     path('', include('camino.urls')),
 ]
-
-# The Django admin and the data editor exist ONLY on a developer's own computer
-# (DEBUG on). They are not routed in production.
-if settings.DEBUG:
-    urlpatterns += [
-        path('admin/', admin.site.urls),
-        path('editor/', include('data_editor.urls')),
-    ]

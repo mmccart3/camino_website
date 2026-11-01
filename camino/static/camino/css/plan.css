@@ -1,0 +1,199 @@
+/* The itinerary planner (/plan/). Uses the site's colour variables from base.html. */
+
+.plan { max-width: 760px; margin: 0 auto; }
+.plan-intro { text-align: center; margin-bottom: 1.25rem; }
+.plan-intro h2 { margin: 0 0 0.35rem; }
+.plan-intro p { margin: 0 auto; max-width: 38rem; color: #475569; }
+
+.plan-card {
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 8px;
+  padding: 1.1rem 1.25rem;
+  margin-bottom: 1.25rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+.plan-card h3 { margin: 0 0 0.75rem; font-size: 1.1rem; color: var(--navy, #1e3a8a); }
+.plan-hint { margin: 0.5rem 0 0; font-size: 0.88rem; color: #475569; }
+
+/* Fields */
+.plan-fields { display: grid; gap: 0.9rem; grid-template-columns: 1fr; }
+.plan-field label { display: block; margin-bottom: 0.25rem; font-size: 0.85rem; font-weight: 600; }
+.plan-input {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 44px;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid #94a3b8;
+  border-radius: 6px;
+  background: #fff;
+  color: var(--text, #1e293b);
+  font: inherit;
+  font-size: 1rem;
+}
+.plan-range { width: 100%; min-height: 44px; accent-color: var(--navy, #1e3a8a); }
+.plan-input:focus-visible, .plan-range:focus-visible, .plan-btn:focus-visible, .plan-option:focus-visible, .plan-pick:focus-visible {
+  outline: 3px solid #f59e0b;
+  outline-offset: 2px;
+}
+@media (min-width: 640px) {
+  .plan-fields { grid-template-columns: 2fr 1.2fr 2fr; }
+}
+
+/* Buttons */
+.plan-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0.4rem 0.9rem;
+  border: 1px solid #94a3b8;
+  border-radius: 6px;
+  background: #fff;
+  color: var(--navy, #1e3a8a);
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.plan-btn:hover:not(:disabled) { background: #f1f5f9; }
+.plan-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.plan-btn-primary { background: var(--navy, #1e3a8a); border-color: var(--navy, #1e3a8a); color: #fff; }
+.plan-btn-primary:hover:not(:disabled) { background: #172b69; }
+.plan-btn-quiet { border-color: #cbd5e1; }
+.plan-btn-danger { color: #b91c1c; border-color: #fca5a5; }
+.plan-btn-danger:hover:not(:disabled) { background: #fef2f2; }
+
+/* Notices */
+.plan-warning, .plan-error {
+  margin: 0.6rem 0 0;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.9rem;
+}
+.plan-warning { background: #fef3c7; color: #78350f; border-left: 4px solid var(--gold, #d97706); }
+.plan-error { background: #fee2e2; color: #991b1b; border-left: 4px solid #dc2626; }
+#plan-notice { margin-bottom: 1rem; }
+.plan-hint-box { margin: 0.5rem 0 0; font-size: 0.9rem; color: #475569; }
+
+/* Totals */
+.plan-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+  gap: 0.6rem;
+  margin-bottom: 1.25rem;
+}
+.plan-stat {
+  display: flex;
+  flex-direction: column;
+  padding: 0.6rem 0.75rem;
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 8px;
+}
+.plan-stat-value { font-size: 1.25rem; font-weight: 700; color: var(--navy, #1e3a8a); }
+.plan-stat-label { font-size: 0.8rem; color: #475569; }
+
+/* Days */
+.plan-days { list-style: none; margin: 0 0 1.25rem; padding: 0; }
+.plan-day {
+  margin-bottom: 0.9rem;
+  padding: 0.9rem 1.1rem 1rem;
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #e2e8f0);
+  border-left: 5px solid var(--navy, #1e3a8a);
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+.plan-day-rest { border-left-color: var(--gold, #d97706); }
+.plan-day-travel { border-left-color: #64748b; }
+.plan-day-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem 0.75rem; }
+.plan-day-no { font-weight: 700; color: var(--navy, #1e3a8a); }
+.plan-day-date { font-size: 0.88rem; color: #475569; }
+.plan-day-title { margin: 0.2rem 0 0.1rem; font-size: 1.05rem; }
+.plan-day-meta { margin: 0; color: #334155; font-size: 0.92rem; }
+.plan-day-hint { margin: 0.3rem 0 0.5rem; font-size: 0.85rem; color: #475569; }
+.plan-day-notes:empty { display: none; }
+
+.plan-travel { display: grid; gap: 0.6rem; grid-template-columns: 1fr; }
+.plan-travel label span { display: block; margin-bottom: 0.2rem; font-size: 0.8rem; font-weight: 600; }
+@media (min-width: 560px) { .plan-travel { grid-template-columns: 1fr 1fr; } }
+
+.plan-stay { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.6rem; margin-top: 0.7rem; }
+.plan-stay:empty { display: none; }
+.plan-stay-label { font-size: 0.85rem; color: #475569; }
+.plan-stay-name { flex: 1 1 12rem; }
+.plan-status { width: auto; min-width: 8.5rem; }
+
+.plan-day-actions { min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-top: 0.8rem; padding-top: 0.7rem; border-top: 1px solid var(--border, #e2e8f0); }
+.plan-route { flex: 1 1 100%; width: 100%; min-width: 0; max-width: 100%; text-overflow: ellipsis; }
+
+/* Chips */
+.plan-chip { display: inline-block; padding: 0.1rem 0.55rem; border-radius: 999px; font-size: 0.75rem; font-weight: 600; background: #e2e8f0; color: #334155; }
+.plan-chip-valley { background: #e0f2fe; color: #075985; }
+.plan-chip-mountain { background: #fee2e2; color: #991b1b; }
+.plan-chip-alt { background: #ede9fe; color: #5b21b6; }
+
+/* Adding a day */
+.plan-start-picker { margin: 0.9rem 0; }
+.plan-options { list-style: none; margin: 0.75rem 0; padding: 0; display: grid; gap: 0.6rem; }
+.plan-option {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.2rem;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.7rem 0.9rem;
+  text-align: left;
+  font: inherit;
+  color: var(--text, #1e293b);
+  background: #fff;
+  border: 1px solid #94a3b8;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.plan-option:hover { background: #f8fafc; border-color: var(--navy, #1e3a8a); }
+.plan-option-name { font-weight: 700; color: var(--navy, #1e3a8a); }
+.plan-option-meta { font-size: 0.88rem; color: #475569; }
+.plan-add-other { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem; }
+
+/* Sending */
+.plan-send-actions { display: flex; flex-wrap: wrap; gap: 0.6rem; margin: 0.75rem 0; }
+.plan-send-msg { margin: 0.5rem 0 0; padding: 0.5rem 0.75rem; border-radius: 6px; background: #dcfce7; color: #14532d; font-size: 0.92rem; }
+.plan-send-msg.plan-error { background: #fee2e2; color: #991b1b; }
+.plan-steps-title { margin: 1.1rem 0 0.4rem; font-size: 0.98rem; }
+.plan-steps { margin: 0; padding-left: 1.3rem; color: #334155; font-size: 0.93rem; }
+.plan-steps li { margin-bottom: 0.3rem; }
+.plan-reset-row { text-align: center; margin: 0 0 1.5rem; }
+
+/* Dialogs */
+.plan-dialog {
+  width: min(560px, calc(100vw - 2rem));
+  max-height: min(85vh, 40rem);
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  color: var(--text, #1e293b);
+  box-shadow: 0 10px 40px rgba(15, 23, 42, 0.35);
+}
+.plan-dialog::backdrop { background: rgba(15, 23, 42, 0.55); }
+.plan-dialog-small { width: min(420px, calc(100vw - 2rem)); }
+.plan-dialog-head { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; padding: 0.9rem 1.1rem; border-bottom: 1px solid var(--border, #e2e8f0); }
+.plan-dialog-head h3 { margin: 0; font-size: 1.05rem; color: var(--navy, #1e3a8a); }
+.plan-dialog-body { padding: 1rem 1.1rem 1.2rem; display: grid; gap: 0.9rem; }
+.plan-dialog-body h3 { margin: 0; color: var(--navy, #1e3a8a); }
+.plan-dialog-body p { margin: 0; }
+.plan-pick-list { list-style: none; margin: 0; padding: 0; max-height: 16rem; overflow-y: auto; border: 1px solid var(--border, #e2e8f0); border-radius: 6px; }
+.plan-pick-list:empty { display: none; }
+.plan-pick-group { padding: 0.35rem 0.75rem; background: #f1f5f9; font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #475569; }
+.plan-pick { display: block; width: 100%; min-height: 44px; padding: 0.55rem 0.75rem; text-align: left; font: inherit; color: var(--text, #1e293b); background: #fff; border: 0; border-top: 1px solid var(--border, #e2e8f0); cursor: pointer; }
+.plan-pick:hover { background: #fef3c7; }
+.plan-own label { display: block; margin-bottom: 0.25rem; font-size: 0.85rem; font-weight: 600; }
+.plan-own-row { display: flex; gap: 0.5rem; }
+.plan-own-row .plan-input { flex: 1; }
+
+@media print {
+  .plan-add, .plan-send, .plan-reset-row, .plan-day-actions, .plan-stay .plan-btn, .plan-status { display: none !important; }
+  .plan-day { break-inside: avoid; box-shadow: none; }
+}

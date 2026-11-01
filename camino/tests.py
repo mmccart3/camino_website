@@ -8,20 +8,17 @@ and the SimpleTestCase tests never touch the database. LiveDatabaseSmokeTests is
 unittest case that only performs GET requests against the real camino.sqlite.
 """
 import json
-import os
 import re
 import unittest
 from decimal import Decimal
+from pathlib import Path
 from types import SimpleNamespace
 
 from django.conf import settings
-from django.http import Http404, HttpResponse
-from django.test import Client, RequestFactory, SimpleTestCase, override_settings
-
-from data_editor.security import local_only
+from django.test import Client, RequestFactory, SimpleTestCase
 
 from . import seo, views
-from .models import Albergue, PrivateAccomm, clean_email, google_maps_url
+from .models import Albergue, PrivateAccomm, Stage, clean_email, google_maps_url
 
 
 class SeoHelperTests(SimpleTestCase):
@@ -108,6 +105,13 @@ class PwaEndpointTests(SimpleTestCase):
         self.assertTrue(any(u.endswith('whatsapp-logo-green.svg') for u in urls))  # logo works offline
         self.assertTrue(any(u.endswith('google-maps-pin.png') for u in urls))  # pin works offline
 
+    def test_the_planner_works_offline(self):
+        body = self.client.get('/sw.js').content.decode()
+        urls = json.loads(re.search(r'const PRECACHE_URLS = (\[.*?\]);', body, re.S).group(1))
+        self.assertIn('/plan/', urls)
+        for name in ('plan-core.js', 'plan.js', 'plan.css'):
+            self.assertTrue(any(u.endswith('/' + name) for u in urls), name)
+
     def test_robots_points_to_sitemap(self):
         response = self.client.get('/robots.txt')
         self.assertEqual(response.status_code, 200)
@@ -146,24 +150,38 @@ class SecurityTests(SimpleTestCase):
     def test_wildcard_host_is_not_allowed(self):
         self.assertNotIn('*', settings.ALLOWED_HOSTS)
 
-    @unittest.skipIf(os.environ.get('DEBUG') == 'True', 'admin and editor are routed when DEBUG=True')
-    def test_admin_and_editor_are_not_routed_in_production(self):
-        for path in ('/admin/', '/editor/'):
+    def test_there_is_no_login_admin_or_editing_page(self):
+        # The site is read-only, so these never exist, with DEBUG on or off.
+        for path in ('/admin/', '/editor/', '/accounts/login/', '/login/'):
             self.assertEqual(self.client.get(path).status_code, 404, path)
 
-    def test_local_only_guard(self):
-        @local_only
-        def view(request):
-            return HttpResponse('ok')
+    def test_only_read_apps_are_installed(self):
+        for name in ('django.contrib.admin', 'django.contrib.auth', 'django.contrib.sessions', 'data_editor'):
+            self.assertNotIn(name, settings.INSTALLED_APPS, name)
 
-        factory = RequestFactory()
-        with override_settings(DEBUG=True):
-            self.assertEqual(view(factory.get('/', REMOTE_ADDR='127.0.0.1')).status_code, 200)
-            with self.assertRaises(Http404):
-                view(factory.get('/', REMOTE_ADDR='203.0.113.5'))
-        with override_settings(DEBUG=False):
-            with self.assertRaises(Http404):
-                view(factory.get('/', REMOTE_ADDR='127.0.0.1'))
+
+class PlannerPageContractTests(SimpleTestCase):
+    """plan.js finds its elements by id; this keeps the template and the script in step."""
+
+    def read(self, *parts):
+        return (settings.BASE_DIR / 'camino' / Path(*parts)).read_text(encoding='utf-8')
+
+    def test_every_id_the_script_uses_is_in_the_template(self):
+        script = self.read('static', 'camino', 'js', 'plan.js')
+        template = self.read('templates', 'camino', 'plan.html')
+        used = set(re.findall(r"\$\('([a-z-]+)'\)", script))
+        self.assertGreater(len(used), 20)
+        for element_id in sorted(used):
+            self.assertIn(f'id="{element_id}"', template, element_id)
+
+    def test_the_page_loads_the_core_before_the_script(self):
+        template = self.read('templates', 'camino', 'plan.html')
+        self.assertLess(template.index('plan-core.js'), template.index('camino/js/plan.js'))
+        self.assertIn('id="plan-data" type="application/json"', template)
+
+    def test_the_menu_links_to_the_planner(self):
+        base = self.read('templates', 'camino', 'base.html')
+        self.assertEqual(base.count("{% url 'plan' %}"), 2)  # menu and footer
 
 
 class GoogleMapsLinkTests(SimpleTestCase):
@@ -234,6 +252,18 @@ class LiveDatabaseSmokeTests(unittest.TestCase):
         self.assertNotIn(settings.APP_VERSION, html.split('<footer')[0])  # version only in the footer
         ld = re.search(r'<script type="application/ld\+json">(.*?)</script>', html, re.S)
         self.assertEqual(json.loads(ld.group(1))['@type'], 'WebSite')
+
+    def test_plan_page_embeds_the_whole_guide(self):
+        html = self.get('/plan/')
+        self.assertIn('rel="canonical"', html)
+        self.assertIn('<title>Plan your Camino', html)
+        match = re.search(r'<script id="plan-data" type="application/json">(.*?)</script>', html, re.S)
+        data = json.loads(match.group(1))
+        self.assertEqual(data['skipped'], [])
+        self.assertEqual(len(data['stages']), Stage.objects.count())
+        self.assertRegex(data['guide'], r'^[0-9a-f]{16}$')
+        self.assertGreater(len(data['stays']), 100)
+        self.assertNotIn('<', match.group(1))  # nothing in the data can end the script tag
 
     def test_towns_page_lists_towns(self):
         html = self.get('/towns/')

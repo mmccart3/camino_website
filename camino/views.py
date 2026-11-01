@@ -4,13 +4,14 @@ import traceback
 from xml.sax.saxutils import escape
 
 from django.conf import settings
+from django.db import connection
 from django.db.models import Count
 from django.http import HttpResponse, HttpResponseServerError, JsonResponse
 from django.shortcuts import render, get_object_or_404, redirect
 from django.templatetags.static import static
 from django.urls import reverse
 
-from . import seo
+from . import planner, seo
 from .models import (
     Stage, Path, ElevationPoint, MapLocationCoord, Location,
     Albergue, PrivateAccomm, TrackPoint
@@ -191,6 +192,30 @@ def towns(request):
     return render(request, 'camino/towns.html', context)
 
 
+def plan_sections():
+    """The guide's own grouping of stages and route variants, as the planner wants it."""
+    return [
+        {
+            'n': group['section_index'],
+            'stages': [s.id for s in group['all_variants']],
+            'variants': {
+                s.id: planner.VARIANT_KEYS.get(s.variant_meta['badge_class'], 'main')
+                for s in group['all_variants']
+            },
+        }
+        for group in get_stage_groups()
+    ]
+
+
+def plan(request):
+    """The itinerary planner. The guide data is embedded in the page, so it also works offline."""
+    body = planner.get_planner_json(connection, plan_sections)
+    # Stop the JSON from ever closing the script tag early.
+    safe = body.replace('<', '\\u003c').replace('>', '\\u003e').replace('&', '\\u0026')
+    context = {'plan_json': safe, 'seo': seo.plan_seo(seo.site_origin(request))}
+    return render(request, 'camino/plan.html', context)
+
+
 def search(request):
     query = request.GET.get('q', '').strip()[:80]
     town_results, stage_results = [], []
@@ -297,11 +322,15 @@ def service_worker(request):
     precache = [
         '/',
         reverse('towns'),
+        reverse('plan'),
         reverse('offline'),
         reverse('offline_pack'),
         static('camino/js/pwa.js'),
         static('camino/js/search.js'),
         static('camino/js/offline-pack.js'),
+        static('camino/js/plan-core.js'),
+        static('camino/js/plan.js'),
+        static('camino/css/plan.css'),
         static('camino/chart.umd.min.js'),
         static('camino/fonts/Fiesta.ttf'),
         static('camino/img/icon-192.png'),
@@ -333,7 +362,7 @@ def robots_txt(request):
 
 def sitemap_xml(request):
     origin = seo.site_origin(request)
-    paths = ['/', reverse('towns'), reverse('offline_pack')]
+    paths = ['/', reverse('towns'), reverse('plan'), reverse('offline_pack')]
     paths += [reverse('stage_detail', args=[s.id]) for s in Stage.objects.order_by('id')]
     towns_qs = Location.objects.annotate(
         n_albergues=Count('albergues', distinct=True),

@@ -1346,6 +1346,7 @@
 .pack-note { font-size: 0.88rem; color: #475569; }
 
     </style>
+    {% block head_extra %}{% endblock %}
   </head>
 
 <script src="{% static 'camino/js/pwa.js' %}" defer></script>
@@ -1367,6 +1368,7 @@
   <nav class="site-nav" aria-label="Main">
     <a href="{% url 'stage_list' %}">Stages</a>
     <a href="{% url 'towns' %}">Towns</a>
+    <a href="{% url 'plan' %}">Plan</a>
     <a href="{% url 'offline_pack' %}">Save for offline</a>
   </nav>
   
@@ -1382,6 +1384,7 @@
       <div class="footer-links">
         <a href="{% url 'stage_list' %}">Stages</a>
         <a href="{% url 'towns' %}">Towns</a>
+        <a href="{% url 'plan' %}">Plan</a>
         <a href="{% url 'offline_pack' %}">Save for offline</a>
       </div>
       

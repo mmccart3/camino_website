@@ -10,6 +10,7 @@ urlpatterns = [
     path('stage/<int:stage_id>/', views.stage_detail, name='stage_detail'),
     path('location/<int:location_id>/', views.location_detail, name='location_detail'),
     path('towns/', views.towns, name='towns'),
+    path('plan/', views.plan, name='plan'),
     path('search/', views.search, name='search'),
     path('offline/', views.offline, name='offline'),
     path('offline-pack/', views.offline_pack, name='offline_pack'),

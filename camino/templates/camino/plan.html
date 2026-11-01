@@ -1,0 +1,130 @@
+{% extends 'camino/base.html' %}
+{% load static %}
+
+{% block head_extra %}
+<link rel="stylesheet" href="{% static 'camino/css/plan.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="plan" id="plan-root" data-version="{{ APP_VERSION }}">
+  <div class="plan-intro">
+    <h2>Plan your Camino</h2>
+    <p>
+      Choose your stages, rest days and places to stay, then send the plan to the
+      Saint Jean to Santiago app on your phone. Your plan is kept on this device only;
+      nothing you enter here is sent to us.
+    </p>
+  </div>
+
+  <noscript><p class="plan-warning">The planner needs JavaScript. Please turn it on for this site.</p></noscript>
+  <p class="plan-error plan-fatal" role="alert" hidden>The planner could not load the guide data. Please reload the page.</p>
+  <p class="plan-warning" id="plan-notice" role="status" hidden></p>
+  <p class="visually-hidden" id="plan-live" aria-live="polite"></p>
+
+  <section class="plan-card" aria-labelledby="plan-details-title">
+    <h3 id="plan-details-title">About this plan</h3>
+    <div class="plan-fields">
+      <div class="plan-field">
+        <label for="plan-name">Name</label>
+        <input type="text" id="plan-name" class="plan-input" maxlength="80" autocomplete="off" data-focus="plan-name">
+      </div>
+      <div class="plan-field">
+        <label for="plan-start">First day (optional)</label>
+        <input type="date" id="plan-start" class="plan-input">
+      </div>
+      <div class="plan-field">
+        <label for="plan-pace">Walking pace: <output id="plan-pace-out" for="plan-pace"></output></label>
+        <input type="range" id="plan-pace" step="0.1" min="2" max="6" value="4.2" class="plan-range" aria-describedby="plan-pace-hint">
+      </div>
+    </div>
+    <p class="plan-hint" id="plan-pace-hint"></p>
+  </section>
+
+  <section id="plan-summary" class="plan-summary" aria-label="Plan totals" hidden></section>
+
+  <ol id="plan-days" class="plan-days" aria-label="Your days" hidden></ol>
+
+  <section class="plan-card plan-add" aria-labelledby="plan-add-title">
+    <h3 id="plan-add-title" tabindex="-1">Day 1</h3>
+    <p class="plan-hint" id="plan-add-lead" hidden></p>
+    <div class="plan-field plan-start-picker" id="plan-start-picker-label">
+      <label for="plan-start-picker">Starting somewhere else on the Camino?</label>
+      <select id="plan-start-picker" class="plan-input"></select>
+    </div>
+    <ul id="plan-next" class="plan-options"></ul>
+    <div class="plan-add-other">
+      <button type="button" class="plan-btn" id="plan-add-rest" data-focus="add-rest">Add a rest day</button>
+      <button type="button" class="plan-btn" id="plan-add-travel" data-focus="add-travel">Add a travel day</button>
+    </div>
+  </section>
+
+  <section class="plan-card plan-send" aria-labelledby="plan-send-title">
+    <h3 id="plan-send-title">Send it to the app</h3>
+    <p class="plan-hint" id="plan-send-count"></p>
+    <p class="plan-error" id="plan-send-problem" hidden></p>
+    <div class="plan-send-actions">
+      <button type="button" class="plan-btn plan-btn-primary" id="plan-download">Download itinerary file</button>
+      <button type="button" class="plan-btn" id="plan-share" hidden>Share…</button>
+    </div>
+    <p class="plan-send-msg" id="plan-send-msg" role="status" hidden></p>
+    <h4 class="plan-steps-title">Opening it in the app</h4>
+    <ol class="plan-steps">
+      <li>Get the file onto your phone: share it from here, or email or message it to yourself.</li>
+      <li>In the app, open <strong>Settings</strong>, then <strong>Backup and restore</strong>, then <strong>Restore backup</strong>.</li>
+      <li>Choose the file. The app shows what it contains before anything is added.</li>
+      <li>Your plan appears in the app next to any plans you already have. Nothing is replaced.</li>
+    </ol>
+    <p class="plan-hint">Opening the same file twice does not make a second copy.</p>
+  </section>
+
+  <p class="plan-reset-row"><button type="button" class="plan-btn plan-btn-quiet" id="plan-reset">Start again</button></p>
+
+  <datalist id="plan-places"></datalist>
+</div>
+
+<dialog id="plan-stay-dialog" class="plan-dialog" aria-labelledby="plan-stay-title">
+  <div class="plan-dialog-head">
+    <h3 id="plan-stay-title">Where will you stay?</h3>
+    <button type="button" class="plan-btn plan-btn-quiet" id="plan-stay-close">Close</button>
+  </div>
+  <div class="plan-dialog-body">
+    <div class="plan-field">
+      <label for="plan-stay-status">Status</label>
+      <select id="plan-stay-status" class="plan-input">
+        <option>Considering</option>
+        <option>Requested</option>
+        <option>Booked</option>
+        <option>Confirmed</option>
+      </select>
+    </div>
+    <div class="plan-field" id="plan-stay-search-row">
+      <label for="plan-stay-search">Search by name</label>
+      <input type="search" id="plan-stay-search" class="plan-input" autocomplete="off">
+    </div>
+    <p class="plan-hint" id="plan-stay-empty" hidden></p>
+    <ul class="plan-pick-list" id="plan-stay-list"></ul>
+    <form id="plan-stay-own-form" class="plan-own">
+      <label for="plan-stay-own">Somewhere not listed</label>
+      <div class="plan-own-row">
+        <input type="text" id="plan-stay-own" class="plan-input" maxlength="200" autocomplete="off" placeholder="Name of the place">
+        <button type="submit" class="plan-btn plan-btn-primary">Use this</button>
+      </div>
+    </form>
+  </div>
+</dialog>
+
+<dialog id="plan-reset-dialog" class="plan-dialog plan-dialog-small" aria-labelledby="plan-reset-title">
+  <div class="plan-dialog-body">
+    <h3 id="plan-reset-title">Start again?</h3>
+    <p>This clears the plan stored on this device. A file you already downloaded is not affected.</p>
+    <div class="plan-send-actions">
+      <button type="button" class="plan-btn" id="plan-reset-cancel">Keep my plan</button>
+      <button type="button" class="plan-btn plan-btn-danger" id="plan-reset-confirm">Clear plan</button>
+    </div>
+  </div>
+</dialog>
+
+<script id="plan-data" type="application/json">{{ plan_json|safe }}</script>
+<script src="{% static 'camino/js/plan-core.js' %}" defer></script>
+<script src="{% static 'camino/js/plan.js' %}" defer></script>
+{% endblock %}

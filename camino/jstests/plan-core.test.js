@@ -223,3 +223,66 @@ test('a day can be inserted anywhere', () => {
   assert.strictEqual(P.addStage(base, 2).days.length, 3);              // no position still means the end
   assert.ok(P.layout(P.addStage(base, 2, 1), data).days[1].warning);  // a stage that does not connect is flagged
 });
+
+test('the end of the guide and how far it is from anywhere', () => {
+  assert.strictEqual(P.guideEnd(data), 3);
+  assert.strictEqual(P.metresToEnd(1, data), 9050 + 11000 + 15060);   // by the road, the shorter way
+  assert.strictEqual(P.metresToEnd(4, data), 11000 + 15060);
+  assert.strictEqual(P.metresToEnd(3, data), 0);
+  assert.strictEqual(P.metresToEnd(5, data), null);                    // a place the paths never reach
+  assert.strictEqual(P.metresToEnd(99, data), null);
+});
+
+test('a day can be changed to end somewhere else; the stay goes unless the place is the same', () => {
+  let s = P.addRoute(P.newState(data), [11, 12], data);                // Alpha to Bravo
+  s = P.setStay(s, 0, { k: 'a', id: 100, name: 'Albergue Bravo', status: 'Booked' }, data);
+  s = P.addRoute(s, [14], data);
+  const shorter = P.setDayRoute(s, 0, [11], data);                      // stop at Midway instead
+  assert.deepStrictEqual(shorter.days[0], { t: 'c', paths: [11], stay: null });
+  assert.match(P.layout(shorter, data).days[1].warning, /starts at Bravo, but the day before ended at Midway/);
+  const hills = P.setDayRoute(s, 0, [13], data);                        // another way to Bravo
+  assert.deepStrictEqual(hills.days[0], { t: 's', stage: 2, stay: { k: 'a', id: 100, name: 'Albergue Bravo', status: 'Booked' } });
+  assert.strictEqual(P.setDayRoute(s, 1, [11], data).days[1].paths.length, 1);
+  assert.strictEqual(P.setDayRoute(s, 0, [11, 14], data), s);           // paths that do not join: nothing changes
+  assert.strictEqual(P.setDayRoute(P.addRest(s), 2, [11], data).days.length, 3);
+  assert.deepStrictEqual(s.days[0].paths, undefined);                   // the old plan is left alone
+});
+
+test('a day that no longer follows on can start from where the day before ended', () => {
+  let s = P.addRoute(P.newState(data), [11, 12], data);
+  s = P.addRoute(s, [14], data);
+  s = P.setStay(s, 1, { k: 'c', id: 0, name: 'Friend', status: 'Considering' }, data);
+  assert.strictEqual(P.refitStart(s, 1, data), null);                   // nothing to fix yet
+  const moved = P.setDayRoute(s, 0, [11], data);                        // day 1 now ends at Midway
+  const fix = P.refitStart(moved, 1, data);
+  assert.deepStrictEqual(fix.chain, [12, 14]);
+  assert.strictEqual(fix.from.name, 'Midway');
+  assert.deepStrictEqual(fix.state.days[1], { t: 'c', paths: [12, 14], stay: { k: 'c', id: 0, name: 'Friend', status: 'Considering' } });
+  assert.strictEqual(P.layout(fix.state, data).days[1].warning, '');
+  assert.strictEqual(P.layout(fix.state, data).days[1].metres, 10960 + 15000);
+  // no way to walk from where the day before ended
+  let back = P.addRoute(P.addRoute(P.newState(data), [14], data), [11, 12], data);  // Bravo to Charlie, then Alpha to Bravo
+  assert.ok(P.layout(back, data).days[1].warning);
+  assert.strictEqual(P.refitStart(back, 1, data), null);
+  assert.strictEqual(P.refitStart(back, 0, data), null);                // the first day has nothing before it
+  assert.strictEqual(P.refitStart(P.addRest(moved), 2, data), null);    // rest days follow on by themselves
+});
+
+test('the summary says where the plan goes and how far is left', () => {
+  assert.deepStrictEqual(P.progress(P.newState(data), data).start, null);
+  let s = P.addRoute(P.newState(data), [11], data);
+  let p = P.progress(s, data);
+  assert.deepStrictEqual([p.start.name, p.end.name, p.metres, p.reachesEnd, p.remaining], ['St Jean Pied de Port', 'Midway', 9000, false, 26060]);
+  s = P.addRoute(s, [12, 14], data);
+  p = P.progress(s, data);
+  assert.deepStrictEqual([p.end.name, p.reachesEnd, p.remaining, p.warnings], ['Charlie', true, 0, []]);
+  s = P.addRoute(P.addRoute(P.newState(data), [14], data), [11], data);   // the second day starts at the wrong place
+  assert.deepStrictEqual(P.progress(s, data).warnings, [1]);
+  let away = P.setTravel(P.addTravel(P.addRoute(P.newState(data), [11], data), data), 1, { to: 'Madrid' });
+  assert.strictEqual(P.progress(away, data).remaining, null);           // ended somewhere off the route
+});
+
+test('asking for the same routes again does not search again', () => {
+  const a = P.routesBetween(1, 3, data), b = P.routesBetween(1, 3, data);
+  assert.strictEqual(a, b);
+});

@@ -5,6 +5,7 @@
  * itinerary the visitor is building:
  *   { v: 1, name, startDate: 'YYYY-MM-DD' | '', pace, days: [day, ...] }
  *   day = { t: 's', stage, stay }                 a guidebook stage
+ *       | { t: 'c', paths: [path ids], stay }     a walking day of the visitor's own, over these paths
  *       | { t: 'r', stay }                        a rest day where the day before ended
  *       | { t: 't', from, to, stay }              travel by other means (flight, bus, taxi)
  *   stay = null | { k: 'a' | 'p' | 'c', id, name, status }   albergue, private, or the visitor's own
@@ -142,7 +143,7 @@
   function graph(data) {
     var g = graphs && graphs.get(data);
     if (g) return g;
-    g = { byId: {}, out: {}, next: {}, order: {} };
+    g = { byId: {}, out: {}, next: {}, order: {}, cache: {}, end: null };
     var routes = data.routes || { paths: [], next: {} };
     routes.paths.forEach(function (r) {
       var p = { id: r[0], o: r[1], d: r[2], stage: r[3], sd: r[4], sw: r[5], fd: r[6], fw: r[7], shape: r[8] };
@@ -168,6 +169,13 @@
       var tail = g.byId[data.stages[sid].paths[data.stages[sid].paths.length - 1]];
       if (tail && !(tail.d in g.order)) g.order[tail.d] = rank++;
     });
+    // The end of the guide is the one place no path leaves (Santiago). Not set if there are several.
+    var sinks = {}, sinkCount = 0, sinkId = null;
+    Object.keys(g.byId).forEach(function (id) {
+      var d = g.byId[id].d;
+      if (!(d in g.out) && !(d in sinks)) { sinks[d] = true; sinkCount += 1; sinkId = d; }
+    });
+    g.end = sinkCount === 1 ? sinkId : null;
     if (graphs) graphs.set(data, g);
     return g;
   }
@@ -207,11 +215,13 @@
   // near-identical routes (the app itself refuses to list them), so those are only offered when there
   // is no route that follows the stages.
   function routesBetween(from, to, data) {
-    var g = graph(data);
+    var g = graph(data), key = from + '>' + to;
     if (from === to || !(from in g.out)) return { routes: [], tooMany: false };
-    var strict = search(from, to, data, true);
-    if (strict.routes.length) return strict;
-    return search(from, to, data, false);
+    if (g.cache[key]) return g.cache[key];            // the same pair is asked for on every redraw
+    var found = search(from, to, data, true);
+    if (!found.routes.length) found = search(from, to, data, false);
+    g.cache[key] = found;
+    return found;
   }
 
   function search(from, to, data, strict) {
@@ -266,6 +276,32 @@
     visit(from, [], visited);
     // Too many hybrid routes and none that follow the stages: offer nothing rather than a pile.
     return { routes: tooMany && !strict ? [] : results, tooMany: tooMany };
+  }
+
+  // The place the guide ends at (Santiago), or null if the data does not say.
+  function guideEnd(data) { return graph(data).end; }
+
+  // About how far it is on foot from a place to the end of the guide, by the shortest way; null if it
+  // cannot be reached. (Whole path lengths, so it can differ from a real day by a few metres.)
+  function metresToEnd(from, data) {
+    var g = graph(data), end = g.end;
+    if (end === null || !(from in data.places)) return null;
+    if (from === end) return 0;
+    var best = {}, done = {};
+    best[from] = 0;
+    for (;;) {
+      var here = null;
+      Object.keys(best).forEach(function (id) {
+        if (!done[id] && (here === null || best[id] < best[here])) here = id;
+      });
+      if (here === null) return null;
+      if (Number(here) === end) return best[here];
+      done[here] = true;
+      (g.out[here] || []).forEach(function (pid) {
+        var p = g.byId[pid], m = best[here] + p.sd;
+        if (!(p.d in best) || m < best[p.d]) best[p.d] = m;
+      });
+    }
   }
 
   // A key for the walk a chain describes, the same for chains that follow the same line on the map.
@@ -514,6 +550,53 @@
   function setCustomRoute(state, i, chain) {
     return withDays(state, function (d) { if (d[i] && d[i].t === 'c') d[i].paths = chain.slice(); });
   }
+  // Replaces walking day i with this chain of paths (a guidebook stage if it is exactly one). The place
+  // to stay is kept only when the day still ends in the same place.
+  function setDayRoute(state, i, chain, data) {
+    var day = state.days[i], total = chainTotals(chain, data);
+    if (!day || (day.t !== 's' && day.t !== 'c') || !total) return state;
+    var end = layout(state, data).days[i].end, sid = stageForChain(chain, data);
+    var stay = end && end.id === total.to ? day.stay : null;
+    return withDays(state, function (d) {
+      d[i] = sid === null ? { t: 'c', paths: chain.slice(), stay: stay } : { t: 's', stage: sid, stay: stay };
+    });
+  }
+
+  // When a walking day no longer starts where the day before ended: the same day, still ending where
+  // it does, but starting from there. Null when that is not possible (no route, or nothing to fix).
+  function refitStart(state, i, data) {
+    var day = state.days[i];
+    if (!day || (day.t !== 's' && day.t !== 'c')) return null;
+    var info = layout(state, data).days[i], previous = endBefore(state, data, i);
+    if (!info.warning || !previous || previous.id <= 0 || !info.end) return null;
+    var found = routesBetween(previous.id, info.end.id, data).routes;
+    if (!found.length) return null;
+    var mine = day.t === 's' ? data.stages[String(day.stage)].paths : day.paths;
+    // Prefer the route that keeps the end of the day as it is, then the shorter one.
+    function shared(chain) {
+      var n = 0;
+      while (n < chain.length && n < mine.length && chain[chain.length - 1 - n] === mine[mine.length - 1 - n]) n += 1;
+      return n;
+    }
+    var best = found.slice().sort(function (a, b) {
+      return (shared(b) - shared(a)) || (chainTotals(a, data).metres - chainTotals(b, data).metres);
+    })[0];
+    return { state: setDayRoute(state, i, best, data), chain: best, from: previous };
+  }
+
+  // Where the plan goes, for the summary above the download button.
+  function progress(state, data) {
+    var l = layout(state, data), t = totals(state, data), first = null;
+    l.days.forEach(function (info) { if (!first && info.start) first = info.start; });
+    var end = l.end, g = graph(data);
+    return {
+      days: t.days, metres: t.metres, start: first, end: end,
+      reachesEnd: !!end && g.end !== null && end.id === g.end,
+      remaining: end && end.id > 0 ? metresToEnd(end.id, data) : null,
+      warnings: l.days.filter(function (info) { return info.warning; }).map(function (info) { return info.index; })
+    };
+  }
+
   function removeDay(state, i) { return withDays(state, function (d) { d.splice(i, 1); }); }
   function moveDay(state, i, by) {
     var j = i + by;
@@ -644,7 +727,8 @@
     stageIds: stageIds, siblings: siblings, staysAt: staysAt, placeIdByName: placeIdByName,
     startFor: startFor, stageEnds: stageEnds, stayCount: stayCount, stageForChain: stageForChain, addRoute: addRoute,
     chainTotals: chainTotals, chainKey: chainKey, routePlaces: routePlaces, routesBetween: routesBetween, stopsFrom: stopsFrom,
-    routeLabel: routeLabel, routeLabels: routeLabels, endBefore: endBefore, addCustom: addCustom, setCustomRoute: setCustomRoute,
+    routeLabel: routeLabel, routeLabels: routeLabels, guideEnd: guideEnd, metresToEnd: metresToEnd,
+    setDayRoute: setDayRoute, refitStart: refitStart, progress: progress, endBefore: endBefore, addCustom: addCustom, setCustomRoute: setCustomRoute,
     addStage: addStage, addRest: addRest, addTravel: addTravel, removeDay: removeDay, moveDay: moveDay,
     setStage: setStage, setTravel: setTravel, setStay: setStay, setStayStatus: setStayStatus, setMeta: setMeta,
     buildFile: buildFile, checkFile: checkFile, fileName: fileName,

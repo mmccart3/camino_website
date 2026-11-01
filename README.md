@@ -111,6 +111,11 @@ and Valcarlos routes out of Saint Jean) the visitor picks one. A day that happen
 is saved as that stage. The page works out each day the way the app does, so the file opens with the same
 figures.
 
+A day can be changed afterwards: "Change where it ends" on a walking day lists the towns from that day's start.
+The place to stay is cleared if the end moves. When a day no longer starts where the one before ended and a
+route exists, its warning has a "Start this day from ..." button. The send card says where the plan goes and how
+far short of Santiago it stops. There is no separate "finish" step: the file can be downloaded at any time.
+
 - `camino/planner.py` works out each stage's distance and walking time from the track points, using the
   same arithmetic as the app, and builds the data embedded in the page, including a graph of how the
   paths join (`routes`) so the page can build a day between any two towns. `camino/test_planner.py` checks

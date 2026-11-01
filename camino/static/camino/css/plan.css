@@ -234,3 +234,11 @@
   .plan-add, .plan-send, .plan-reset-row, .plan-day-actions, .plan-stay .plan-btn, .plan-status { display: none !important; }
   .plan-day { break-inside: avoid; box-shadow: none; }
 }
+
+/* Changing a day, and the line above the download button */
+.plan-day-editing { border-color: var(--gold, #d97706); box-shadow: 0 0 0 3px rgba(217, 119, 6, 0.25); }
+.plan-btn-small { min-height: 36px; padding: 0.2rem 0.7rem; font-size: 0.85rem; }
+.plan-warning .plan-btn { margin-left: 0.4rem; vertical-align: middle; }
+.plan-edit-row { margin: 0.5rem 0 0.75rem; }
+.plan-send-route { margin: 0.4rem 0 0.6rem; font-weight: 600; color: var(--navy, #1e3a8a); }
+.plan-send-done { padding: 0.5rem 0.75rem; border-radius: 6px; background: #dcfce7; color: #14532d; }

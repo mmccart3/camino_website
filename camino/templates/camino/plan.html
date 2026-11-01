@@ -48,6 +48,7 @@
   <section class="plan-card plan-add" aria-labelledby="plan-add-title">
     <h3 id="plan-add-title" tabindex="-1">Day 1</h3>
     <p class="plan-hint" id="plan-add-lead" hidden></p>
+    <p class="plan-edit-row" id="plan-edit-row" hidden><button type="button" class="plan-btn" id="plan-edit-cancel">Cancel the change</button></p>
     <div class="plan-field plan-where" id="plan-add-where-row" hidden>
       <label for="plan-add-where">Where should the new day go?</label>
       <select id="plan-add-where" class="plan-input" data-focus="add-where"></select>
@@ -60,11 +61,11 @@
     <p class="plan-hint" id="plan-stops-empty" hidden></p>
     <ul id="plan-stops" class="plan-stops"></ul>
     <button type="button" class="plan-btn plan-btn-quiet" id="plan-stops-more" hidden>Show places further ahead</button>
-    <div class="plan-add-other">
+    <div class="plan-add-other" id="plan-add-other">
       <button type="button" class="plan-btn" id="plan-add-rest" data-focus="add-rest">Add a rest day</button>
       <button type="button" class="plan-btn" id="plan-add-travel" data-focus="add-travel">Add a travel day</button>
     </div>
-    <details class="plan-any">
+    <details class="plan-any" id="plan-any">
       <summary>Choose a whole guidebook stage</summary>
       <p class="plan-hint">Pick any stage from the guide, wherever it starts. If it does not start where the day before ended, that day is flagged so you can fix the order.</p>
       <div class="plan-any-row">
@@ -77,6 +78,8 @@
   <section class="plan-card plan-send" aria-labelledby="plan-send-title">
     <h3 id="plan-send-title">Send it to the app</h3>
     <p class="plan-hint" id="plan-send-count"></p>
+    <p class="plan-send-route" id="plan-send-route" hidden></p>
+    <p class="plan-warning" id="plan-send-warn" hidden></p>
     <p class="plan-error" id="plan-send-problem" hidden></p>
     <div class="plan-send-actions">
       <button type="button" class="plan-btn plan-btn-primary" id="plan-download">Download itinerary file</button>

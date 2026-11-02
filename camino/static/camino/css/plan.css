@@ -244,7 +244,6 @@
 .plan-send-done { padding: 0.5rem 0.75rem; border-radius: 6px; background: #dcfce7; color: #14532d; }
 
 /* A journey on the same day, and moving a rest day */
-.plan-chip-same { background: #e0f2fe; color: #075985; }
 .plan-check { display: flex; align-items: flex-start; gap: 0.5rem; margin: 0.7rem 0 0; font-size: 0.92rem; color: #334155; cursor: pointer; }
 .plan-check input { flex: none; width: 1.25rem; height: 1.25rem; margin: 0.1rem 0 0; accent-color: var(--navy, #1e3a8a); }
 .plan-rest-move { margin: 0.7rem 0 0; padding: 0.8rem; border: 1px solid #cbd5e1; border-radius: 8px; background: #f8fafc; }

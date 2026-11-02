@@ -118,7 +118,9 @@ far short of Santiago it stops. There is no separate "finish" step: the file can
 
 A rest day takes its place from where the day before ended. "Rest somewhere else" on a rest day adds the journey
 in front of it. A travel day can be ticked "Same day as the day before" (walk, then bus): it then shares that
-day's date and later days do not move. The app currently flags that as a date problem; see
+day's date and later days do not move. The pair is one numbered day in parts, "Day 3 – part 1" and
+"Day 3 – part 2" (`dayLabel` and `dayRef` in `plan-core.js`), and "Add a day after" always goes after the last
+part. The app currently flags the shared date as a problem and numbers the journey as its own day; see
 `docs/same_day_travel_brief.md` in the app project.
 
 - `camino/planner.py` works out each stage's distance and walking time from the track points, using the

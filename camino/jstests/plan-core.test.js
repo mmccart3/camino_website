@@ -307,6 +307,24 @@ test('a journey on the same day as the day before shares its date and adds no da
   assert.deepStrictEqual(P.layout(own, data).days.map(d => d.date), ['2027-04-10', '2027-04-11', '2027-04-12']);
 });
 
+test('a day split in parts is one numbered day: "Day 1 \u2013 part 1", "Day 1 \u2013 part 2"', () => {
+  let s = P.addRoute(P.newState(data), [11, 12], data);                 // Alpha to Bravo
+  let l = P.layout(s, data).days;
+  assert.deepStrictEqual(l.map(d => P.dayLabel(d)), ['Day 1']);          // no parts, no suffix
+  s = P.setTravel(P.addTravel(s, data, undefined, true), 1, { to: 'Charlie' });
+  s = P.setTravel(P.addTravel(s, data, undefined, true), 2, { from: 'Charlie', to: 'Delta' });   // a third part
+  s = P.addRest(s);
+  s = P.setTravel(P.addTravel(s, data), 4, { from: 'Delta', to: 'Echo' });
+  l = P.layout(s, data).days;                                            // no start date: numbers do not depend on dates
+  assert.deepStrictEqual(l.map(d => [d.no, d.part, d.parts]), [[1, 1, 3], [1, 2, 3], [1, 3, 3], [2, 1, 1], [3, 1, 1]]);
+  assert.deepStrictEqual(l.map(d => P.dayLabel(d)), ['Day 1 \u2013 part 1', 'Day 1 \u2013 part 2', 'Day 1 \u2013 part 3', 'Day 2', 'Day 3']);
+  assert.deepStrictEqual(l.map(d => P.dayRef(d)), ['day 1, part 1', 'day 1, part 2', 'day 1, part 3', 'day 2', 'day 3']);
+  assert.strictEqual(P.totals(s, data).days, 3);
+  // taking the tick off the middle part: the third part now follows it, and so does its number
+  const apart = P.setTravel(s, 1, { same: false });
+  assert.deepStrictEqual(P.layout(apart, data).days.map(d => P.dayLabel(d)), ['Day 1', 'Day 2 \u2013 part 1', 'Day 2 \u2013 part 2', 'Day 3', 'Day 4']);
+});
+
 test('the first day cannot be a same-day journey, and saved plans are kept in line', () => {
   assert.strictEqual(P.addTravel(P.newState(data), data, undefined, true).days[0].same, false);
   const first = P.setTravel(P.addTravel(P.newState(data), data), 0, { same: true });

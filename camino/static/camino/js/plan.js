@@ -97,6 +97,14 @@
 
   function announce(message) { $('plan-live').textContent = message; }
 
+  // How a day is named in a sentence: "day 3", or "day 3, part 2" when a day has more than one part.
+  // Looked up in `st` (the plan as it will be, or as it is now) because the numbers depend on the plan.
+  function ref(i, st) {
+    var info = Plan.layout(st || state, data).days[i];
+    return info ? Plan.dayRef(info) : 'day ' + (i + 1);
+  }
+  function cap(text) { return text.charAt(0).toUpperCase() + text.slice(1); }
+
   // ------------------------------------------------------------------ drawing the page
 
   function update(next, focusKey, message, undoText) {
@@ -211,27 +219,27 @@
       if (fix) {
         note.appendChild(button('Start this day from ' + fix.from.name, 'refit', {
           'class': 'plan-btn plan-btn-small', 'data-focus': 'day-' + info.index + '-refit',
-          'aria-label': 'Start day ' + (info.index + 1) + ' from ' + fix.from.name }));
+          'aria-label': 'Start ' + Plan.dayRef(info) + ' from ' + fix.from.name }));
       }
       container.appendChild(note);
     }
   }
 
   function fillStay(container, info, day, i) {
-    var no = i + 1;
+    var name = Plan.dayRef(info);
     container.innerHTML = '';
     if (!info.end || info.invalid) return;
     if (day.stay) {
       var status = el('select', { 'class': 'plan-input plan-status', 'data-act': 'status', 'data-focus': 'day-' + i + '-status',
-        'aria-label': 'Booking status for day ' + no });
+        'aria-label': 'Booking status for ' + name });
       Plan.STATUSES.forEach(function (s) {
         status.appendChild(el('option', { value: s, selected: s === day.stay.status, text: s }));
       });
-      container.appendChild(el('span', { 'class': 'plan-stay-label', text: 'Night ' + no + ':' }));
+      container.appendChild(el('span', { 'class': 'plan-stay-label', text: 'Night ' + info.no + ':' }));
       container.appendChild(el('strong', { 'class': 'plan-stay-name', text: day.stay.name }));
       container.appendChild(status);
-      container.appendChild(button('Change', 'stay', { 'data-focus': 'day-' + i + '-stay', 'aria-label': 'Change where to stay on day ' + no }));
-      container.appendChild(button('Remove', 'stay-clear', { 'aria-label': 'Remove the stay on day ' + no }));
+      container.appendChild(button('Change', 'stay', { 'data-focus': 'day-' + i + '-stay', 'aria-label': 'Change where to stay on ' + name }));
+      container.appendChild(button('Remove', 'stay-clear', { 'aria-label': 'Remove the stay on ' + name }));
     } else {
       container.appendChild(button('Choose where to stay in ' + info.end.name, 'stay', { 'data-focus': 'day-' + i + '-stay', 'class': 'plan-btn plan-btn-quiet' }));
     }
@@ -245,13 +253,12 @@
 
   function dayCard(info, i, count) {
     var day = state.days[i];
-    var no = i + 1;
+    var name = Plan.dayRef(info);
     var walking = info.type === 's' || info.type === 'c';
     var kindClass = walking ? 'stage' : (info.type === 'r' ? 'rest' : 'travel');
     var head = el('div', { 'class': 'plan-day-head' }, [
-      el('span', { 'class': 'plan-day-no', text: 'Day ' + no }),
+      el('span', { 'class': 'plan-day-no', text: Plan.dayLabel(info) }),
       info.date ? el('span', { 'class': 'plan-day-date', text: formatDate(info.date) }) : null,
-      info.same ? chip('Same day as day ' + i, 'same') : null,
       info.type === 's' && KIND_LABELS[info.stage.kind] ? chip(KIND_LABELS[info.stage.kind], info.stage.kind) : null
     ]);
     var body = [head, el('h4', { 'class': 'plan-day-title', tabindex: '-1', 'data-focus': 'day-' + i + '-title', text: dayTitle(info) })];
@@ -302,7 +309,7 @@
       var same = Plan.siblings(day.stage, data);
       if (same.length > 1) {
         var choose = el('select', { 'class': 'plan-input plan-route', 'data-act': 'route', 'data-focus': 'day-' + i + '-route',
-          'aria-label': 'Choose the route for day ' + no });
+          'aria-label': 'Choose the route for ' + name });
         same.forEach(function (id) {
           var s = data.stages[id];
           choose.appendChild(el('option', { value: String(id), selected: id === day.stage,
@@ -316,7 +323,7 @@
       if (found.length > 1) {
         var mine = Plan.chainKey(day.paths, data);
         var pick = el('select', { 'class': 'plan-input plan-route', 'data-act': 'croute', 'data-focus': 'day-' + i + '-route',
-          'aria-label': 'Choose the route for day ' + no });
+          'aria-label': 'Choose the route for ' + name });
         var foundLabels = Plan.routeLabels(found, data);
         found.forEach(function (chain, n) {
           var t = Plan.chainTotals(chain, data);
@@ -327,15 +334,15 @@
       }
     }
     if (walking && info.start && info.end && !info.invalid) {
-      actions.appendChild(button('Change where it ends', 'reend', { 'data-focus': 'day-' + i + '-reend', 'aria-label': 'Change where day ' + no + ' ends' }));
+      actions.appendChild(button('Change where it ends', 'reend', { 'data-focus': 'day-' + i + '-reend', 'aria-label': 'Change where ' + name + ' ends' }));
     }
     if (info.type === 'r' && info.end && !info.invalid) {
-      actions.appendChild(button('Rest somewhere else', 'restmove', { 'data-focus': 'day-' + i + '-restmove', 'aria-label': 'Rest somewhere else on day ' + no }));
+      actions.appendChild(button('Rest somewhere else', 'restmove', { 'data-focus': 'day-' + i + '-restmove', 'aria-label': 'Rest somewhere else on ' + name }));
     }
-    actions.appendChild(button('Move up', 'up', { 'data-focus': 'day-' + i + '-up', disabled: i === 0, 'aria-label': 'Move day ' + no + ' earlier' }));
-    actions.appendChild(button('Move down', 'down', { 'data-focus': 'day-' + i + '-down', disabled: i === count - 1, 'aria-label': 'Move day ' + no + ' later' }));
-    actions.appendChild(button('Add a day after', 'insert', { 'data-focus': 'day-' + i + '-insert', 'aria-label': 'Add a day after day ' + no }));
-    actions.appendChild(button('Remove day', 'remove', { 'data-focus': 'day-' + i + '-remove', 'class': 'plan-btn plan-btn-danger', 'aria-label': 'Remove day ' + no }));
+    actions.appendChild(button('Move up', 'up', { 'data-focus': 'day-' + i + '-up', disabled: i === 0, 'aria-label': 'Move ' + name + ' earlier' }));
+    actions.appendChild(button('Move down', 'down', { 'data-focus': 'day-' + i + '-down', disabled: i === count - 1, 'aria-label': 'Move ' + name + ' later' }));
+    actions.appendChild(button('Add a day after', 'insert', { 'data-focus': 'day-' + i + '-insert', 'aria-label': 'Add a day after day ' + info.no }));
+    actions.appendChild(button('Remove day', 'remove', { 'data-focus': 'day-' + i + '-remove', 'class': 'plan-btn plan-btn-danger', 'aria-label': 'Remove ' + name }));
     body.push(actions);
 
     return el('li', { 'class': 'plan-day plan-day-' + kindClass + (ui.editAt === i ? ' plan-day-editing' : ''), 'data-index': String(i) }, body);
@@ -382,9 +389,13 @@
     return item;
   }
 
+  // Where a new day goes: null for the end. Never between a day and the journey on the same date
+  // (day 3, part 1 and part 2), which would move that journey on to the new day.
   function insertPoint() {
     var at = ui.insertAt;
-    return (at === null || at >= state.days.length) ? null : at;
+    if (at === null) return null;
+    while (at < state.days.length && at > 0 && state.days[at].t === 't' && state.days[at].same) at += 1;
+    return at >= state.days.length ? null : at;
   }
 
   function shortTitle(info) {
@@ -419,12 +430,13 @@
       editInfo = Plan.layout(state, data).days[editing];
       current = editInfo.end.id;
     }
-    $('plan-add-title').textContent = editing !== null ? 'Change day ' + (editing + 1)
-      : 'Day ' + (position + 1) + (at === null ? '' : ' (new)');
+    var allDays = Plan.layout(state, data).days;
+    $('plan-add-title').textContent = editing !== null ? 'Change ' + Plan.dayRef(editInfo)
+      : 'Day ' + (position > 0 ? allDays[position - 1].no + 1 : 1) + (at === null ? '' : ' (new)');
 
     var lead = '';
     if (editing !== null) {
-      lead = 'Day ' + (editing + 1) + ' is ' + dayTitle(editInfo) + '. Choose where it should end instead.' +
+      lead = cap(Plan.dayRef(editInfo)) + ' is ' + dayTitle(editInfo) + '. Choose where it should end instead.' +
         (state.days[editing].stay ? ' If you pick a different place, the place to stay you chose is cleared.' : '');
     } else if (finished) {
       lead = 'Your plan reaches ' + start.previous.name + ', the end of the guide. Add a rest day or a journey home, or send the plan below.';
@@ -446,8 +458,9 @@
     where.innerHTML = '';
     where.appendChild(el('option', { value: 'end', text: 'At the end' }));
     if (count) where.appendChild(el('option', { value: '0', text: 'At the start' }));
-    Plan.layout(state, data).days.forEach(function (info, i) {
-      if (i < count - 1) where.appendChild(el('option', { value: String(i + 1), text: 'After day ' + (i + 1) + ': ' + shortTitle(info) }));
+    allDays.forEach(function (info, i) {
+      // a day can only be added after the last part of a day, not between its parts
+      if (i < count - 1 && !allDays[i + 1].same) where.appendChild(el('option', { value: String(i + 1), text: 'After ' + Plan.dayRef(info) + ': ' + shortTitle(info) }));
     });
     where.value = at === null ? 'end' : String(at);
     $('plan-add-where-row').hidden = count === 0 || editing !== null;
@@ -497,7 +510,7 @@
     if (!state.days.length) problem = 'Add at least one day to create the file.';
     else {
       var bad = l.days.filter(function (d) { return d.invalid; })[0];
-      if (bad) problem = 'Day ' + (bad.index + 1) + ' needs attention: ' + bad.invalid;
+      if (bad) problem = cap(Plan.dayRef(bad)) + ' needs attention: ' + bad.invalid;
     }
     $('plan-download').disabled = !!problem;
     var share = $('plan-share');
@@ -528,9 +541,10 @@
     route.hidden = false;
     var n = p.warnings.length;
     if (n) {
-      var numbers = p.warnings.map(function (i) { return String(i + 1); });
-      var list = n === 1 ? numbers[0] : numbers.slice(0, -1).join(', ') + ' and ' + numbers[n - 1];
-      warn.textContent = (n === 1 ? 'Day ' : 'Days ') + list + (n === 1 ? ' does not start' : ' do not start') +
+      var plain = p.warnings.every(function (i) { return l.days[i].parts === 1; });
+      var names = p.warnings.map(function (i) { return plain ? String(l.days[i].no) : Plan.dayRef(l.days[i]); });
+      var list = n === 1 ? names[0] : names.slice(0, -1).join(', ') + ' and ' + names[n - 1];
+      warn.textContent = (plain ? (n === 1 ? 'Day ' : 'Days ') + list : cap(list)) + (n === 1 ? ' does not start' : ' do not start') +
         ' where the day before ended. You can still send the plan, but check ' + (n === 1 ? 'it' : 'them') + ' first.';
     }
     warn.hidden = !n;
@@ -636,7 +650,7 @@
     var i = ui.stayIndex;
     closeDialog($('plan-stay-dialog'));
     if (i < 0) return;
-    update(Plan.setStay(state, i, stay, data), 'day-' + i + '-stay', 'Stay chosen for day ' + (i + 1) + '.');
+    update(Plan.setStay(state, i, stay, data), 'day-' + i + '-stay', 'Stay chosen for ' + ref(i) + '.');
   }
 
   // ------------------------------------------------------------------ events
@@ -664,7 +678,7 @@
     ui.insertAt = null;
     ui.openStop = null;
     ui.far = false;
-    update(next, at === null ? 'first-stop' : 'day-' + position + '-title', message + ' as day ' + (position + 1) + '.');
+    update(next, at === null ? 'first-stop' : 'day-' + position + '-title', message + ' as ' + ref(position, next) + '.');
   }
 
   function addChain(chain) {
@@ -678,13 +692,13 @@
     if (i === null || !t) return;
     var next = Plan.setDayRoute(state, i, chain, data);
     var lost = !!state.days[i].stay && !next.days[i].stay;
-    var message = 'Day ' + (i + 1) + ' now ends at ' + data.places[t.to] + '.';
+    var message = cap(ref(i, next)) + ' now ends at ' + data.places[t.to] + '.';
     var after = Plan.layout(next, data).days[i + 1];
     ui.openStop = null;
     ui.far = false;
     update(next, 'day-' + i + '-title',
       message + (lost ? ' Its place to stay was cleared.' : '') +
-      (after && after.warning ? ' Day ' + (i + 2) + ' no longer starts where this one ends.' : ''),
+      (after && after.warning ? ' ' + cap(ref(i + 1, next)) + ' no longer starts where this one ends.' : ''),
       message + (lost ? ' Its place to stay was cleared.' : ''));
   }
 
@@ -758,7 +772,7 @@
     var at = insertPoint(), next = Plan.addTravel(state, data, at, same), i = at === null ? next.days.length - 1 : at;
     ui.insertAt = null;
     update(next, 'day-' + i + (next.days[i].from ? '-to' : '-from'),
-      (same ? 'Journey added on the same day, as day ' : 'Travel day added as day ') + (i + 1) + '.');
+      (same ? 'Journey added as ' : 'Travel day added as ') + ref(i, next) + '.');
   }
   $('plan-add-travel').addEventListener('click', function () { addJourney(false); });
   $('plan-add-travel-same').addEventListener('click', function () { addJourney(true); });
@@ -793,7 +807,7 @@
       ui.far = false;
       renderDays();
       renderAdd();
-      announce('Choose where day ' + (i + 1) + ' should end instead.');
+      announce('Choose where ' + ref(i) + ' should end instead.');
       $('plan-add-title').focus();
     } else if (act === 'restmove') {
       ui.restAt = i;
@@ -808,7 +822,7 @@
     } else if (act === 'refit') {
       var fix = Plan.refitStart(state, i, data);
       if (!fix) return;
-      var said = 'Day ' + (i + 1) + ' now starts from ' + fix.from.name + '.';
+      var said = cap(ref(i)) + ' now starts from ' + fix.from.name + '.';
       update(fix.state, 'day-' + i + '-title', said, said);
     } else if (act === 'insert') {
       ui.editAt = null;
@@ -816,12 +830,12 @@
       ui.fromPlace = null;
       ui.openStop = null;
       renderAdd();
-      announce('Choose the day to add after day ' + (i + 1) + '.');
+      announce('Choose the day to add after ' + ref((insertPoint() === null ? state.days.length : insertPoint()) - 1) + '.');
       $('plan-add-title').focus();
     } else if (act === 'remove') {
       var gone = dayTitle(Plan.layout(state, data).days[i]);
       update(Plan.removeDay(state, i), state.days.length > 1 ? 'day-' + Math.min(i, state.days.length - 2) + '-remove' : 'add-rest',
-        'Day ' + (i + 1) + ' removed.', 'Removed day ' + (i + 1) + ' (' + gone + ').');
+        cap(ref(i)) + ' removed.', 'Removed ' + ref(i) + ' (' + gone + ').');
     }
     else if (act === 'stay') openStay(i);
     else if (act === 'stay-clear') update(Plan.setStay(state, i, null, data), 'day-' + i + '-stay', 'Stay removed.');
@@ -839,14 +853,14 @@
     if (next === state) {
       ui.restAt = null;
       renderDays();
-      announce('Day ' + (i + 1) + ' is already ' + place + '.');
+      announce(cap(ref(i)) + ' is already ' + place + '.');
       var again = root.querySelector('[data-focus="day-' + i + '-restmove"]');
       if (again) again.focus();
       return;
     }
     var where = next.days[i].to;
-    update(next, 'day-' + (i + 1) + '-title', 'Rest day moved to ' + where + '. A journey was added as day ' + (i + 1) + '.',
-      'Rest day moved to ' + where + ' (journey added as day ' + (i + 1) + ').');
+    update(next, 'day-' + (i + 1) + '-title', 'Rest day moved to ' + where + '. A journey was added as ' + ref(i, next) + '.',
+      'Rest day moved to ' + where + ' (journey added as ' + ref(i, next) + ').');
   });
 
   $('plan-days').addEventListener('change', function (e) {
@@ -854,12 +868,13 @@
     if (!act) return;
     var i = dayIndex(target);
     if (i < 0) return;
-    if (act === 'route') update(Plan.setStage(state, i, Number(target.value)), 'day-' + i + '-route', 'Route changed for day ' + (i + 1) + '.');
-    else if (act === 'croute') update(Plan.setCustomRoute(state, i, target.value.split(',').map(Number)), 'day-' + i + '-route', 'Route changed for day ' + (i + 1) + '.');
+    if (act === 'route') update(Plan.setStage(state, i, Number(target.value)), 'day-' + i + '-route', 'Route changed for ' + ref(i) + '.');
+    else if (act === 'croute') update(Plan.setCustomRoute(state, i, target.value.split(',').map(Number)), 'day-' + i + '-route', 'Route changed for ' + ref(i) + '.');
     else if (act === 'status') update(Plan.setStayStatus(state, i, target.value), 'day-' + i + '-status');
     else if (act === 'same') {
-      update(Plan.setTravel(state, i, { same: target.checked }), 'day-' + i + '-same',
-        target.checked ? 'Day ' + (i + 1) + ' is now on the same day as day ' + i + '.' : 'Day ' + (i + 1) + ' now has a day of its own.');
+      var split = Plan.setTravel(state, i, { same: target.checked });
+      update(split, 'day-' + i + '-same',
+        cap(ref(i, split)) + (target.checked ? ' is now on the same date as the part before it.' : ' now has a day of its own.'));
     }
     else if (act === 'from') edit(Plan.setTravel(state, i, { from: target.value }), i);
     else if (act === 'to') edit(Plan.setTravel(state, i, { to: target.value }), i);

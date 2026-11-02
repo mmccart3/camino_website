@@ -410,7 +410,8 @@
       var same = day.t === 't' && !!day.same && i > 0;
       if (!same) offset += 1;
       var info = {
-        index: i, type: day.t, same: same, date: state.startDate ? addDays(state.startDate, offset) : null,
+        index: i, type: day.t, same: same, no: offset + 1, part: 1, parts: 1,
+        date: state.startDate ? addDays(state.startDate, offset) : null,
         start: null, end: null, metres: null, seconds: null, stage: null, warning: '', invalid: ''
       };
       if (day.t === 's') {
@@ -453,8 +454,21 @@
       if (info.end) here = info.end;
       infos.push(info);
     });
+    // A day split in two (a walk, then a bus the same day) is one numbered day in several parts.
+    var count = {}, seen = {};
+    infos.forEach(function (info) { count[info.no] = (count[info.no] || 0) + 1; });
+    infos.forEach(function (info) {
+      seen[info.no] = (seen[info.no] || 0) + 1;
+      info.part = seen[info.no];
+      info.parts = count[info.no];
+    });
     return { days: infos, end: here };
   }
+
+  // How a day is named: "Day 3", or "Day 3 – part 2" when the day has more than one part.
+  function dayLabel(info) { return 'Day ' + info.no + (info.parts > 1 ? ' \u2013 part ' + info.part : ''); }
+  // The same for use in a sentence: "day 3" or "day 3, part 2".
+  function dayRef(info) { return 'day ' + info.no + (info.parts > 1 ? ', part ' + info.part : ''); }
 
   // `days` are calendar days (a journey on the same day as the day before does not add one); `entries`
   // counts every row of the plan. A night counts as chosen when any row of that day has a stay.
@@ -751,7 +765,7 @@
 
   return {
     STATUSES: STATUSES, MAX_DAYS: MAX_DAYS,
-    newState: newState, clean: clean, layout: layout, totals: totals,
+    newState: newState, clean: clean, layout: layout, dayLabel: dayLabel, dayRef: dayRef, totals: totals,
     stageIds: stageIds, siblings: siblings, staysAt: staysAt, placeIdByName: placeIdByName,
     startFor: startFor, stageEnds: stageEnds, stayCount: stayCount, stageForChain: stageForChain, addRoute: addRoute,
     chainTotals: chainTotals, chainKey: chainKey, routePlaces: routePlaces, routesBetween: routesBetween, stopsFrom: stopsFrom,

@@ -7,7 +7,8 @@
  *   day = { t: 's', stage, stay }                 a guidebook stage
  *       | { t: 'c', paths: [path ids], stay }     a walking day of the visitor's own, over these paths
  *       | { t: 'r', stay }                        a rest day where the day before ended
- *       | { t: 't', from, to, stay }              travel by other means (flight, bus, taxi)
+ *       | { t: 't', from, to, stay, same }        travel by other means (flight, bus, taxi); `same` puts it on
+ *                                                 the same date as the day before (walk, then bus)
  *   stay = null | { k: 'a' | 'p' | 'c', id, name, status }   albergue, private, or the visitor's own
  *
  * buildFile() produces a camino-personal-backup file (version 1, plans only) that the app's
@@ -99,7 +100,7 @@
       else if (d.t === 'c' && Array.isArray(d.paths) && chainTotals(d.paths.map(Number), data)) {
         state.days.push({ t: 'c', paths: d.paths.map(Number), stay: stay });
       } else if (d.t === 'r') state.days.push({ t: 'r', stay: stay });
-      else if (d.t === 't') state.days.push({ t: 't', from: text(d.from, 100), to: text(d.to, 100), stay: stay });
+      else if (d.t === 't') state.days.push({ t: 't', from: text(d.from, 100), to: text(d.to, 100), stay: stay, same: d.same === true && state.days.length > 0 });
     });
     return state;
   }
@@ -404,9 +405,12 @@
       if (!(key in negative)) negative[key] = -(++negativeCount);
       return { id: negative[key], name: name };
     }
+    var offset = -1;   // days since the first day; a journey on the same day as the one before adds none
     state.days.forEach(function (day, i) {
+      var same = day.t === 't' && !!day.same && i > 0;
+      if (!same) offset += 1;
       var info = {
-        index: i, type: day.t, date: state.startDate ? addDays(state.startDate, i) : null,
+        index: i, type: day.t, same: same, date: state.startDate ? addDays(state.startDate, offset) : null,
         start: null, end: null, metres: null, seconds: null, stage: null, warning: '', invalid: ''
       };
       if (day.t === 's') {
@@ -452,17 +456,23 @@
     return { days: infos, end: here };
   }
 
+  // `days` are calendar days (a journey on the same day as the day before does not add one); `entries`
+  // counts every row of the plan. A night counts as chosen when any row of that day has a stay.
   function totals(state, data) {
-    var l = layout(state, data), t = { days: state.days.length, walking: 0, rest: 0, travel: 0, stays: 0, metres: 0, seconds: 0 };
+    var l = layout(state, data), t = { days: 0, entries: state.days.length, walking: 0, rest: 0, travel: 0, stays: 0, metres: 0, seconds: 0 };
+    var group = -1, nights = {};
     l.days.forEach(function (info, i) {
+      if (!info.same) group += 1;
+      if (state.days[i].stay) nights[group] = true;
       if (info.type === 's' || info.type === 'c') {
         t.walking++;
         if (info.metres !== null) { t.metres += info.metres; t.seconds += info.seconds; }
       }
       else if (info.type === 'r') t.rest++;
       else t.travel++;
-      if (state.days[i].stay) t.stays++;
     });
+    t.days = group + 1;
+    t.stays = Object.keys(nights).length;
     return t;
   }
 
@@ -537,9 +547,11 @@
   // The three adders take an optional `at`: the position the new day should take (default: the end).
   function addStage(state, stageId, at) { return insertDay(state, at, { t: 's', stage: stageId, stay: null }); }
   function addRest(state, at) { return insertDay(state, at, { t: 'r', stay: null }); }
-  function addTravel(state, data, at) {
+  // `same`: on the same date as the day before (walk, then bus). Not possible for the first day.
+  function addTravel(state, data, at, same) {
     var end = layout(before(state, at), data).end;
-    return insertDay(state, at, { t: 't', from: end ? end.name : '', to: '', stay: null });
+    var position = (at === undefined || at === null || at > state.days.length) ? state.days.length : Math.max(0, at);
+    return insertDay(state, at, { t: 't', from: end ? end.name : '', to: '', stay: null, same: !!same && position > 0 });
   }
   function addCustom(state, chain, at) { return insertDay(state, at, { t: 'c', paths: chain.slice(), stay: null }); }
   // A day along this chain of paths: a guidebook stage when it is exactly one, otherwise the visitor's own.
@@ -597,6 +609,21 @@
     };
   }
 
+  // Rest somewhere else. A rest day is wherever the day before ended, so a different place means a
+  // journey first: this puts that journey in front of the rest day. The rest day keeps no place to
+  // stay, as the one chosen was for the old place. Returns the same state when nothing changes.
+  function moveRest(state, i, name, data) {
+    var day = state.days[i], place = text(name, 100).trim();
+    if (!day || day.t !== 'r' || !place || state.days.length >= MAX_DAYS) return state;
+    var here = endBefore(state, data, i);
+    if (!here) return state;
+    var id = placeIdByName(place, data);
+    if (id !== null ? id === here.id : placeKey(place) === placeKey(here.name)) return state;
+    var next = insertDay(state, i, { t: 't', from: here.name, to: id !== null ? data.places[id] : place, stay: null, same: false });
+    next.days[i + 1].stay = null;
+    return next;
+  }
+
   function removeDay(state, i) { return withDays(state, function (d) { d.splice(i, 1); }); }
   function moveDay(state, i, by) {
     var j = i + by;
@@ -611,6 +638,7 @@
       if (!d[i] || d[i].t !== 't') return;
       if ('from' in patch) d[i].from = text(patch.from, 100);
       if ('to' in patch) d[i].to = text(patch.to, 100);
+      if ('same' in patch) d[i].same = !!patch.same && i > 0;
     });
   }
   function setStay(state, i, stay, data) {
@@ -728,7 +756,7 @@
     startFor: startFor, stageEnds: stageEnds, stayCount: stayCount, stageForChain: stageForChain, addRoute: addRoute,
     chainTotals: chainTotals, chainKey: chainKey, routePlaces: routePlaces, routesBetween: routesBetween, stopsFrom: stopsFrom,
     routeLabel: routeLabel, routeLabels: routeLabels, guideEnd: guideEnd, metresToEnd: metresToEnd,
-    setDayRoute: setDayRoute, refitStart: refitStart, progress: progress, endBefore: endBefore, addCustom: addCustom, setCustomRoute: setCustomRoute,
+    setDayRoute: setDayRoute, refitStart: refitStart, moveRest: moveRest, progress: progress, endBefore: endBefore, addCustom: addCustom, setCustomRoute: setCustomRoute,
     addStage: addStage, addRest: addRest, addTravel: addTravel, removeDay: removeDay, moveDay: moveDay,
     setStage: setStage, setTravel: setTravel, setStay: setStay, setStayStatus: setStayStatus, setMeta: setMeta,
     buildFile: buildFile, checkFile: checkFile, fileName: fileName,

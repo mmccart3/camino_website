@@ -286,3 +286,71 @@ test('asking for the same routes again does not search again', () => {
   const a = P.routesBetween(1, 3, data), b = P.routesBetween(1, 3, data);
   assert.strictEqual(a, b);
 });
+
+test('a journey on the same day as the day before shares its date and adds no day', () => {
+  let s = P.setMeta(P.addRoute(P.newState(data), [11, 12], data), { startDate: '2027-04-10' }, data);   // Alpha to Bravo
+  s = P.setTravel(P.addTravel(s, data, undefined, true), 1, { to: 'Charlie' });                          // the bus on to Charlie, same day
+  s = P.addRest(s);                                                                                       // rest in Charlie, next day
+  const l = P.layout(s, data);
+  assert.deepStrictEqual(l.days.map(d => d.date), ['2027-04-10', '2027-04-10', '2027-04-11']);
+  assert.deepStrictEqual(l.days.map(d => d.same), [false, true, false]);
+  assert.strictEqual(l.days[2].end.name, 'Charlie');
+  const total = P.totals(s, data);
+  assert.deepStrictEqual([total.days, total.entries, total.walking, total.travel, total.rest], [2, 3, 1, 1, 1]);
+  // dates in the file
+  const doc = P.buildFile(s, data, NOW);
+  assert.deepStrictEqual(P.checkFile(doc), []);
+  assert.deepStrictEqual(doc.plans[0].days.map(d => JSON.parse(d.route).date), ['2027-04-10', '2027-04-10', '2027-04-11']);
+  assert.deepStrictEqual(doc.plans[0].days.map(d => d.ordinal), [0, 1, 2]);
+  // switching it off gives the journey a day of its own
+  const own = P.setTravel(s, 1, { same: false });
+  assert.deepStrictEqual(P.layout(own, data).days.map(d => d.date), ['2027-04-10', '2027-04-11', '2027-04-12']);
+});
+
+test('the first day cannot be a same-day journey, and saved plans are kept in line', () => {
+  assert.strictEqual(P.addTravel(P.newState(data), data, undefined, true).days[0].same, false);
+  const first = P.setTravel(P.addTravel(P.newState(data), data), 0, { same: true });
+  assert.strictEqual(first.days[0].same, false);
+  const s = P.clean({ days: [{ t: 't', from: 'A', to: 'B', same: true }, { t: 't', from: 'B', to: 'C', same: true }, { t: 't', from: 'C', to: 'D' }] }, data);
+  assert.deepStrictEqual(s.days.map(d => d.same), [false, true, false]);
+  const l = P.layout(P.setMeta(s, { startDate: '2027-01-01' }, data), data);
+  assert.deepStrictEqual(l.days.map(d => d.date), ['2027-01-01', '2027-01-01', '2027-01-02']);
+});
+
+test('a night counts once however many rows the day has', () => {
+  let s = P.addRoute(P.newState(data), [11, 12], data);
+  s = P.setTravel(P.addTravel(s, data, undefined, true), 1, { to: 'Charlie' });
+  assert.strictEqual(P.totals(s, data).stays, 0);
+  s = P.setStay(s, 1, { k: 'a', id: 300, name: 'Albergue Charlie', status: 'Booked' }, data);
+  assert.strictEqual(P.totals(s, data).stays, 1);
+  s = P.setStay(s, 0, { k: 'a', id: 100, name: 'Albergue Bravo', status: 'Booked' }, data);
+  assert.strictEqual(P.totals(s, data).stays, 1);                         // still one night
+  assert.strictEqual(P.totals(P.addRest(s), data).stays, 1);              // the rest day has none yet
+});
+
+test('a rest day can be moved to another place; the journey is added in front of it', () => {
+  let s = P.setMeta(P.addRoute(P.newState(data), [11, 12], data), { startDate: '2027-04-10' }, data);   // Alpha to Bravo
+  s = P.setStay(s, 0, { k: 'a', id: 100, name: 'Albergue Bravo', status: 'Booked' }, data);
+  s = P.addRest(s);
+  s = P.setStay(s, 1, { k: 'a', id: 200, name: 'Hotel Bravo', status: 'Considering' }, data);
+  const moved = P.moveRest(s, 1, ' charlie ', data);                         // forgiving spelling
+  assert.deepStrictEqual(moved.days.map(d => d.t), ['s', 't', 'r']);
+  assert.deepStrictEqual([moved.days[1].from, moved.days[1].to, moved.days[1].same], ['Bravo', 'Charlie', false]);
+  assert.strictEqual(moved.days[2].stay, null);                              // the old stay was for Bravo
+  assert.strictEqual(moved.days[0].stay.name, 'Albergue Bravo');
+  const l = P.layout(moved, data);
+  assert.strictEqual(l.days[2].end.name, 'Charlie');
+  assert.deepStrictEqual(l.days.map(d => d.date), ['2027-04-10', '2027-04-11', '2027-04-12']);
+  assert.strictEqual(l.days.filter(d => d.warning).length, 0);
+  assert.strictEqual(s.days.length, 2);                                       // the old plan is untouched
+  // a place that is not in the guide
+  const off = P.moveRest(s, 1, 'Madrid', data);
+  assert.strictEqual(off.days[1].to, 'Madrid');
+  assert.ok(P.layout(off, data).days[2].end.id < 0);
+  assert.deepStrictEqual(P.checkFile(P.buildFile(off, data, NOW)), []);
+  // nothing to do: the place it already is, empty text, a walking day
+  assert.strictEqual(P.moveRest(s, 1, 'Bravo', data), s);
+  assert.strictEqual(P.moveRest(s, 1, '  ', data), s);
+  assert.strictEqual(P.moveRest(s, 0, 'Charlie', data), s);
+  assert.strictEqual(P.moveRest(s, 5, 'Charlie', data), s);
+});

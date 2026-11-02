@@ -26,7 +26,7 @@
   var STAY_NAMES = { a: 'Albergue', p: 'Hotel or guesthouse', c: 'Your own choice' };
 
   var storageWorks = true;
-  var ui = { fromPlace: null, stayIndex: -1, insertAt: null, editAt: null, undo: null, far: false, openStop: null };
+  var ui = { fromPlace: null, stayIndex: -1, insertAt: null, editAt: null, restAt: null, undo: null, far: false, openStop: null };
   var state = loadState();
 
   function $(id) { return document.getElementById(id); }
@@ -102,6 +102,7 @@
   function update(next, focusKey, message, undoText) {
     ui.undo = undoText ? { state: state, text: undoText } : null;
     ui.editAt = null;
+    ui.restAt = null;
     state = next;
     ui.notice = '';
     saveState();
@@ -120,7 +121,7 @@
     var layout = Plan.layout(state, data), items = $('plan-days').children;
     for (var k = index; k < state.days.length; k += 1) {
       if (items[k]) patchCard(items[k], layout.days[k], k);
-      if (k > index && state.days[k].type !== 'r') break;
+      if (k > index && state.days[k].t !== 'r') break;   // rest days follow the place; stop after the first walking day
     }
     renderNotice();
     renderSummary();
@@ -250,6 +251,7 @@
     var head = el('div', { 'class': 'plan-day-head' }, [
       el('span', { 'class': 'plan-day-no', text: 'Day ' + no }),
       info.date ? el('span', { 'class': 'plan-day-date', text: formatDate(info.date) }) : null,
+      info.same ? chip('Same day as day ' + i, 'same') : null,
       info.type === 's' && KIND_LABELS[info.stage.kind] ? chip(KIND_LABELS[info.stage.kind], info.stage.kind) : null
     ]);
     var body = [head, el('h4', { 'class': 'plan-day-title', tabindex: '-1', 'data-focus': 'day-' + i + '-title', text: dayTitle(info) })];
@@ -266,6 +268,12 @@
         el('label', {}, [el('span', { text: 'From' }), from]),
         el('label', {}, [el('span', { text: 'To' }), to])
       ]));
+      if (i > 0) {
+        body.push(el('label', { 'class': 'plan-check' }, [
+          el('input', { type: 'checkbox', 'data-act': 'same', 'data-focus': 'day-' + i + '-same', checked: day.same ? true : null }),
+          el('span', { text: 'Same day as the day before (for example a bus after the walk)' })
+        ]));
+      }
     }
 
     var notes = el('div', { 'class': 'plan-day-notes' });
@@ -274,6 +282,20 @@
     fillStay(stayRow, info, day, i);
     body.push(notes);
     body.push(stayRow);
+
+    if (info.type === 'r' && ui.restAt === i && info.end && !info.invalid) {
+      body.push(el('form', { 'class': 'plan-rest-move', novalidate: true }, [
+        el('label', {}, [el('span', { text: 'Where will you rest?' }), el('input', {
+          type: 'text', 'class': 'plan-input', name: 'place', list: 'plan-places', autocomplete: 'off', maxlength: '100',
+          placeholder: 'For example Santiago', 'data-focus': 'day-' + i + '-restplace' })]),
+        el('p', { 'class': 'plan-hint', text: 'If this is not ' + info.end.name + ', a journey from there is added before this rest day.' +
+          (day.stay ? ' The place to stay you chose here is cleared.' : '') }),
+        el('div', { 'class': 'plan-rest-move-actions' }, [
+          el('button', { type: 'submit', 'class': 'plan-btn plan-btn-primary', text: 'Move the rest day' }),
+          button('Cancel', 'restcancel', { 'data-focus': 'day-' + i + '-restcancel' })
+        ])
+      ]));
+    }
 
     var actions = el('div', { 'class': 'plan-day-actions' });
     if (info.type === 's') {
@@ -306,6 +328,9 @@
     }
     if (walking && info.start && info.end && !info.invalid) {
       actions.appendChild(button('Change where it ends', 'reend', { 'data-focus': 'day-' + i + '-reend', 'aria-label': 'Change where day ' + no + ' ends' }));
+    }
+    if (info.type === 'r' && info.end && !info.invalid) {
+      actions.appendChild(button('Rest somewhere else', 'restmove', { 'data-focus': 'day-' + i + '-restmove', 'aria-label': 'Rest somewhere else on day ' + no }));
     }
     actions.appendChild(button('Move up', 'up', { 'data-focus': 'day-' + i + '-up', disabled: i === 0, 'aria-label': 'Move day ' + no + ' earlier' }));
     actions.appendChild(button('Move down', 'down', { 'data-focus': 'day-' + i + '-down', disabled: i === count - 1, 'aria-label': 'Move day ' + no + ' later' }));
@@ -454,6 +479,7 @@
       $('plan-stops-more').hidden = ui.far || all.length === stops.length;
     }
     $('plan-add-rest').disabled = position === 0;
+    $('plan-add-travel-same').disabled = position === 0;
 
     // Any stage in the guide
     var any = $('plan-any-stage');
@@ -728,11 +754,14 @@
     var at = insertPoint();
     added(Plan.addRest(state, at), at, 'Rest day added');
   });
-  $('plan-add-travel').addEventListener('click', function () {
-    var at = insertPoint(), next = Plan.addTravel(state, data, at), i = at === null ? next.days.length - 1 : at;
+  function addJourney(same) {
+    var at = insertPoint(), next = Plan.addTravel(state, data, at, same), i = at === null ? next.days.length - 1 : at;
     ui.insertAt = null;
-    update(next, 'day-' + i + (next.days[i].from ? '-to' : '-from'), 'Travel day added as day ' + (i + 1) + '.');
-  });
+    update(next, 'day-' + i + (next.days[i].from ? '-to' : '-from'),
+      (same ? 'Journey added on the same day, as day ' : 'Travel day added as day ') + (i + 1) + '.');
+  }
+  $('plan-add-travel').addEventListener('click', function () { addJourney(false); });
+  $('plan-add-travel-same').addEventListener('click', function () { addJourney(true); });
   $('plan-any-add').addEventListener('click', function () {
     var id = Number($('plan-any-stage').value), at = insertPoint();
     if (!data.stages[id]) return;
@@ -766,6 +795,16 @@
       renderAdd();
       announce('Choose where day ' + (i + 1) + ' should end instead.');
       $('plan-add-title').focus();
+    } else if (act === 'restmove') {
+      ui.restAt = i;
+      renderDays();
+      var field = root.querySelector('[data-focus="day-' + i + '-restplace"]');
+      if (field) field.focus();
+    } else if (act === 'restcancel') {
+      ui.restAt = null;
+      renderDays();
+      var back = root.querySelector('[data-focus="day-' + i + '-restmove"]');
+      if (back) back.focus();
     } else if (act === 'refit') {
       var fix = Plan.refitStart(state, i, data);
       if (!fix) return;
@@ -788,6 +827,28 @@
     else if (act === 'stay-clear') update(Plan.setStay(state, i, null, data), 'day-' + i + '-stay', 'Stay removed.');
   });
 
+  $('plan-days').addEventListener('submit', function (e) {
+    var form = e.target;
+    if (!form.classList || !form.classList.contains('plan-rest-move')) return;
+    e.preventDefault();
+    var i = dayIndex(form), input = form.querySelector('input[name="place"]'), place = input.value.trim();
+    if (i < 0) return;
+    if (!place) { announce('Type where you will rest.'); input.focus(); return; }
+    if (state.days.length >= Plan.MAX_DAYS) { announce('The plan is full.'); return; }
+    var next = Plan.moveRest(state, i, place, data);
+    if (next === state) {
+      ui.restAt = null;
+      renderDays();
+      announce('Day ' + (i + 1) + ' is already ' + place + '.');
+      var again = root.querySelector('[data-focus="day-' + i + '-restmove"]');
+      if (again) again.focus();
+      return;
+    }
+    var where = next.days[i].to;
+    update(next, 'day-' + (i + 1) + '-title', 'Rest day moved to ' + where + '. A journey was added as day ' + (i + 1) + '.',
+      'Rest day moved to ' + where + ' (journey added as day ' + (i + 1) + ').');
+  });
+
   $('plan-days').addEventListener('change', function (e) {
     var target = e.target, act = target.getAttribute && target.getAttribute('data-act');
     if (!act) return;
@@ -796,6 +857,10 @@
     if (act === 'route') update(Plan.setStage(state, i, Number(target.value)), 'day-' + i + '-route', 'Route changed for day ' + (i + 1) + '.');
     else if (act === 'croute') update(Plan.setCustomRoute(state, i, target.value.split(',').map(Number)), 'day-' + i + '-route', 'Route changed for day ' + (i + 1) + '.');
     else if (act === 'status') update(Plan.setStayStatus(state, i, target.value), 'day-' + i + '-status');
+    else if (act === 'same') {
+      update(Plan.setTravel(state, i, { same: target.checked }), 'day-' + i + '-same',
+        target.checked ? 'Day ' + (i + 1) + ' is now on the same day as day ' + i + '.' : 'Day ' + (i + 1) + ' now has a day of its own.');
+    }
     else if (act === 'from') edit(Plan.setTravel(state, i, { from: target.value }), i);
     else if (act === 'to') edit(Plan.setTravel(state, i, { to: target.value }), i);
   });

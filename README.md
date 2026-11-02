@@ -116,6 +116,11 @@ The place to stay is cleared if the end moves. When a day no longer starts where
 route exists, its warning has a "Start this day from ..." button. The send card says where the plan goes and how
 far short of Santiago it stops. There is no separate "finish" step: the file can be downloaded at any time.
 
+A rest day takes its place from where the day before ended. "Rest somewhere else" on a rest day adds the journey
+in front of it. A travel day can be ticked "Same day as the day before" (walk, then bus): it then shares that
+day's date and later days do not move. The app currently flags that as a date problem; see
+`docs/same_day_travel_brief.md` in the app project.
+
 - `camino/planner.py` works out each stage's distance and walking time from the track points, using the
   same arithmetic as the app, and builds the data embedded in the page, including a graph of how the
   paths join (`routes`) so the page can build a day between any two towns. `camino/test_planner.py` checks

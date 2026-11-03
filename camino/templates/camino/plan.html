@@ -22,6 +22,18 @@
   <p class="plan-undo" id="plan-undo" hidden><span id="plan-undo-text"></span><button type="button" class="plan-btn" id="plan-undo-btn">Undo</button></p>
   <p class="visually-hidden" id="plan-live" aria-live="polite"></p>
 
+  <section class="plan-card plan-shared" id="plan-shared" aria-labelledby="plan-shared-title" hidden>
+    <h3 id="plan-shared-title" tabindex="-1" data-focus="shared-title">A plan has been shared with you</h3>
+    <p class="plan-shared-name" id="plan-shared-name"></p>
+    <p class="plan-hint" id="plan-shared-detail"></p>
+    <p class="plan-warning" id="plan-shared-replace" hidden></p>
+    <p class="plan-error" id="plan-shared-error" role="alert" hidden></p>
+    <div class="plan-send-actions">
+      <button type="button" class="plan-btn plan-btn-primary" id="plan-shared-open">Open this plan</button>
+      <button type="button" class="plan-btn" id="plan-shared-keep">Keep my plan</button>
+    </div>
+  </section>
+
   <section class="plan-card" aria-labelledby="plan-details-title">
     <h3 id="plan-details-title">About this plan</h3>
     <div class="plan-fields">
@@ -85,6 +97,7 @@
     <div class="plan-send-actions">
       <button type="button" class="plan-btn plan-btn-primary" id="plan-download">Download itinerary file</button>
       <button type="button" class="plan-btn" id="plan-share" hidden>Share…</button>
+      <button type="button" class="plan-btn" id="plan-qr-open" data-focus="qr-open" hidden>Share as QR code</button>
     </div>
     <p class="plan-send-msg" id="plan-send-msg" role="status" hidden></p>
     <h4 class="plan-steps-title">Opening it in the app</h4>
@@ -133,6 +146,29 @@
   </div>
 </dialog>
 
+<dialog id="plan-qr-dialog" class="plan-dialog" aria-labelledby="plan-qr-title">
+  <div class="plan-dialog-head">
+    <h3 id="plan-qr-title">Share this plan as a QR code</h3>
+    <button type="button" class="plan-btn plan-btn-quiet" id="plan-qr-close">Close</button>
+  </div>
+  <div class="plan-dialog-body plan-qr">
+    <p class="plan-error" id="plan-qr-error" role="alert" hidden></p>
+    <div class="plan-qr-frame" id="plan-qr-frame"><img id="plan-qr-img" class="plan-qr-img" alt=""></div>
+    <p class="plan-hint" id="plan-qr-hint" hidden></p>
+    <p>Point a phone camera at the code. It opens this planner with the plan ready to open there, and from there you can send the file to the app.</p>
+    <div class="plan-send-actions plan-qr-actions">
+      <button type="button" class="plan-btn plan-btn-primary" id="plan-qr-copy">Copy link</button>
+      <button type="button" class="plan-btn" id="plan-qr-png">Save the QR code as a picture</button>
+    </div>
+    <p class="plan-send-msg" id="plan-qr-msg" role="status" hidden></p>
+    <div class="plan-field">
+      <label for="plan-qr-link">The link</label>
+      <input type="text" id="plan-qr-link" class="plan-input plan-qr-link" readonly>
+    </div>
+    <p class="plan-hint">The plan is inside the code and the link, so anyone who has them can see it: your stages, dates and places to stay. Nothing is stored on our server.</p>
+  </div>
+</dialog>
+
 <dialog id="plan-reset-dialog" class="plan-dialog plan-dialog-small" aria-labelledby="plan-reset-title">
   <div class="plan-dialog-body">
     <h3 id="plan-reset-title">Start again?</h3>
@@ -146,5 +182,7 @@
 
 <script id="plan-data" type="application/json">{{ plan_json|safe }}</script>
 <script src="{% static 'camino/js/plan-core.js' %}" defer></script>
+<script src="{% static 'camino/js/qr.js' %}" defer></script>
+<script src="{% static 'camino/js/plan-share.js' %}" defer></script>
 <script src="{% static 'camino/js/plan.js' %}" defer></script>
 {% endblock %}

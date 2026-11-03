@@ -123,13 +123,23 @@ day's date and later days do not move. The pair is one numbered day in parts, "D
 part. The app currently flags the shared date as a problem and numbers the journey as its own day; see
 `docs/same_day_travel_brief.md` in the app project.
 
+A plan can be shared as a QR code or a link ("Share as QR code" on the send card). The code holds the choices
+(stage numbers, routes, places to stay, dates, pace) in a few hundred bytes, never distances or times, and goes in
+the link's fragment (`/plan/#p=...`), which a browser never sends to the server. Opening such a link shows a card
+("A plan has been shared with you") and opens nothing until the visitor says so; an existing plan can be put back
+with Undo. A code made for a different edition of the guide, or damaged, is refused with a plain message. The layout
+is `docs/itinerary_qr_code_spec.md` in the app project, with test vectors. `plan-share.js` makes and reads the
+code, `qr.js` draws it (a small QR generator written for the site, because no library could be fetched; checked by
+decoding its output with OpenCV, `python camino/jstests/qr_decode_check.py`).
+
 - `camino/planner.py` works out each stage's distance and walking time from the track points, using the
   same arithmetic as the app, and builds the data embedded in the page, including a graph of how the
   paths join (`routes`) so the page can build a day between any two towns. `camino/test_planner.py` checks
   it against the stored stage distances and times, and that walking every stage through the graph gives
   the same figures.
 - `camino/static/camino/js/plan-core.js` holds the planner's rules and the file builder;
-  `plan.js` draws the page. Tests for the rules: `node --test` (Node 18 or newer).
+  `plan.js` draws the page. Tests for the rules, the plan code and the QR generator: `node --test`
+  (Node 18 or newer).
 - The file format is described in the app project's `docs/itinerary_exchange_format.md`.
 - Change the guide data (stages, paths, track points) and the page picks it up when the database file
   changes. Remember to run the app's sync script first, so the website and the app agree.

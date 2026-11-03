@@ -329,6 +329,8 @@ def service_worker(request):
         static('camino/js/search.js'),
         static('camino/js/offline-pack.js'),
         static('camino/js/plan-core.js'),
+        static('camino/js/qr.js'),
+        static('camino/js/plan-share.js'),
         static('camino/js/plan.js'),
         static('camino/css/plan.css'),
         static('camino/chart.umd.min.js'),

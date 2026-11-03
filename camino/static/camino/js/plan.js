@@ -9,6 +9,8 @@
   'use strict';
 
   var Plan = window.CaminoPlan;
+  var Share = window.CaminoShare;   // plan codes and QR codes: the page works without them
+  var QR = window.CaminoQR;
   var root = document.getElementById('plan-root');
   var dataElement = document.getElementById('plan-data');
   if (!Plan || !root || !dataElement) return;
@@ -26,7 +28,7 @@
   var STAY_NAMES = { a: 'Albergue', p: 'Hotel or guesthouse', c: 'Your own choice' };
 
   var storageWorks = true;
-  var ui = { fromPlace: null, stayIndex: -1, insertAt: null, editAt: null, restAt: null, undo: null, far: false, openStop: null };
+  var ui = { fromPlace: null, stayIndex: -1, insertAt: null, editAt: null, restAt: null, undo: null, far: false, openStop: null, shared: null };
   var state = loadState();
 
   function $(id) { return document.getElementById(id); }
@@ -142,6 +144,7 @@
       document.activeElement.getAttribute('data-focus'));
     renderNotice();
     renderUndo();
+    renderShared();
     renderFields();
     renderSummary();
     renderDays();
@@ -162,6 +165,39 @@
     var box = $('plan-notice');
     box.textContent = messages.join(' ');
     box.hidden = !messages.length;
+  }
+
+  // A plan that arrived by QR code or link: shown for the visitor to open or ignore, never opened on its own.
+  function renderShared() {
+    var box = $('plan-shared'), shared = ui.shared;
+    box.hidden = !shared;
+    if (!shared) return;
+    var bad = !!shared.error;
+    $('plan-shared-title').textContent = bad ? 'This plan code cannot be opened' : 'A plan has been shared with you';
+    $('plan-shared-error').textContent = bad ? shared.error : '';
+    $('plan-shared-error').hidden = !bad;
+    $('plan-shared-name').hidden = bad;
+    $('plan-shared-detail').hidden = bad;
+    $('plan-shared-open').hidden = bad;
+    $('plan-shared-keep').textContent = bad ? 'Close' : 'Keep my plan';
+    var replace = $('plan-shared-replace');
+    replace.hidden = true;
+    if (bad) return;
+    var other = shared.state, t = Plan.totals(other, data), p = Plan.progress(other, data);
+    $('plan-shared-name').textContent = other.name;
+    var detail = [];
+    if (!t.days) detail.push('It has no days yet.');
+    else {
+      detail.push(plural(t.days, 'day') + (p.start && p.end ? ', from ' + p.start.name + ' to ' + p.end.name : '') +
+        (other.startDate ? ', starting ' + formatDate(other.startDate) : '') + '.');
+      detail.push(t.stays + ' of ' + plural(t.days, 'night') + ' chosen.');
+    }
+    $('plan-shared-detail').textContent = detail.join(' ');
+    if (state.days.length) {
+      replace.textContent = 'You already have a plan on this device (' + plural(Plan.totals(state, data).days, 'day') + '). ' +
+        'Opening this one replaces it. You can undo that straight afterwards.';
+      replace.hidden = false;
+    }
   }
 
   function renderUndo() {
@@ -513,6 +549,9 @@
       if (bad) problem = cap(Plan.dayRef(bad)) + ' needs attention: ' + bad.invalid;
     }
     $('plan-download').disabled = !!problem;
+    var qrButton = $('plan-qr-open');
+    qrButton.hidden = !(Share && QR);
+    qrButton.disabled = !!problem;          // a code, like the file, waits until every day can be built
     var share = $('plan-share');
     share.hidden = !canShareFiles();
     share.disabled = !!problem;
@@ -598,6 +637,93 @@
         if (error && error.name === 'AbortError') return;
         say('Sharing did not work here. Use Download instead.', true);
       });
+  }
+
+  // ------------------------------------------------------------------ sharing by QR code or link
+
+  var shown = { url: '', image: null };
+
+  function pageUrl() { return location.origin + location.pathname; }
+
+  function qrSay(message, isError) {
+    var box = $('plan-qr-msg');
+    box.textContent = message;
+    box.className = 'plan-send-msg' + (isError ? ' plan-error' : '');
+    box.hidden = !message;
+  }
+
+  // Shows the plan as it is now as a code and a link. A plan too big for a QR code still gets its link.
+  function openQr() {
+    if (!Share || !QR || !state.days.length) return;
+    var error = '', hint = '', code = null;
+    shown = { url: '', image: null };
+    try { code = Share.encode(state, data); } catch (problem) { error = 'This plan cannot be turned into a code.'; }
+    if (code) {
+      shown.url = Share.toUrl(pageUrl(), code.text);
+      shown.image = QR.encode(shown.url, { levels: ['M', 'L'] });
+      if (!shown.image) error = 'This plan is too big for a QR code. You can still copy the link, or send the file.';
+      else if (shown.image.version > 25) hint = 'This code is dense, because the plan has a lot of places typed in by hand. If a phone has trouble reading it, send the link or the file instead.';
+      if (code.notes.length) hint = (hint ? hint + ' ' : '') + code.notes.join(' ');
+    }
+    var image = $('plan-qr-img');
+    if (shown.image) {
+      image.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(QR.toSvg(shown.image));
+      image.alt = 'QR code for the plan ' + state.name;
+    } else {
+      image.removeAttribute('src');
+      image.alt = '';
+    }
+    $('plan-qr-frame').hidden = !shown.image;
+    $('plan-qr-error').textContent = error;
+    $('plan-qr-error').hidden = !error;
+    $('plan-qr-hint').textContent = hint;
+    $('plan-qr-hint').hidden = !hint;
+    $('plan-qr-link').value = shown.url;
+    $('plan-qr-copy').disabled = !shown.url;
+    $('plan-qr-png').disabled = !shown.image;
+    qrSay('', false);
+    var dialog = $('plan-qr-dialog');
+    if (typeof dialog.showModal === 'function') dialog.showModal(); else dialog.setAttribute('open', '');
+  }
+
+  function copyLink() {
+    var field = $('plan-qr-link');
+    function selectIt() { field.focus(); field.select(); qrSay('Select the link and copy it.', false); }
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(shown.url).then(function () { qrSay('Link copied.', false); }, selectIt);
+        return;
+      }
+    } catch (error) { /* fall through */ }
+    selectIt();
+  }
+
+  function saveQrPicture() {
+    if (!shown.image) return;
+    var canvas = document.createElement('canvas');
+    QR.toCanvas(shown.image, canvas, 8, 4);
+    canvas.toBlob(function (blob) {
+      if (!blob) { qrSay('The picture could not be made here.', true); return; }
+      var name = Plan.fileName(state).replace(/\.json$/, '-qr.png');
+      var url = URL.createObjectURL(blob);
+      var link = el('a', { href: url, download: name });
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+      qrSay('Saved ' + name + '.', false);
+    }, 'image/png');
+  }
+
+  // A plan code in the address (a scanned QR code, or a link): decoded and offered, never opened on its own.
+  function readLink() {
+    if (!Share) return false;
+    var code = Share.fromUrl(location.hash);
+    if (code === null) return false;
+    try { history.replaceState(null, '', location.pathname + location.search); } catch (error) { /* it stays in the address bar */ }
+    var result = Share.decode(code, data);
+    ui.shared = result.ok ? { state: result.state } : { error: result.message };
+    return true;
   }
 
   // ------------------------------------------------------------------ the stay chooser
@@ -903,6 +1029,33 @@
     var dialog = $('plan-reset-dialog');
     if (typeof dialog.showModal === 'function') dialog.showModal(); else dialog.setAttribute('open', '');
   });
+  $('plan-qr-open').addEventListener('click', openQr);
+  $('plan-qr-close').addEventListener('click', function () { closeDialog($('plan-qr-dialog')); });
+  $('plan-qr-dialog').addEventListener('click', function (e) { if (e.target === e.currentTarget) closeDialog(e.currentTarget); });
+  $('plan-qr-copy').addEventListener('click', copyLink);
+  $('plan-qr-png').addEventListener('click', saveQrPicture);
+  $('plan-qr-link').addEventListener('focus', function (e) { e.target.select(); });
+
+  $('plan-shared-open').addEventListener('click', function () {
+    var shared = ui.shared;
+    if (!shared || !shared.state) return;
+    var replacing = state.days.length > 0;
+    ui.shared = null;
+    ui.fromPlace = null;
+    ui.insertAt = null;
+    ui.openStop = null;
+    ui.far = false;
+    ui.notice = '';
+    say('', false);
+    update(shared.state, 'plan-name', 'Opened the shared plan.', replacing ? 'Opened the shared plan, in place of yours.' : '');
+  });
+  $('plan-shared-keep').addEventListener('click', function () {
+    ui.shared = null;
+    render('plan-name');
+    announce('Closed.');
+  });
+  window.addEventListener('hashchange', function () { if (readLink()) render('shared-title'); });
+
   $('plan-reset-cancel').addEventListener('click', function () { closeDialog($('plan-reset-dialog')); });
   $('plan-reset-confirm').addEventListener('click', function () {
     closeDialog($('plan-reset-dialog'));
@@ -924,5 +1077,5 @@
   $('plan-pace').min = data.pace.min;
   $('plan-pace').max = data.pace.max;
   root.classList.add('plan-ready');
-  render();
+  render(readLink() ? 'shared-title' : undefined);
 }());

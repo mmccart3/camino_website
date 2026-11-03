@@ -109,7 +109,7 @@ class PwaEndpointTests(SimpleTestCase):
         body = self.client.get('/sw.js').content.decode()
         urls = json.loads(re.search(r'const PRECACHE_URLS = (\[.*?\]);', body, re.S).group(1))
         self.assertIn('/plan/', urls)
-        for name in ('plan-core.js', 'plan.js', 'plan.css'):
+        for name in ('plan-core.js', 'qr.js', 'plan-share.js', 'plan.js', 'plan.css'):
             self.assertTrue(any(u.endswith('/' + name) for u in urls), name)
 
     def test_robots_points_to_sitemap(self):
@@ -177,6 +177,10 @@ class PlannerPageContractTests(SimpleTestCase):
     def test_the_page_loads_the_core_before_the_script(self):
         template = self.read('templates', 'camino', 'plan.html')
         self.assertLess(template.index('plan-core.js'), template.index('camino/js/plan.js'))
+        # the code that makes and reads plan codes is loaded before the page script uses it
+        self.assertLess(template.index('plan-core.js'), template.index('camino/js/plan-share.js'))
+        self.assertLess(template.index('camino/js/qr.js'), template.index('camino/js/plan.js'))
+        self.assertLess(template.index('camino/js/plan-share.js'), template.index('camino/js/plan.js'))
         self.assertIn('id="plan-data" type="application/json"', template)
 
     def test_the_menu_links_to_the_planner(self):

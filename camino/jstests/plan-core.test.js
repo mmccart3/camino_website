@@ -130,7 +130,7 @@ test('the visitor\'s own stage: distance, time, warning and the way the file rec
 
 test('rest and travel days', () => {
   let s = P.addRest(P.newState(data));
-  assert.match(P.layout(s, data).days[0].invalid, /needs a place/);
+  assert.match(P.layout(s, data).days[0].invalid, /where this rest day is/);
   s = P.addRest(plan());
   const rest = P.layout(s, data).days[2];
   assert.strictEqual(rest.end.name, 'Charlie'); assert.strictEqual(rest.metres, 0);
@@ -371,4 +371,106 @@ test('a rest day can be moved to another place; the journey is added in front of
   assert.strictEqual(P.moveRest(s, 1, '  ', data), s);
   assert.strictEqual(P.moveRest(s, 0, 'Charlie', data), s);
   assert.strictEqual(P.moveRest(s, 5, 'Charlie', data), s);
+});
+
+// ---------------------------------------------------------------- a rest day first, references, travel details
+
+test('a rest day can be the first day: it names its own place', () => {
+  let s = P.addRest(P.newState(data));
+  assert.match(P.layout(s, data).days[0].invalid, /where this rest day is/);
+  s = P.setRestPlace(s, 0, 'saint-jean pied de port');            // forgiving match to a guide place
+  let info = P.layout(s, data).days[0];
+  assert.strictEqual(info.invalid, '');
+  assert.deepStrictEqual([info.start.id, info.end.id, info.metres, info.seconds], [1, 1, 0, 0]);
+  s = P.addStage(s, 1);                                             // the walk then starts where the rest was
+  assert.strictEqual(P.layout(s, data).days[1].warning, '');
+  const doc = P.buildFile(s, data, NOW);
+  assert.deepStrictEqual(P.checkFile(doc), []);
+  const d0 = doc.plans[0].days[0];
+  assert.deepStrictEqual([d0.start_id, d0.end_id, d0.metres, JSON.parse(d0.route).isRestDay, JSON.parse(d0.route).paths], [1, 1, 0, true, []]);
+  // a place that is not in the guide is taken at its word, with a negative number
+  s = P.setRestPlace(P.addRest(P.newState(data)), 0, 'Biarritz');
+  info = P.layout(s, data).days[0];
+  assert.ok(info.start.id < 0 && info.start.id === info.end.id);
+  assert.strictEqual(P.buildFile(s, data, NOW).plans[0].days[0].start_name, 'Biarritz');
+});
+
+test('a rest day only names its own place while it is the first day', () => {
+  let s = P.setRestPlace(P.addRest(P.newState(data)), 0, 'Bravo');
+  s = P.addStage(s, 1, 0);                                          // a stage is put in front of it
+  assert.strictEqual(s.days[1].at, undefined);
+  assert.strictEqual(P.layout(s, data).days[1].end.name, 'Bravo');   // rests where the stage finished
+  s = P.setRestPlace(s, 1, 'Charlie');                              // not the first day: nothing happens
+  assert.strictEqual(s.days[1].at, undefined);
+  // moving a day: the rest day that ends up first has no place yet
+  const moved = P.moveDay(s, 1, -1);
+  assert.strictEqual(moved.days[0].t, 'r');
+  assert.match(P.layout(moved, data).days[0].invalid, /where this rest day is/);
+  // saved plans: the place is kept on the first day only
+  const raw = { days: [{ t: 'r', at: 'Bravo' }, { t: 'r', at: 'Charlie' }] };
+  const cleaned = P.clean(raw, data);
+  assert.deepStrictEqual(cleaned.days.map((d) => d.at), ['Bravo', undefined]);
+});
+
+test('a stay keeps a booking reference, notes and a contact; empty ones are left out', () => {
+  let s = P.setStay(plan(), 0, { k: 'a', id: 100, name: 'Albergue Bravo', status: 'Booked', ref: '  AB-1234  ' }, data);
+  assert.strictEqual(s.days[0].stay.ref, 'AB-1234');
+  assert.ok(!('notes' in s.days[0].stay) && !('contact' in s.days[0].stay));
+  s = P.setStayDetails(s, 0, { notes: 'Arrive after 4pm', contact: '+34 600 000 000' });
+  assert.deepStrictEqual([s.days[0].stay.notes, s.days[0].stay.contact], ['Arrive after 4pm', '+34 600 000 000']);
+  s = P.setStayStatus(s, 0, 'Confirmed');                           // changing the status keeps the details
+  assert.strictEqual(s.days[0].stay.ref, 'AB-1234');
+  const stay = JSON.parse(P.buildFile(s, data, NOW).plans[0].days[0].stay);
+  assert.deepStrictEqual([stay.reference, stay.notes, stay.contact, stay.status], ['AB-1234', 'Arrive after 4pm', '+34 600 000 000', 'Confirmed']);
+  s = P.setStayDetails(s, 0, { ref: '', notes: '' });
+  assert.ok(!('ref' in s.days[0].stay) && !('notes' in s.days[0].stay) && s.days[0].stay.contact);
+  s = P.setStay(s, 0, { k: 'p', id: 200, name: 'Hotel Bravo', status: 'Considering' }, data);   // another stay: no old details
+  assert.deepStrictEqual(Object.keys(s.days[0].stay).sort(), ['id', 'k', 'name', 'status']);
+  assert.strictEqual(P.setStayDetails(plan(), 0, { ref: 'x' }).days[0].stay, null);                // no stay, nothing to change
+  assert.strictEqual(P.setStayDetails(s, 0, { ref: 'x'.repeat(100) }).days[0].stay.ref.length, P.MAX_REF);
+});
+
+test('a travel day keeps how it is made, its times, reference and notes', () => {
+  let s = P.setTravel(P.addTravel(plan(), data), 2, { to: 'Madrid', mode: 'train', dep: 9 * 60 + 5, arr: 13 * 60, ref: ' TK-77 ', notes: 'Platform 3' });
+  assert.deepStrictEqual([s.days[2].mode, s.days[2].dep, s.days[2].arr, s.days[2].ref, s.days[2].notes], ['train', 545, 780, 'TK-77', 'Platform 3']);
+  const doc = P.buildFile(s, data, NOW);
+  assert.deepStrictEqual(P.checkFile(doc), []);
+  const route = JSON.parse(doc.plans[0].days[2].route);
+  assert.strictEqual(route.departureMinutes, 545);
+  assert.deepStrictEqual(route.travel, { mode: 'train', arrivalMinutes: 780, reference: 'TK-77', notes: 'Platform 3' });
+  assert.strictEqual(JSON.parse(doc.plans[0].days[0].route).travel, undefined);   // walking days have none
+  // an empty or bad value takes a field away; a plain travel day writes no travel object
+  s = P.setTravel(s, 2, { mode: '', dep: null, arr: 5000, ref: '', notes: '' });
+  assert.deepStrictEqual(Object.keys(s.days[2]).sort(), ['from', 'same', 'stay', 't', 'to']);
+  const plain = JSON.parse(P.buildFile(s, data, NOW).plans[0].days[2].route);
+  assert.deepStrictEqual([plain.departureMinutes, plain.travel], [480, undefined]);
+  // saved plans are cleaned the same way
+  const cleaned = P.clean({ days: [{ t: 't', from: 'A', to: 'B', mode: 'rocket', dep: 'soon', arr: 61, ref: 7, notes: 'n'.repeat(500) }] }, data);
+  assert.deepStrictEqual([cleaned.days[0].mode, cleaned.days[0].dep, cleaned.days[0].arr, cleaned.days[0].ref, cleaned.days[0].notes.length], [undefined, undefined, 61, '7', P.MAX_TRAVEL_NOTES]);
+});
+
+test('the file check refuses travel details the app could not make sense of', () => {
+  const s = P.setTravel(P.addTravel(plan(), data), 2, { to: 'Madrid', mode: 'bus' });
+  const doc = P.buildFile(s, data, NOW);
+  const bad = (change) => {
+    const copy = JSON.parse(JSON.stringify(doc));
+    const route = JSON.parse(copy.plans[0].days[2].route);
+    change(route);
+    copy.plans[0].days[2].route = JSON.stringify(route);
+    return P.checkFile(copy);
+  };
+  assert.deepStrictEqual(bad((r) => { r.travel.mode = 'bus'; }), []);
+  assert.ok(bad((r) => { r.travel.mode = 'rocket'; }).length);
+  assert.ok(bad((r) => { r.travel.arrivalMinutes = 1440; }).length);
+  assert.ok(bad((r) => { r.travel.notes = 5; }).length);
+  assert.ok(bad((r) => { r.travel = 'bus'; }).length);
+});
+
+test('clock times: minutes after midnight and back', () => {
+  assert.strictEqual(P.formatClock(0), '00:00');
+  assert.strictEqual(P.formatClock(545), '09:05');
+  assert.strictEqual(P.formatClock(1439), '23:59');
+  assert.strictEqual(P.formatClock(1440), ''); assert.strictEqual(P.formatClock(-1), ''); assert.strictEqual(P.formatClock(null), '');
+  assert.deepStrictEqual(['9:05', '09:05', '0905', ' 23:59 '].map(P.parseClock), [545, 545, 545, 1439]);
+  assert.deepStrictEqual(['', '24:00', '9:60', '9', 'ab:cd', null].map(P.parseClock), [null, null, null, null, null, null]);
 });

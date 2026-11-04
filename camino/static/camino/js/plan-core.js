@@ -6,10 +6,18 @@
  *   { v: 1, name, startDate: 'YYYY-MM-DD' | '', pace, days: [day, ...] }
  *   day = { t: 's', stage, stay }                 a guidebook stage
  *       | { t: 'c', paths: [path ids], stay }     a walking day of the visitor's own, over these paths
- *       | { t: 'r', stay }                        a rest day where the day before ended
- *       | { t: 't', from, to, stay, same }        travel by other means (flight, bus, taxi); `same` puts it on
- *                                                 the same date as the day before (walk, then bus)
- *   stay = null | { k: 'a' | 'p' | 'c', id, name, status }   albergue, private, or the visitor's own
+ *       | { t: 'r', stay, at? }                   a rest day where the day before ended; the first day of a plan
+ *                                                 has no day before, so it names its own place in `at`
+ *       | { t: 't', from, to, stay, same, mode?, dep?, arr?, ref?, notes? }
+ *                                                 travel by other means (flight, bus, taxi); `same` puts it on
+ *                                                 the same date as the day before (walk, then bus); `mode` is one
+ *                                                 of MODES, `dep` and `arr` are minutes after midnight, `ref` is a
+ *                                                 ticket or booking reference
+ *   stay = null | { k: 'a' | 'p' | 'c', id, name, status, ref?, notes?, contact? }
+ *                                                 albergue, private, or the visitor's own; `ref` is the booking
+ *                                                 reference (it travels in a plan code), `notes` and `contact` go
+ *                                                 in the file only
+ *   Optional fields are left out when empty.
  *
  * buildFile() produces a camino-personal-backup file (version 1, plans only) that the app's
  * "Restore backup" already accepts. docs/itinerary_exchange_format.md in the app project
@@ -28,6 +36,12 @@
   var KIND_NAMES = { a: 'albergue', p: 'private', c: 'custom' };
   var MAX_DAYS = 120;
   var MAX_TEXT = 20000;
+  // How a travel day is made. Order matters: a plan code stores the position (see plan-share.js).
+  var MODES = ['flight', 'train', 'bus', 'taxi', 'ferry', 'other'];
+  var MAX_REF = 40;            // a booking or ticket reference
+  var MAX_TRAVEL_NOTES = 200;  // notes on a travel day (they travel in a plan code)
+  var MAX_STAY_NOTES = 500;    // notes on a stay (file only)
+  var MAX_CONTACT = 100;       // contact for a stay (file only)
 
   // ---------------------------------------------------------------- small helpers
 
@@ -53,6 +67,23 @@
   }
 
   function formatKm(metres) { return (metres / 1000).toFixed(1) + ' km'; }
+
+  // Minutes after midnight (0 to 1439) as "07:30", and back. parseClock accepts "7:30" and "0730";
+  // anything else gives null.
+  function formatClock(minutes) {
+    if (!Number.isInteger(minutes) || minutes < 0 || minutes > 1439) return '';
+    var h = Math.floor(minutes / 60), m = minutes % 60;
+    return (h < 10 ? '0' : '') + h + ':' + (m < 10 ? '0' : '') + m;
+  }
+  function parseClock(value) {
+    var m = /^\s*(\d{1,2}):?(\d{2})\s*$/.exec(String(value == null ? '' : value));
+    if (!m) return null;
+    var h = Number(m[1]), min = Number(m[2]);
+    return h < 24 && min < 60 ? h * 60 + min : null;
+  }
+  function cleanMinutes(value) {
+    return Number.isInteger(value) && value >= 0 && value <= 1439 ? value : null;
+  }
 
   function formatDuration(seconds) {
     var minutes = Math.round(seconds / 60);
@@ -81,7 +112,24 @@
     var name = text(raw.name, 200).trim();
     if (!Number.isInteger(id) || !name) return null;
     var status = STATUSES.indexOf(raw.status) >= 0 ? raw.status : 'Considering';
-    return { k: k, id: id, name: name, status: status };
+    var stay = { k: k, id: id, name: name, status: status };
+    var ref = text(raw.ref, MAX_REF).trim(), notes = text(raw.notes, MAX_STAY_NOTES).trim(), contact = text(raw.contact, MAX_CONTACT).trim();
+    if (ref) stay.ref = ref;
+    if (notes) stay.notes = notes;
+    if (contact) stay.contact = contact;
+    return stay;
+  }
+
+  // The optional parts of a travel day, kept only when they have a value.
+  function travelDetails(raw) {
+    var out = {}, ref = text(raw.ref, MAX_REF).trim(), notes = text(raw.notes, MAX_TRAVEL_NOTES).trim();
+    var dep = cleanMinutes(raw.dep), arr = cleanMinutes(raw.arr);
+    if (MODES.indexOf(raw.mode) >= 0) out.mode = raw.mode;
+    if (dep !== null) out.dep = dep;
+    if (arr !== null) out.arr = arr;
+    if (ref) out.ref = ref;
+    if (notes) out.notes = notes;
+    return out;
   }
 
   // Makes anything read back from storage safe to use. Unknown stages are dropped.
@@ -99,8 +147,15 @@
       if (d.t === 's' && data.stages[String(d.stage)]) state.days.push({ t: 's', stage: Number(d.stage), stay: stay });
       else if (d.t === 'c' && Array.isArray(d.paths) && chainTotals(d.paths.map(Number), data)) {
         state.days.push({ t: 'c', paths: d.paths.map(Number), stay: stay });
-      } else if (d.t === 'r') state.days.push({ t: 'r', stay: stay });
-      else if (d.t === 't') state.days.push({ t: 't', from: text(d.from, 100), to: text(d.to, 100), stay: stay, same: d.same === true && state.days.length > 0 });
+      } else if (d.t === 'r') {
+        var rest = { t: 'r', stay: stay };
+        var at = text(d.at, 100).trim();
+        if (at && state.days.length === 0) rest.at = at;   // only the first day names its own place
+        state.days.push(rest);
+      } else if (d.t === 't') {
+        var travel = { t: 't', from: text(d.from, 100), to: text(d.to, 100), stay: stay, same: d.same === true && state.days.length > 0 };
+        state.days.push(Object.assign(travel, travelDetails(d)));
+      }
     });
     return state;
   }
@@ -425,8 +480,9 @@
           info.warning = 'This day starts at ' + info.start.name + ', but the day before ended at ' + here.name + '.';
         }
       } else if (day.t === 'r') {
-        if (!here) info.invalid = 'A rest day needs a place. Add a stage first.';
-        else { info.start = here; info.end = here; info.metres = 0; info.seconds = 0; }
+        var restAt = here ? here : (String(day.at || '').trim() ? typedPlace(day.at) : null);
+        if (!restAt) info.invalid = 'Say where this rest day is.';
+        else { info.start = restAt; info.end = restAt; info.metres = 0; info.seconds = 0; }
       } else if (day.t === 'c') {
         var total = chainTotals(day.paths, data);
         if (!total) info.invalid = 'This part of the route is no longer in the guide. Remove the day and make it again.';
@@ -549,7 +605,13 @@
 
   // ---------------------------------------------------------------- changing the itinerary (each returns a new state)
 
-  function withDays(state, fn) { var s = clone(state); fn(s.days); return s; }
+  // Only the first day names its own place for a rest day; anywhere else the rest is where the day before ended.
+  function withDays(state, fn) {
+    var s = clone(state);
+    fn(s.days);
+    s.days.forEach(function (d, i) { if (d.t === 'r' && i > 0) delete d.at; });
+    return s;
+  }
 
   function insertDay(state, at, day) {
     if (state.days.length >= MAX_DAYS) return state;
@@ -653,10 +715,34 @@
       if ('from' in patch) d[i].from = text(patch.from, 100);
       if ('to' in patch) d[i].to = text(patch.to, 100);
       if ('same' in patch) d[i].same = !!patch.same && i > 0;
+      // How it is made, and the times, reference and notes. An empty value takes the field away.
+      var detail = travelDetails(Object.assign({}, d[i], patch));
+      ['mode', 'dep', 'arr', 'ref', 'notes'].forEach(function (key) {
+        if (key in detail) d[i][key] = detail[key]; else delete d[i][key];
+      });
+    });
+  }
+  // The place of a rest day that is the first day of the plan (anywhere else it follows the day before).
+  function setRestPlace(state, i, name) {
+    return withDays(state, function (d) {
+      if (!d[i] || d[i].t !== 'r' || i !== 0) return;
+      var place = text(name, 100).trim();
+      if (place) d[i].at = place; else delete d[i].at;
     });
   }
   function setStay(state, i, stay, data) {
     return withDays(state, function (d) { if (d[i]) d[i].stay = stay ? cleanStay(stay, data) : null; });
+  }
+  // The booking reference, notes and contact of the stay on day i. An empty value takes the field away.
+  function setStayDetails(state, i, patch) {
+    return withDays(state, function (d) {
+      if (!d[i] || !d[i].stay) return;
+      var merged = Object.assign({}, d[i].stay, patch);
+      var stay = cleanStay(merged, null);
+      ['ref', 'notes', 'contact'].forEach(function (key) {
+        if (stay && key in stay) d[i].stay[key] = stay[key]; else delete d[i].stay[key];
+      });
+    });
   }
   function setStayStatus(state, i, status) {
     return withDays(state, function (d) {
@@ -688,8 +774,18 @@
       var route = {
         isRestDay: day.t === 'r', id: 'web-' + guide + '-' + (n + 1),
         paths: day.t === 's' ? info.stage.paths : (day.t === 'c' ? day.paths : []), pace: state.pace, date: info.date,
-        departureMinutes: 480, breaks: {}
+        departureMinutes: day.t === 't' && day.dep !== undefined ? day.dep : 480, breaks: {}
       };
+      // What a travel day adds. The app keeps only the fields it knows, so until it reads this it is
+      // set aside on restore; the plan code and the website keep it.
+      if (day.t === 't') {
+        var travel = {};
+        if (day.mode) travel.mode = day.mode;
+        if (day.arr !== undefined) travel.arrivalMinutes = day.arr;
+        if (day.ref) travel.reference = day.ref;
+        if (day.notes) travel.notes = day.notes;
+        if (Object.keys(travel).length) route.travel = travel;
+      }
       var row = {
         ordinal: n, start_id: info.start.id, end_id: info.end.id,
         start_name: info.start.name, end_name: info.end.name,
@@ -701,7 +797,8 @@
         var custom = day.stay.k === 'c';
         stay = {
           id: custom ? CUSTOM_STAY_BASE + stayCount : day.stay.id, kind: KIND_NAMES[day.stay.k],
-          name: day.stay.name, status: day.stay.status, reference: '', notes: '', contact: ''
+          name: day.stay.name, status: day.stay.status,
+          reference: day.stay.ref || '', notes: day.stay.notes || '', contact: day.stay.contact || ''
         };
       }
       row.route = JSON.stringify(route);
@@ -746,11 +843,18 @@
           errors.push(where + 'an unknown place cannot have a route or distance');
         }
         if (route.isRestDay && (route.paths.length || (d.metres != null && d.metres !== 0))) errors.push(where + 'rest day has a route');
+        if (route.travel !== undefined) {
+          var tr = route.travel;
+          if (!tr || typeof tr !== 'object' || Array.isArray(tr) || route.isRestDay || route.paths.length) errors.push(where + 'bad travel details');
+          else if ((tr.mode !== undefined && MODES.indexOf(tr.mode) < 0) || (tr.arrivalMinutes !== undefined && cleanMinutes(tr.arrivalMinutes) === null) ||
+              (tr.reference !== undefined && typeof tr.reference !== 'string') || (tr.notes !== undefined && typeof tr.notes !== 'string')) errors.push(where + 'bad travel details');
+        }
         if (d.stay != null) {
           var stay;
           try { stay = JSON.parse(d.stay); } catch (e) { errors.push(where + 'stay is not JSON text'); return; }
           if (!int(stay.id) || ['albergue', 'private', 'custom'].indexOf(stay.kind) < 0 || STATUSES.indexOf(stay.status) < 0 ||
-              typeof stay.name !== 'string' || typeof stay.reference !== 'string' || typeof stay.notes !== 'string') errors.push(where + 'bad stay');
+              typeof stay.name !== 'string' || typeof stay.reference !== 'string' || typeof stay.notes !== 'string' ||
+              (stay.contact !== undefined && typeof stay.contact !== 'string')) errors.push(where + 'bad stay');
         }
         [d.start_name, d.end_name, route.id].forEach(function (t) { if (t.length > MAX_TEXT) errors.push(where + 'text too long'); });
       });
@@ -764,7 +868,10 @@
   }
 
   return {
-    STATUSES: STATUSES, MAX_DAYS: MAX_DAYS,
+    STATUSES: STATUSES, MAX_DAYS: MAX_DAYS, MODES: MODES, MAX_REF: MAX_REF, MAX_TRAVEL_NOTES: MAX_TRAVEL_NOTES,
+    MAX_STAY_NOTES: MAX_STAY_NOTES, MAX_CONTACT: MAX_CONTACT,
+    formatClock: formatClock, parseClock: parseClock, cleanMinutes: cleanMinutes,
+    setRestPlace: setRestPlace, setStayDetails: setStayDetails,
     newState: newState, clean: clean, layout: layout, dayLabel: dayLabel, dayRef: dayRef, totals: totals,
     stageIds: stageIds, siblings: siblings, staysAt: staysAt, placeIdByName: placeIdByName,
     startFor: startFor, stageEnds: stageEnds, stayCount: stayCount, stageForChain: stageForChain, addRoute: addRoute,

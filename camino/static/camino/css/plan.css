@@ -260,3 +260,15 @@
 .plan-rest-move label span { display: block; margin-bottom: 0.25rem; font-size: 0.85rem; font-weight: 600; }
 .plan-rest-move .plan-hint { margin: 0.5rem 0; }
 .plan-rest-move-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+
+/* A rest day that starts the plan, booking details on a stay, and how a journey is made */
+.plan-rest-at { margin: 0.6rem 0 0; }
+.plan-rest-at label span, .plan-more-grid label span { display: block; margin-bottom: 0.2rem; font-size: 0.8rem; font-weight: 600; }
+.plan-more { flex: 1 1 100%; margin-top: 0.1rem; }
+.plan-more > summary { display: flex; align-items: center; min-height: 44px; cursor: pointer; font-size: 0.9rem; font-weight: 600; color: var(--navy, #1e3a8a); word-break: break-word; }
+.plan-more[open] > summary { margin-bottom: 0.4rem; }
+.plan-more-grid { display: grid; gap: 0.6rem; grid-template-columns: 1fr; }
+@media (min-width: 560px) { .plan-more-grid { grid-template-columns: 1fr 1fr; } .plan-more-wide { grid-column: 1 / -1; } }
+.plan-textarea { min-height: 4.5rem; resize: vertical; }
+.plan-travel-more { margin-top: 0.8rem; padding-top: 0.7rem; border-top: 1px solid var(--border, #e2e8f0); }
+.plan-travel-more .plan-hint { margin-top: 0.5rem; }

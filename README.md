@@ -116,18 +116,27 @@ The place to stay is cleared if the end moves. When a day no longer starts where
 route exists, its warning has a "Start this day from ..." button. The send card says where the plan goes and how
 far short of Santiago it stops. There is no separate "finish" step: the file can be downloaded at any time.
 
-A rest day takes its place from where the day before ended. "Rest somewhere else" on a rest day adds the journey
-in front of it. A travel day can be ticked "Same day as the day before" (walk, then bus): it then shares that
+A rest day takes its place from where the day before ended, except as the first day of a plan, which has no day
+before it and asks where it is (`at` in the plan state; a town on the Camino or any place). "Rest somewhere else"
+on a later rest day adds the journey in front of it. A travel day can be ticked "Same day as the day before" (walk, then bus): it then shares that
 day's date and later days do not move. The pair is one numbered day in parts, "Day 3 – part 1" and
 "Day 3 – part 2" (`dayLabel` and `dayRef` in `plan-core.js`), and "Add a day after" always goes after the last
 part. The app currently flags the shared date as a problem and numbers the journey as its own day; see
 `docs/same_day_travel_brief.md` in the app project.
 
+A stay can carry a booking reference, a contact and notes; a travel day can say how it is made (flight, train, bus,
+taxi, ferry, other), when it leaves and arrives, and carry a ticket reference and notes. The file has them all
+(`stay.reference/contact/notes`; `route.departureMinutes` and `route.travel` for a travel day, which today's app
+drops on restore). A plan code has the stay reference and every travel detail, but not a stay's contact or notes.
+
 A plan can be shared as a QR code or a link ("Share as QR code" on the send card). The code holds the choices
-(stage numbers, routes, places to stay, dates, pace) in a few hundred bytes, never distances or times, and goes in
+(stage numbers, routes, places to stay, dates, pace, and any booking references and travel details) in a few hundred
+bytes, never distances or times, and goes in
 the link's fragment (`/plan/#p=...`), which a browser never sends to the server. Opening such a link shows a card
 ("A plan has been shared with you") and opens nothing until the visitor says so; an existing plan can be put back
-with Undo. A code made for a different edition of the guide, or damaged, is refused with a plain message. The layout
+with Undo. A code made for a different edition of the guide, or damaged, is refused with a plain message. A code is version 1
+unless the plan needs version 2 (a rest day first, a reference, a travel detail), so plain plans still open in an
+app that only reads version 1, which says "newer version" for the rest. The layout
 is `docs/itinerary_qr_code_spec.md` in the app project, with test vectors. `plan-share.js` makes and reads the
 code, `qr.js` draws it (a small QR generator written for the site, because no library could be fetched; checked by
 decoding its output with OpenCV, `python camino/jstests/qr_decode_check.py`).

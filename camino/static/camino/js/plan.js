@@ -28,7 +28,8 @@
   var STAY_NAMES = { a: 'Albergue', p: 'Hotel or guesthouse', c: 'Your own choice' };
 
   var storageWorks = true;
-  var ui = { fromPlace: null, stayIndex: -1, insertAt: null, editAt: null, restAt: null, undo: null, far: false, openStop: null, shared: null };
+  var ui = { fromPlace: null, stayIndex: -1, insertAt: null, editAt: null, restAt: null, undo: null, far: false, openStop: null, shared: null, openMore: {} };
+  var MODE_LABELS = { flight: 'Flight', train: 'Train', bus: 'Bus', taxi: 'Taxi', ferry: 'Ferry', other: 'Other' };
   var state = loadState();
 
   function $(id) { return document.getElementById(id); }
@@ -110,6 +111,7 @@
   // ------------------------------------------------------------------ drawing the page
 
   function update(next, focusKey, message, undoText) {
+    if (next.days.length !== state.days.length) ui.openMore = {};   // the numbers of the days have moved
     ui.undo = undoText ? { state: state, text: undoText } : null;
     ui.editAt = null;
     ui.restAt = null;
@@ -243,7 +245,8 @@
     if (info.type === 's') return info.stage.name;
     if (info.type === 'r') return info.end ? 'Rest day in ' + info.end.name : 'Rest day';
     if (info.type === 'c') return info.start && info.end ? info.start.name + ' to ' + info.end.name : 'Walking day';
-    return 'Travel';
+    var travel = state.days[info.index];
+    return (travel && MODE_LABELS[travel.mode]) || 'Travel';
   }
 
   function fillNotes(container, info) {
@@ -261,6 +264,48 @@
     }
   }
 
+  function staySummary(stay) { return 'Booking reference and notes' + (stay.ref ? ': ' + stay.ref : ''); }
+
+  // The booking reference (it goes in the file, the plan code and the link), and a contact and notes (the file only).
+  function stayDetails(stay, i, name) {
+    var key = 's' + i;
+    return el('details', { 'class': 'plan-more plan-stay-more', 'data-more': key, open: ui.openMore[key] ? true : null }, [
+      el('summary', { text: staySummary(stay) }),
+      el('div', { 'class': 'plan-more-grid' }, [
+        el('label', {}, [el('span', { text: 'Booking reference' }), el('input', { type: 'text', 'class': 'plan-input', 'data-act': 'sref',
+          'data-focus': 'day-' + i + '-sref', maxlength: String(Plan.MAX_REF), autocomplete: 'off', value: stay.ref || '',
+          'aria-label': 'Booking reference for ' + name })]),
+        el('label', {}, [el('span', { text: 'Contact (phone or email)' }), el('input', { type: 'text', 'class': 'plan-input', 'data-act': 'scontact',
+          maxlength: String(Plan.MAX_CONTACT), autocomplete: 'off', value: stay.contact || '', 'aria-label': 'Contact for the stay on ' + name })]),
+        el('label', { 'class': 'plan-more-wide' }, [el('span', { text: 'Notes' }), el('textarea', { 'class': 'plan-input plan-textarea', 'data-act': 'snotes',
+          rows: '2', maxlength: String(Plan.MAX_STAY_NOTES), 'aria-label': 'Notes for the stay on ' + name }, [stay.notes || ''])])
+      ]),
+      el('p', { 'class': 'plan-hint', text: 'The reference goes in the file and in the plan code and link, so anyone who has those can read it. The contact and notes go in the file only.' })
+    ]);
+  }
+
+  // How a journey is made, when it leaves and arrives, and its reference and notes. All of it goes in the plan code.
+  function travelMore(day, i, name) {
+    var mode = el('select', { 'class': 'plan-input', 'data-act': 'tmode', 'data-focus': 'day-' + i + '-tmode', 'aria-label': 'How you travel on ' + name });
+    mode.appendChild(el('option', { value: '', text: 'Not said' }));
+    Plan.MODES.forEach(function (m) { mode.appendChild(el('option', { value: m, selected: day.mode === m, text: MODE_LABELS[m] })); });
+    function time(act, value, label) {
+      return el('input', { type: 'time', 'class': 'plan-input', 'data-act': act, value: Plan.formatClock(value), 'aria-label': label + ' on ' + name });
+    }
+    return el('div', { 'class': 'plan-travel-more' }, [
+      el('div', { 'class': 'plan-more-grid' }, [
+        el('label', {}, [el('span', { text: 'How' }), mode]),
+        el('label', {}, [el('span', { text: 'Leaves' }), time('tdep', day.dep, 'Departure time')]),
+        el('label', {}, [el('span', { text: 'Arrives' }), time('tarr', day.arr, 'Arrival time')]),
+        el('label', {}, [el('span', { text: 'Ticket or booking reference' }), el('input', { type: 'text', 'class': 'plan-input', 'data-act': 'tref',
+          maxlength: String(Plan.MAX_REF), autocomplete: 'off', value: day.ref || '', 'aria-label': 'Ticket reference for ' + name })]),
+        el('label', { 'class': 'plan-more-wide' }, [el('span', { text: 'Notes' }), el('textarea', { 'class': 'plan-input plan-textarea', 'data-act': 'tnotes',
+          rows: '2', maxlength: String(Plan.MAX_TRAVEL_NOTES), 'aria-label': 'Notes for ' + name }, [day.notes || ''])])
+      ]),
+      el('p', { 'class': 'plan-hint', text: 'These go in the plan code and the file. The phone app does not show them yet.' })
+    ]);
+  }
+
   function fillStay(container, info, day, i) {
     var name = Plan.dayRef(info);
     container.innerHTML = '';
@@ -276,6 +321,7 @@
       container.appendChild(status);
       container.appendChild(button('Change', 'stay', { 'data-focus': 'day-' + i + '-stay', 'aria-label': 'Change where to stay on ' + name }));
       container.appendChild(button('Remove', 'stay-clear', { 'aria-label': 'Remove the stay on ' + name }));
+      container.appendChild(stayDetails(day.stay, i, name));
     } else {
       container.appendChild(button('Choose where to stay in ' + info.end.name, 'stay', { 'data-focus': 'day-' + i + '-stay', 'class': 'plan-btn plan-btn-quiet' }));
     }
@@ -317,6 +363,14 @@
           el('span', { text: 'Same day as the day before (for example a bus after the walk)' })
         ]));
       }
+      body.push(travelMore(day, i, name));
+    } else if (info.type === 'r' && i === 0) {
+      body.push(el('div', { 'class': 'plan-rest-at' }, [
+        el('label', {}, [el('span', { text: 'Where will you rest?' }), el('input', { type: 'text', 'class': 'plan-input', list: 'plan-places',
+          value: day.at || '', autocomplete: 'off', placeholder: 'For example Saint Jean Pied de Port', 'data-act': 'restat',
+          'data-focus': 'day-0-restat', maxlength: '100' })]),
+        el('p', { 'class': 'plan-day-hint', text: 'Nothing comes before the first day, so say where it is. Start typing a town on the Camino to pick it from the list, or type any place.' })
+      ]));
     }
 
     var notes = el('div', { 'class': 'plan-day-notes' });
@@ -372,7 +426,7 @@
     if (walking && info.start && info.end && !info.invalid) {
       actions.appendChild(button('Change where it ends', 'reend', { 'data-focus': 'day-' + i + '-reend', 'aria-label': 'Change where ' + name + ' ends' }));
     }
-    if (info.type === 'r' && info.end && !info.invalid) {
+    if (info.type === 'r' && info.end && !info.invalid && i > 0) {
       actions.appendChild(button('Rest somewhere else', 'restmove', { 'data-focus': 'day-' + i + '-restmove', 'aria-label': 'Rest somewhere else on ' + name }));
     }
     actions.appendChild(button('Move up', 'up', { 'data-focus': 'day-' + i + '-up', disabled: i === 0, 'aria-label': 'Move ' + name + ' earlier' }));
@@ -479,7 +533,7 @@
     } else if (!start.fixed && !start.previous) {
       lead = position === 0 && count
         ? 'This day will go at the start of your plan.'
-        : 'Choose where your walk begins, then where you stop on this first day. If you arrive by plane or train first, add a travel day instead.';
+        : 'Choose where your walk begins, then where you stop on this first day. If you arrive by plane or train first, add a travel day instead; to begin with a rest day, add one below.';
     } else if (!start.fixed) {
       lead = 'The day before ends at ' + start.previous.name + ', which is not on the route. Choose where this day starts, or add a travel day to get there.';
     }
@@ -527,7 +581,6 @@
       empty.hidden = !!stops.length;
       $('plan-stops-more').hidden = ui.far || all.length === stops.length;
     }
-    $('plan-add-rest').disabled = position === 0;
     $('plan-add-travel-same').disabled = position === 0;
 
     // Any stage in the guide
@@ -559,6 +612,8 @@
     msg.textContent = problem;
     msg.hidden = !problem;
     msg.className = state.days.length ? 'plan-error' : 'plan-hint-box';
+    var hasPrivate = state.days.some(function (d) { return (d.stay && d.stay.ref) || d.ref || d.notes; });
+    $('plan-send-private').hidden = !hasPrivate;
     var stays = t.stays;
     $('plan-send-count').textContent = state.days.length
       ? plural(t.days, 'day') + ', ' + plural(stays, 'stay') + ' chosen.'
@@ -662,7 +717,7 @@
       shown.url = Share.toUrl(pageUrl(), code.text);
       shown.image = QR.encode(shown.url, { levels: ['M', 'L'] });
       if (!shown.image) error = 'This plan is too big for a QR code. You can still copy the link, or send the file.';
-      else if (shown.image.version > 25) hint = 'This code is dense, because the plan has a lot of places typed in by hand. If a phone has trouble reading it, send the link or the file instead.';
+      else if (shown.image.version > 25) hint = 'This code is dense, because the plan carries a lot of text (places typed in by hand, booking references or notes). If a phone has trouble reading it, send the link or the file instead.';
       if (code.notes.length) hint = (hint ? hint + ' ' : '') + code.notes.join(' ');
     }
     var image = $('plan-qr-img');
@@ -776,6 +831,10 @@
     var i = ui.stayIndex;
     closeDialog($('plan-stay-dialog'));
     if (i < 0) return;
+    var old = state.days[i].stay;
+    if (old && old.k === stay.k && old.id === stay.id && old.name === stay.name) {   // the same place again: its details stay
+      ['ref', 'notes', 'contact'].forEach(function (key) { if (old[key]) stay[key] = old[key]; });
+    }
     update(Plan.setStay(state, i, stay, data), 'day-' + i + '-stay', 'Stay chosen for ' + ref(i) + '.');
   }
 
@@ -891,8 +950,16 @@
   });
 
   $('plan-add-rest').addEventListener('click', function () {
-    var at = insertPoint();
-    added(Plan.addRest(state, at), at, 'Rest day added');
+    var at = insertPoint(), position = at === null ? state.days.length : at, next = Plan.addRest(state, at);
+    if (position === 0) {               // the first day has no day before it, so it asks where it is
+      ui.fromPlace = null;
+      ui.insertAt = null;
+      ui.openStop = null;
+      ui.far = false;
+      update(next, 'day-0-restat', 'Rest day added as day 1. Say where you will rest.');
+      return;
+    }
+    added(next, at, 'Rest day added');
   });
   function addJourney(same) {
     var at = insertPoint(), next = Plan.addTravel(state, data, at, same), i = at === null ? next.days.length - 1 : at;
@@ -923,6 +990,7 @@
     if (!target) return;
     var i = dayIndex(target), act = target.getAttribute('data-act');
     if (i < 0) return;
+    if (act === 'up' || act === 'down') ui.openMore = {};
     if (act === 'up') update(Plan.moveDay(state, i, -1), i > 1 ? 'day-' + (i - 1) + '-up' : 'day-' + (i - 1) + '-down', 'Day moved earlier.');
     else if (act === 'down') update(Plan.moveDay(state, i, 1), i + 1 < state.days.length - 1 ? 'day-' + (i + 1) + '-down' : 'day-' + (i + 1) + '-up', 'Day moved later.');
     else if (act === 'reend') {
@@ -1004,7 +1072,44 @@
     }
     else if (act === 'from') edit(Plan.setTravel(state, i, { from: target.value }), i);
     else if (act === 'to') edit(Plan.setTravel(state, i, { to: target.value }), i);
+    else if (act === 'restat') edit(Plan.setRestPlace(state, i, target.value), i);
+    else if (act === 'sref' || act === 'scontact' || act === 'snotes') {
+      // nothing else on the page depends on these, so the cards are left alone and the field keeps its focus
+      var patch = {}, field = act === 'sref' ? 'ref' : (act === 'scontact' ? 'contact' : 'notes');
+      patch[field] = target.value;
+      state = Plan.setStayDetails(state, i, patch);
+      saveState();
+      var kept = state.days[i].stay;
+      if (kept) target.value = kept[field] || '';
+      var summary = target.closest('details') && target.closest('details').querySelector('summary');
+      if (summary && kept) summary.textContent = staySummary(kept);
+      renderSend();
+    } else if (act === 'tmode' || act === 'tdep' || act === 'tarr' || act === 'tref' || act === 'tnotes') {
+      var change = {}, minutes = act === 'tdep' || act === 'tarr' ? Plan.parseClock(target.value) : null;
+      if (act === 'tmode') change.mode = target.value;
+      else if (act === 'tdep') change.dep = minutes;
+      else if (act === 'tarr') change.arr = minutes;
+      else if (act === 'tref') change.ref = target.value;
+      else change.notes = target.value;
+      state = Plan.setTravel(state, i, change);
+      saveState();
+      var now = state.days[i];
+      if (act === 'tdep') target.value = Plan.formatClock(now.dep);
+      else if (act === 'tarr') target.value = Plan.formatClock(now.arr);
+      else if (act === 'tref') target.value = now.ref || '';
+      else if (act === 'tnotes') target.value = now.notes || '';
+      var heading = target.closest('.plan-day').querySelector('.plan-day-title');
+      heading.textContent = dayTitle(Plan.layout(state, data).days[i]);
+      renderSend();
+    }
   });
+
+  // Which detail panels are open, kept across redraws.
+  $('plan-days').addEventListener('toggle', function (e) {
+    var box = e.target, key = box && box.getAttribute && box.getAttribute('data-more');
+    if (!key) return;
+    if (box.open) ui.openMore[key] = true; else delete ui.openMore[key];
+  }, true);
 
   $('plan-stay-search').addEventListener('input', renderStayList);
   $('plan-stay-list').addEventListener('click', function (e) {

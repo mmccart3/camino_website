@@ -6,14 +6,19 @@
  * as the file does. So it is small enough for a QR code. The layout is written up in the app project,
  * docs/itinerary_qr_code_spec.md, with test vectors; keep the two in step.
  *
- *   byte 0       format version, 1
+ *   byte 0       format version: 1, or 2 when the plan needs what version 2 adds (see below)
  *   bytes 1-4    the guide: the first 8 hex characters of the guide fingerprint
  *   byte 5       pace x 10
  *   varint       first day: 0 for none, else days since 2000-01-01, plus 1
  *   varint+utf8  plan name
  *   varint       number of days
  *   each day     a flags byte, then what that kind of day needs (see writeDay)
+ *   version 2:   an extras section, one entry for each day that has more to say (see writeExtras)
  *   2 bytes      CRC-16/CCITT-FALSE of everything before it, high byte first
+ *
+ * Version 2 adds to version 1, so a plan that needs nothing new is still written as version 1: a rest day
+ * as the first day of the plan (it carries its own place), the booking reference of a stay, and the way,
+ * times, reference and notes of a travel day.
  *
  * It runs in the browser (window.CaminoShare) and in Node tests.
  */
@@ -24,7 +29,7 @@
 })(typeof self !== 'undefined' ? self : this, function (Plan) {
   'use strict';
 
-  var VERSION = 1;
+  var VERSION = 2;                         // the newest version this file reads and writes
   var STATUSES = Plan.STATUSES;
   var EPOCH = '2000-01-01';
   var DAY_TYPES = { s: 0, c: 1, r: 2, t: 3 };
@@ -33,6 +38,8 @@
   var KIND_LETTERS = ['a', 'p', 'c'];
   // Bounds on what is read, so that a damaged or hostile code cannot make the page do much work.
   var MAX_NAME_BYTES = 320, MAX_PLACE_BYTES = 400, MAX_STAY_BYTES = 800, MAX_PATHS = 200, MAX_DAYS = Plan.MAX_DAYS;
+  var MAX_REF_BYTES = Plan.MAX_REF * 4, MAX_NOTES_BYTES = Plan.MAX_TRAVEL_NOTES * 4;   // a character is up to 4 bytes
+  var MODES = Plan.MODES;
 
   var MESSAGES = {
     damaged: 'This plan code looks cut off or damaged. Ask for the QR code or link again.',
@@ -133,9 +140,10 @@
   //          bit 3 journey on the same date as the day before, bits 4-5 kind of stay (0 albergue, 1 private,
   //          2 own), bits 6-7 status (0 Considering, 1 Requested, 2 Booked, 3 Confirmed)
   //   stage: varint stage number          own route: varint count, then each path number
-  //   rest day: nothing                   journey: the place it starts at, the place it ends at
+  //   rest day: nothing, except in version 2 as the first day of the plan: its place
+  //   journey: the place it starts at, the place it ends at
   //   stay: guide albergue or private: varint accommodation number; own: varint length, utf-8 name
-  function writeDay(w, day, index, data) {
+  function writeDay(w, day, index, data, v2) {
     var stay = day.stay, kind = 2, name = '';
     if (stay) {
       kind = STAY_KINDS[stay.k];
@@ -149,10 +157,51 @@
     if (day.t === 's') w.varint(day.stage);
     else if (day.t === 'c') { w.varint(day.paths.length); day.paths.forEach(function (p) { w.varint(p); }); }
     else if (day.t === 't') { writePlace(w, day.from, data); writePlace(w, day.to, data); }
+    else if (day.t === 'r' && index === 0 && v2) {
+      if (!String(day.at || '').trim()) throw new Error('a rest day at the start needs a place');
+      writePlace(w, day.at, data);
+    }
     if (stay) {
       if (kind === 2) w.text(name);
       else w.varint(stay.id);
     }
+  }
+
+  // The days with more to say, in order: [index, flags]. Flags: bit 0 the stay's booking reference,
+  // bits 1-5 (travel days only) how it is made, departure, arrival, reference, notes.
+  function extrasOf(state) {
+    var out = [];
+    state.days.forEach(function (day, index) {
+      var flags = 0;
+      if (day.stay && day.stay.ref) flags |= 1;
+      if (day.t === 't') {
+        if (day.mode) flags |= 2;
+        if (day.dep !== undefined) flags |= 4;
+        if (day.arr !== undefined) flags |= 8;
+        if (day.ref) flags |= 16;
+        if (day.notes) flags |= 32;
+      }
+      if (flags) out.push([index, flags]);
+    });
+    return out;
+  }
+
+  // Version 2 only: a count, then for each day with extras: its position (varint), a flags byte, and in
+  // this order what the flags name: stay reference (text), way (1 + position in MODES), departure and
+  // arrival (varint, minutes after midnight), travel reference (text), travel notes (text).
+  function writeExtras(w, state, entries) {
+    w.varint(entries.length);
+    entries.forEach(function (entry) {
+      var day = state.days[entry[0]], flags = entry[1];
+      w.varint(entry[0]);
+      w.byte(flags);
+      if (flags & 1) w.text(day.stay.ref);
+      if (flags & 2) w.byte(MODES.indexOf(day.mode) + 1);
+      if (flags & 4) w.varint(day.dep);
+      if (flags & 8) w.varint(day.arr);
+      if (flags & 16) w.text(day.ref);
+      if (flags & 32) w.text(day.notes);
+    });
   }
 
   function daysSinceEpoch(iso) {
@@ -164,7 +213,8 @@
     var w = new Writer(), notes = [];
     var guide = String(data.guide || '');
     if (!/^[0-9a-f]{8,}/.test(guide)) throw new Error('the guide data has no fingerprint');
-    w.byte(VERSION);
+    var extras = extrasOf(state), v2 = extras.length > 0 || (state.days.length > 0 && state.days[0].t === 'r');
+    w.byte(v2 ? 2 : 1);
     for (var i = 0; i < 4; i++) w.byte(parseInt(guide.substr(i * 2, 2), 16));
     w.byte(Math.min(255, Math.max(0, Math.round(state.pace * 10))));
     var date = 0;
@@ -176,11 +226,12 @@
     w.varint(date);
     w.text(String(state.name || ''));
     w.varint(state.days.length);
-    state.days.forEach(function (day, index) { writeDay(w, day, index, data); });
+    state.days.forEach(function (day, index) { writeDay(w, day, index, data, v2); });
+    if (v2) writeExtras(w, state, extras);
     var crc = crc16(w.bytes);
     w.byte(crc >> 8);
     w.byte(crc);
-    return { bytes: w.bytes, text: toBase64Url(w.bytes), notes: notes };
+    return { bytes: w.bytes, text: toBase64Url(w.bytes), notes: notes, version: v2 ? 2 : 1 };
   }
 
   // ---------------------------------------------------------------- reading
@@ -225,7 +276,7 @@
 
   function Unknown() { this.unknown = true; }
 
-  function readDay(r, data) {
+  function readDay(r, data, index, version) {
     var flags = r.byte(), type = TYPE_LETTERS[flags & 3], day, i;
     if (type === 's') {
       var stage = r.varint();
@@ -239,6 +290,10 @@
       day = { t: 'c', paths: paths, stay: null };
     } else if (type === 'r') {
       day = { t: 'r', stay: null };
+      if (version >= 2 && index === 0) {     // the first day has no day before to say where it is
+        day.at = readPlace(r, data).trim();
+        if (!day.at) throw new Bad();
+      }
     } else {
       day = { t: 't', from: readPlace(r, data), to: readPlace(r, data), stay: null, same: (flags & 8) !== 0 };
     }
@@ -259,12 +314,52 @@
     return day;
   }
 
+  // Text that may not be empty and may not be longer than `chars` characters.
+  function readLimited(r, byteLimit, chars) {
+    var s = r.text(byteLimit).trim();
+    if (!s || s.length > chars) throw new Bad();
+    return s;
+  }
+
+  function readMinutes(r) {
+    var m = r.varint();
+    if (m > 1439) throw new Bad();
+    return m;
+  }
+
+  // The extras section (see writeExtras), put onto the days already read.
+  function readExtras(r, days) {
+    var count = r.varint(), last = -1;
+    if (count > days.length) throw new Bad();
+    for (var n = 0; n < count; n++) {
+      var index = r.varint(), flags = r.byte();
+      if (index <= last || index >= days.length || flags === 0 || (flags & 0xC0)) throw new Bad();
+      last = index;
+      var day = days[index];
+      if (flags & 1) {
+        if (!day.stay) throw new Bad();
+        day.stay.ref = readLimited(r, MAX_REF_BYTES, Plan.MAX_REF);
+      }
+      if ((flags & 0x3E) && day.t !== 't') throw new Bad();
+      if (flags & 2) {
+        var mode = r.byte();
+        if (mode < 1 || mode > MODES.length) throw new Bad();
+        day.mode = MODES[mode - 1];
+      }
+      if (flags & 4) day.dep = readMinutes(r);
+      if (flags & 8) day.arr = readMinutes(r);
+      if (flags & 16) day.ref = readLimited(r, MAX_REF_BYTES, Plan.MAX_REF);
+      if (flags & 32) day.notes = readLimited(r, MAX_NOTES_BYTES, Plan.MAX_TRAVEL_NOTES);
+    }
+  }
+
   // Reads a plan code. Returns { ok: true, state } (a state already passed through the planner's own
   // clean-up), or { ok: false, reason: 'damaged' | 'version' | 'guide' | 'unknown', message }.
   function decode(text, data) {
     var bytes = fromBase64Url(text);
     if (!bytes || bytes.length < 10) return failure('damaged');
-    if (bytes[0] !== VERSION) return failure(bytes[0] > VERSION ? 'version' : 'damaged');
+    var version = bytes[0];
+    if (version < 1 || version > VERSION) return failure(version > VERSION ? 'version' : 'damaged');
     var body = bytes.slice(0, bytes.length - 2), crc = (bytes[bytes.length - 2] << 8) | bytes[bytes.length - 1];
     if (crc16(body) !== crc) return failure('damaged');
     var guide = String(data.guide || '');
@@ -277,7 +372,8 @@
       var pace = r.byte() / 10, date = r.varint(), name = r.text(MAX_NAME_BYTES), count = r.varint();
       if (count > MAX_DAYS) throw new Bad();
       var days = [];
-      for (var k = 0; k < count; k++) days.push(readDay(r, data));
+      for (var k = 0; k < count; k++) days.push(readDay(r, data, k, version));
+      if (version >= 2) readExtras(r, days);
       if (r.pos !== r.end) throw new Bad();
       var startDate = '';
       if (date > 0) {
@@ -287,7 +383,10 @@
       var state = Plan.clean({ v: 1, name: name, startDate: startDate, pace: pace, days: days }, data);
       // clean() quietly drops what it cannot use; a code that loses anything is refused instead
       if (state.days.length !== days.length) throw new Unknown();
-      for (var d = 0; d < days.length; d++) if (!!state.days[d].stay !== !!days[d].stay) throw new Unknown();
+      for (var d = 0; d < days.length; d++) {
+        if (!!state.days[d].stay !== !!days[d].stay) throw new Unknown();
+        if (!sameExtras(state.days[d], days[d])) throw new Unknown();
+      }
       if (date > 0 && !state.startDate) throw new Bad();
       return { ok: true, state: state };
     } catch (e) {
@@ -295,6 +394,14 @@
       if (e && e.bad) return failure('damaged');
       throw e;
     }
+  }
+
+  // True when clean() kept everything version 2 carries: the place of a first rest day, a stay's reference,
+  // and a travel day's way, times, reference and notes.
+  function sameExtras(a, b) {
+    var keys = ['at', 'mode', 'dep', 'arr', 'ref', 'notes'], i;
+    for (i = 0; i < keys.length; i++) if (a[keys[i]] !== b[keys[i]]) return false;
+    return (a.stay ? a.stay.ref : undefined) === (b.stay ? b.stay.ref : undefined);
   }
 
   // ---------------------------------------------------------------- links

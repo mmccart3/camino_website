@@ -714,3 +714,55 @@ test('dates that do not follow on one day after another are straightened, and th
   assert.strictEqual(one.state.pace, data.pace.default);
   assert.ok(one.notes.some(n => /pace/.test(n)));
 });
+
+// ---------------------------------------------------------------- "my plan is complete"
+
+test('a plan can be marked complete only when it has days, and the mark can be taken off', () => {
+  const empty = P.newState(data);
+  assert.strictEqual('done' in P.setDone(empty, true), false);
+  const s = P.addStage(P.newState(data), 1);
+  const done = P.setDone(s, true);
+  assert.strictEqual(done.done, true);
+  assert.strictEqual('done' in s, false, 'the plan it was made from is not changed');
+  assert.strictEqual('done' in P.setDone(done, false), false);
+});
+
+test('the complete mark survives being saved and read back, but only for a plan with days', () => {
+  const done = P.setDone(P.addStage(P.newState(data), 1), true);
+  const back = P.clean(JSON.parse(JSON.stringify(done)), data);
+  assert.strictEqual(back.done, true);
+  assert.strictEqual('done' in P.clean({ v: 1, name: 'x', days: [], done: true }, data), false);
+  assert.strictEqual('done' in P.clean({ v: 1, name: 'x', days: [{ t: 'r' }], done: 'yes' }, data), false, 'only true counts');
+  assert.strictEqual('done' in P.clean(JSON.parse(JSON.stringify(P.addStage(P.newState(data), 1))), data), false);
+});
+
+test('a day added at the end reopens a complete plan; a day put in the middle does not', () => {
+  let s = P.addStage(P.addStage(P.newState(data), 1), 3);
+  const done = P.setDone(s, true);
+  for (const next of [P.addRest(done), P.addRest(done, 2), P.addStage(done, 3, null), P.addTravel(done, data, null, false), P.addTravel(done, data, 2, true)]) {
+    assert.strictEqual('done' in next, false, 'added at the end');
+  }
+  for (const next of [P.addRest(done, 1), P.addRest(done, 0), P.addStage(done, 2, 1)]) {
+    assert.strictEqual(next.done, true, 'added in the middle');
+    assert.strictEqual(next.days.length, 3);
+  }
+});
+
+test('changing a complete plan keeps it complete, and removing its last day clears the mark', () => {
+  const done = P.setDone(P.addRest(P.addStage(P.newState(data), 1)), true);
+  assert.strictEqual(P.moveDay(done, 0, 1).done, true);
+  assert.strictEqual(P.removeDay(done, 1).done, true);
+  assert.strictEqual(P.setMeta(done, { name: 'Renamed' }, data).done, true);
+  const one = P.setDone(P.addStage(P.newState(data), 1), true);
+  assert.strictEqual('done' in P.removeDay(one, 0), false);
+  assert.strictEqual(P.removeDay(one, 0).days.length, 0);
+});
+
+test('the mark is not part of the plan: the file and the plan code are the same with it or without', () => {
+  const S = require('../static/camino/js/plan-share.js');
+  const s = P.addStage(P.addStage(P.newState(data), 1), 3);
+  const done = P.setDone(s, true);
+  assert.deepStrictEqual(P.buildFile(done, data, NOW), P.buildFile(s, data, NOW));
+  assert.strictEqual(S.encode(done, data).text, S.encode(s, data).text);
+  assert.deepStrictEqual(P.layout(done, data), P.layout(s, data));
+});

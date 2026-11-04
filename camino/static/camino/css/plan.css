@@ -304,6 +304,10 @@
 .plan-btn-small { min-height: 36px; padding: 0.2rem 0.7rem; font-size: 0.85rem; }
 .plan-warning .plan-btn { margin-left: 0.4rem; vertical-align: middle; }
 .plan-edit-row { margin: 0.5rem 0 0.75rem; }
+.plan-finish-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.75rem; margin: 0.6rem 0 0.2rem; }
+.plan-finish-row .plan-hint { margin: 0; flex: 1 1 14rem; }
+.plan-done { border-left: 4px solid #16a34a; }
+.plan-done h3 { margin-top: 0; }
 .plan-send-route { margin: 0.4rem 0 0.6rem; font-weight: 600; color: var(--navy, #1e3a8a); }
 .plan-send-done { padding: 0.5rem 0.75rem; border-radius: 6px; background: #dcfce7; color: #14532d; }
 

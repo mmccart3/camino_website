@@ -62,9 +62,21 @@
 
   <ol id="plan-days" class="plan-days" aria-label="Your days" hidden></ol>
 
-  <section class="plan-card plan-add" aria-labelledby="plan-add-title">
-    <h3 id="plan-add-title" tabindex="-1">Day 1</h3>
+  <section class="plan-card plan-done" id="plan-done" aria-labelledby="plan-done-title" hidden>
+    <h3 id="plan-done-title" tabindex="-1" data-focus="done-title">Your plan is complete</h3>
+    <p class="plan-hint" id="plan-done-text"></p>
+    <div class="plan-send-actions">
+      <button type="button" class="plan-btn" id="plan-reopen" data-focus="reopen">Add another day</button>
+    </div>
+  </section>
+
+  <section class="plan-card plan-add" id="plan-add-card" aria-labelledby="plan-add-title">
+    <h3 id="plan-add-title" tabindex="-1" data-focus="add-title">Day 1</h3>
     <p class="plan-hint" id="plan-add-lead" hidden></p>
+    <p class="plan-finish-row" id="plan-finish-row" hidden>
+      <button type="button" class="plan-btn" id="plan-finish" data-focus="finish">My plan is complete</button>
+      <span class="plan-hint" id="plan-finish-hint">Finished? This puts this section away until you add another day.</span>
+    </p>
     <p class="plan-edit-row" id="plan-edit-row" hidden><button type="button" class="plan-btn" id="plan-edit-cancel">Cancel the change</button></p>
     <div class="plan-field plan-where" id="plan-add-where-row" hidden>
       <label for="plan-add-where">Where should the new day go?</label>

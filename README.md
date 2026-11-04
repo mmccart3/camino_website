@@ -179,6 +179,14 @@ references, contacts and notes (off unless ticked, because paper gets seen), and
 climb, where to stay) or a short line. The choices are remembered in this browser (`camino-plan-print-v1`). The
 column heads repeat on each page and a day is never split across two.
 
+The card at the foot of the plan always offers the next day ("Day 10"), which reads oddly once a plan is finished. "My
+plan is complete" puts that card away and shows "Your plan is complete" with an "Add another day" button in its place.
+The mark is `done: true` on the plan state (`Plan.setDone`; `clean` keeps it only for a plan with days), so it is saved
+with the working plan and with saved copies. It is not in the file or the plan code, which carry the plan and nothing
+more; a plan opened from a file or a link is shown as complete, since it was made elsewhere. A day added at the end
+(`insertDay`) takes the mark off; a day put in the middle, or any other change, leaves it. The add card comes back by
+itself while a day is being put in the middle or changed (`renderDone` in `plan.js`).
+
 A plan can be shared as a QR code or a link ("Share as QR code" on the send card). The code holds the choices
 (stage numbers, routes, places to stay, dates, pace, and any booking references and travel details) in a few hundred
 bytes, never distances or times, and goes in

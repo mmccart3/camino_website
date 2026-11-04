@@ -159,6 +159,7 @@
         state.days.push(Object.assign(travel, travelDetails(d)));
       }
     });
+    if (raw.done === true && state.days.length) state.done = true;   // "my plan is complete": only a plan with days can be
     return state;
   }
 
@@ -709,10 +710,13 @@
 
   function insertDay(state, at, day) {
     if (state.days.length >= MAX_DAYS) return state;
-    return withDays(state, function (d) {
+    var atEnd = at === undefined || at === null || at >= state.days.length;
+    var next = withDays(state, function (d) {
       var i = (at === undefined || at === null || at > d.length) ? d.length : Math.max(0, at);
       d.splice(i, 0, day);
     });
+    if (atEnd) delete next.done;   // a day added at the end means the plan was not complete after all; one put in the middle leaves it so
+    return next;
   }
   // The three adders take an optional `at`: the position the new day should take (default: the end).
   function addStage(state, stageId, at) { return insertDay(state, at, { t: 's', stage: stageId, stay: null }); }
@@ -794,7 +798,11 @@
     return next;
   }
 
-  function removeDay(state, i) { return withDays(state, function (d) { d.splice(i, 1); }); }
+  function removeDay(state, i) {
+    var next = withDays(state, function (d) { d.splice(i, 1); });
+    if (!next.days.length) delete next.done;
+    return next;
+  }
   function moveDay(state, i, by) {
     var j = i + by;
     if (j < 0 || j >= state.days.length) return state;
@@ -842,6 +850,13 @@
     return withDays(state, function (d) {
       if (d[i] && d[i].stay && STATUSES.indexOf(status) >= 0) d[i].stay.status = status;
     });
+  }
+  // "My plan is complete": the page stops offering a next day. Only a plan with days can be complete, and the
+  // mark is the planner's own: it is not in the plan code or the file, which carry the plan and nothing more.
+  function setDone(state, done) {
+    var s = clone(state);
+    if (done && s.days.length) s.done = true; else delete s.done;
+    return s;
   }
   function setMeta(state, patch, data) {
     var s = clone(state);
@@ -1045,7 +1060,7 @@
     routeLabel: routeLabel, routeLabels: routeLabels, guideEnd: guideEnd, metresToEnd: metresToEnd,
     setDayRoute: setDayRoute, refitStart: refitStart, moveRest: moveRest, progress: progress, endBefore: endBefore, addCustom: addCustom, setCustomRoute: setCustomRoute,
     addStage: addStage, addRest: addRest, addTravel: addTravel, removeDay: removeDay, moveDay: moveDay,
-    setStage: setStage, setTravel: setTravel, setStay: setStay, setStayStatus: setStayStatus, setMeta: setMeta,
+    setStage: setStage, setTravel: setTravel, setStay: setStay, setStayStatus: setStayStatus, setMeta: setMeta, setDone: setDone,
     buildFile: buildFile, checkFile: checkFile, readFile: readFile, fileName: fileName,
     formatKm: formatKm, formatDuration: formatDuration, walkingSeconds: walkingSeconds, addDays: addDays, isIsoDate: isIsoDate
   };

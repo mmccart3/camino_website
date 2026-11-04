@@ -602,8 +602,24 @@
     return { id: info.start.id, name: info.start.name, fixed: true, previous: null };
   }
 
+  // A plan marked complete puts the add-a-day card away, so the page does not end on a "Day 10" that is not
+  // wanted. It comes back when a day is being added in the middle of the plan or changed, or the plan is emptied.
+  function renderDone(editing) {
+    var closed = !!state.done && state.days.length > 0 && editing === null && ui.insertAt === null;
+    $('plan-add-card').hidden = closed;
+    $('plan-done').hidden = !closed;
+    if (closed) {
+      var totals = Plan.totals(state, data), days = Plan.layout(state, data).days;
+      var last = days[days.length - 1], place = last && last.end && last.end.name;
+      $('plan-done-text').textContent = plural(totals.days, 'day') + (place ? ', ending at ' + place : '') +
+        '. When you are ready, send it to the app, print it or save a copy, below. You can still change any day.';
+    }
+    $('plan-finish-row').hidden = editing !== null || !state.days.length;
+  }
+
   function renderAdd() {
     var count = state.days.length, editing = editingIndex(), at = editing === null ? insertPoint() : null;
+    renderDone(editing);
     var position = editing !== null ? editing : (at === null ? count : at);   // number of days before the new one
     var start = addStart();
     var current = null, editInfo = null;
@@ -1020,7 +1036,7 @@
       if (!result.ok) { ui.shared = { error: result.message, file: file.name }; render('shared-title'); return; }
       if (result.plans.length === 1) {
         var only = result.plans[0];
-        openPlan(only.state, '"' + only.name + '"', only.notes, null);
+        openPlan(Plan.setDone(only.state, true), '"' + only.name + '"', only.notes, null);
         return;
       }
       ui.shared = { state: result.plans[0].state, plans: result.plans, index: 0, file: file.name, notes: result.plans[0].notes };
@@ -1544,6 +1560,7 @@
     ui.insertAt = e.target.value === 'end' ? null : Number(e.target.value);
     ui.fromPlace = null;
     ui.openStop = null;
+    if (state.done && ui.insertAt === null) { state = Plan.setDone(state, false); saveState(); }   // the end of the plan again: more days are coming
     renderAdd();
     $('plan-add-where').focus();
   });
@@ -1605,6 +1622,22 @@
     var id = Number($('plan-any-stage').value), at = insertPoint();
     if (!data.stages[id]) return;
     added(Plan.addStage(state, id, at), at, 'Added ' + data.stages[id].name);
+  });
+  // "My plan is complete" folds the add-a-day card away; "Add another day" brings it back.
+  $('plan-finish').addEventListener('click', function () {
+    if (!state.days.length) return;
+    ui.fromPlace = null;
+    ui.insertAt = null;
+    ui.openStop = null;
+    ui.far = false;
+    update(Plan.setDone(state, true), 'done-title', 'Your plan is marked complete. Use Add another day to carry on.');
+  });
+  $('plan-reopen').addEventListener('click', function () {
+    ui.fromPlace = null;
+    ui.insertAt = null;
+    ui.openStop = null;
+    ui.far = false;
+    update(Plan.setDone(state, false), 'add-title', 'Add the next day.');
   });
   $('plan-undo-btn').addEventListener('click', function () {
     if (!ui.undo) return;
@@ -1806,7 +1839,7 @@
     if (!shared || !shared.state) return;
     if (shared.file) {
       var chosen = shared.plans[shared.index];
-      openPlan(chosen.state, '"' + chosen.name + '"', chosen.notes, null);
+      openPlan(Plan.setDone(chosen.state, true), '"' + chosen.name + '"', chosen.notes, null);
       return;
     }
     var replacing = state.days.length > 0;
@@ -1818,7 +1851,7 @@
     ui.far = false;
     ui.notice = '';
     say('', false);
-    update(shared.state, 'plan-name', 'Opened the shared plan.', replacing ? 'Opened the shared plan, in place of yours.' : '');
+    update(Plan.setDone(shared.state, true), 'plan-name', 'Opened the shared plan.', replacing ? 'Opened the shared plan, in place of yours.' : '');
   });
   $('plan-shared-pick').addEventListener('change', function (e) {
     var shared = ui.shared;

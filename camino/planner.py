@@ -13,6 +13,7 @@ import hashlib
 import json
 import math
 import os
+import re
 import threading
 
 FORMAT_VERSION = 1
@@ -185,12 +186,29 @@ def path_shape(rows):
     return hashlib.sha1(';'.join(coords).encode()).hexdigest()[:8]
 
 
-def build_route_graph(legs):
+def climb_of(heights):
+    """Metres climbed and descended along a line of heights, the way the stage pages count them:
+    every step up is climb, every other step is descent (camino/views.py, stage_detail)."""
+    up = down = 0.0
+    for before, after in zip(heights, heights[1:]):
+        step = after - before
+        if step > 0:
+            up += step
+        else:
+            down -= step
+    return up, down
+
+
+def build_route_graph(legs, elevations=None):
     """What the page needs to join paths into a day of the visitor's own, as the app does.
 
     legs: [(path, ordered track points)] for every path of every plannable stage.
-    Returns {'paths': [[id, origin, dest, stage, distance, weighted, first distance, first weighted, shape]],
+    elevations: optional {path id: [heights in metres along the path]} from the guide's elevation points.
+    Returns {'paths': [[id, origin, dest, stage, distance, weighted, first distance, first weighted, shape,
+                        climb, descent, first height, last height]],
              'next':  {path id: [[next path id, 1 if it continues the same track else 0]]}}.
+    The last four numbers are left off a path with no heights. A day's climb is its paths' climbs plus
+    the step between one path's last height and the next one's first, as on the stage pages.
 
     A day over several paths adds every point's distance, except that the first point of the day,
     and the first point of a path that starts a different stage's track, add nothing. So a path's
@@ -199,9 +217,14 @@ def build_route_graph(legs):
     out, info, by_origin = [], {}, {}
     for path, rows in legs:
         first, last = rows[0], rows[-1]
-        out.append([path['id'], path['origin'], path['dest'], path['stage'],
-                    round(sum(p['d3'] for p in rows), 6), round(sum(p['w'] for p in rows), 6),
-                    round(first['d3'], 6), round(first['w'], 6), path_shape(rows)])
+        row = [path['id'], path['origin'], path['dest'], path['stage'],
+               round(sum(p['d3'] for p in rows), 6), round(sum(p['w'] for p in rows), 6),
+               round(first['d3'], 6), round(first['w'], 6), path_shape(rows)]
+        heights = (elevations or {}).get(path['id'])
+        if heights and len(heights) >= 2:
+            up, down = climb_of(heights)
+            row += [round(up, 2), round(down, 2), round(heights[0], 2), round(heights[-1], 2)]
+        out.append(row)
         info[path['id']] = (path, first, last)
         by_origin.setdefault(path['origin'], []).append(path['id'])
     following = {}
@@ -225,7 +248,7 @@ def build_route_graph(legs):
 VARIANT_KEYS = {'badge-valley': 'valley', 'badge-mountain': 'mountain', 'badge-alt': 'alt', 'badge-main': 'main'}
 
 
-def build_planner_data(stages, paths, points_by_path, locations, stays, sections=None):
+def build_planner_data(stages, paths, points_by_path, locations, stays, sections=None, elevations=None):
     """Builds the planner JSON.
 
     stages:   [{'id', 'name', 'ref', 'start', 'finish'}]
@@ -235,6 +258,7 @@ def build_planner_data(stages, paths, points_by_path, locations, stays, sections
     stays:    [(kind, id, location_id, name)] with kind 0 = albergue, 1 = private
     sections: optional [{'n': 1, 'stages': [ids], 'variants': {id: 'main'|'valley'|'mountain'|'alt'}}]
               giving the guide's own grouping of stages and their variants.
+    elevations: optional {path id: [heights]}; without it the page shows no climb.
     """
     by_stage = {}
     for path in paths:
@@ -275,7 +299,7 @@ def build_planner_data(stages, paths, points_by_path, locations, stays, sections
             entry['section'], entry['kind'] = next_n, 'main'
             clean_sections.append({'n': next_n, 'stages': [int(sid_text)]})
             next_n += 1
-    routes = build_route_graph(legs)
+    routes = build_route_graph(legs, elevations)
     used_places = {s['start'] for s in out_stages.values()} | {s['finish'] for s in out_stages.values()}
     for row in routes['paths']:
         used_places.update((row[1], row[2]))
@@ -297,6 +321,16 @@ def build_planner_data(stages, paths, points_by_path, locations, stays, sections
 
 
 # --- database access (the only part that needs Django) ----------------------------------------
+
+def load_elevations(cursor):
+    """The guide's elevation points as {path id: [heights in metres]} in order along each path."""
+    cursor.execute('SELECT pathID, elevationMetres FROM elevation_points ORDER BY pathID, sequence')
+    heights = {}
+    for path_id, metres in cursor.fetchall():
+        if metres is not None:
+            heights.setdefault(path_id, []).append(float(metres))
+    return heights
+
 
 def load_inputs(cursor):
     """Reads everything build_planner_data needs, with plain SQL (about 30,000 track points)."""
@@ -336,8 +370,235 @@ def get_planner_json(connection, sections_provider=None):
         if _cache['key'] != key or _cache['body'] is None:
             with connection.cursor() as cursor:
                 stages, paths, points_by_path, locations, stays = load_inputs(cursor)
+                elevations = load_elevations(cursor)
             sections = sections_provider() if sections_provider else None
-            data = build_planner_data(stages, paths, points_by_path, locations, stays, sections)
+            data = build_planner_data(stages, paths, points_by_path, locations, stays, sections, elevations)
             body = json.dumps(data, ensure_ascii=False, separators=(',', ':'))
             _cache.update(key=key, body=body)
         return _cache['body']
+
+
+# --- the details of each place to stay (a second, lazily loaded file) ------------------------------
+#
+# The planner page carries only the names of the places to stay. The prices, beds, facilities and
+# contact links are about 250 KB, so the page loads them from /plan/stays.json the first time it
+# needs them and the service worker keeps a copy for use offline. Nothing here affects the guide
+# fingerprint, so plans and plan codes made before this file existed still open.
+
+STAY_DETAILS_VERSION = 1
+# Words the data uses where a value is missing.
+NO_VALUE = {'', 'null', 'none', 'n/a', 'na', 'unknown', '-', 'no website available', 'not on booking',
+            'not on booking.com', 'no website', 'none available'}
+LIMITS = {'address': 160, 'opening': 400, 'checkin': 250, 'notes': 160, 'url': 300, 'email': 64}
+MAX_PRICE = 2000
+
+
+def clean_text(value, limit):
+    """One line of plain text, or None when the field is empty or holds a placeholder."""
+    text = ' '.join(str(value if value is not None else '').split())
+    if text.lower() in NO_VALUE:
+        return None
+    return text if len(text) <= limit else text[:limit - 1].rstrip() + '\u2026'
+
+
+def clean_price(value):
+    """A price in euros as a number, or None for blanks, zero (the data's way of saying unknown) and nonsense."""
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(number) or number <= 0 or number > MAX_PRICE:
+        return None
+    number = round(number, 2)
+    return int(number) if number == int(number) else number
+
+
+def clean_url(value):
+    """The web address, or None unless it is a plain http or https address."""
+    text = str(value if value is not None else '').strip()
+    if text.lower() in NO_VALUE or len(text) > LIMITS['url'] or re.search(r'\s', text):
+        return None
+    return text if re.match(r'https?://[^/\s]+', text, re.I) else None
+
+
+def clean_email_address(value):
+    text = str(value if value is not None else '').strip()
+    if len(text) > LIMITS['email'] or not re.fullmatch(r'[^@\s,;]+@[^@\s,;]+\.[^@\s,;]+', text):
+        return None
+    return text
+
+
+def clean_phone(country_code, number):
+    """The telephone number in international form ("+34987123456"), or None when it cannot be told.
+
+    The data keeps the country code apart from the number. A number that already starts with "+"
+    or the country code is taken as it is, and a French or British number loses the 0 it is dialled
+    with at home.
+    """
+    raw = str(number if number is not None else '').strip()
+    digits = re.sub(r'\D', '', raw)
+    if not digits:
+        return None
+    code = re.sub(r'\D', '', str(country_code if country_code is not None else ''))
+    if raw.startswith('+'):
+        full = digits
+    elif digits.startswith('00') and len(digits) > 10:
+        full = digits[2:]
+    elif code and len(digits) >= 11 and digits.startswith(code):
+        full = digits
+    else:
+        code = code or ('34' if len(digits) == 9 else '')      # most of the Camino is in Spain
+        if not code:
+            return None
+        full = code + (digits.lstrip('0') if code in ('33', '44') else digits)
+    return '+' + full if 8 <= len(full) <= 15 else None
+
+
+def clean_whatsapp(number):
+    """WhatsApp numbers are kept as digits with the country code, ready for https://wa.me/<digits>."""
+    digits = re.sub(r'\D', '', str(number if number is not None else ''))
+    return digits if 8 <= len(digits) <= 15 else None
+
+
+def owner_language(country_code, whatsapp, latitude, longitude):
+    """'fr' when the owner is better written to in French, else None (Spanish).
+
+    The same rules as helperLanguage in the app (lib/services/booking_message.dart): a WhatsApp number
+    that starts with +33, then a calling code of 33, and only when there is no calling code at all,
+    a position on the French side of the border (north of 43.10 N and east of 1.35 W).
+    """
+    digits = re.sub(r'\D', '', str(whatsapp if whatsapp is not None else ''))
+    if len(digits) >= 10 and digits.startswith('33'):
+        return 'fr'
+    code = re.sub(r'\D', '', str(country_code if country_code is not None else ''))
+    if code == '33':
+        return 'fr'
+    if not code:
+        try:
+            lat, lon = float(latitude), float(longitude)
+        except (TypeError, ValueError):
+            return None
+        if lat > 43.10 and lon > -1.35:
+            return 'fr'
+    return None
+
+
+def _flag(value):
+    return str(value).strip().lower() in ('1', 'true', 'yes') if value is not None else False
+
+
+def albergue_details(row):
+    """What the page shows for one albergue. Keys that have no value are left out.
+
+    row: id, address, beds, low, high, notes, kitchen, meal, washer, dryer, rooms, opening, checkin,
+         country, phone, whatsapp, email, website, booking, lat, lon
+    """
+    out = {}
+    low, high = clean_price(row.get('low')), clean_price(row.get('high'))
+    if low:
+        out['p'] = low
+        if high and high > low:
+            out['px'] = high
+    try:
+        beds = int(row.get('beds') or 0)
+    except (TypeError, ValueError):
+        beds = 0
+    if 0 < beds < 1000:
+        out['n'] = beds
+    facilities = ''.join(letter for letter, key in (('k', 'kitchen'), ('m', 'meal'), ('w', 'washer'), ('d', 'dryer'), ('r', 'rooms'))
+                         if _flag(row.get(key)))
+    if facilities:
+        out['f'] = facilities
+    _common_details(out, row)
+    for key, field, limit in (('op', 'opening', 'opening'), ('ci', 'checkin', 'checkin')):
+        text = clean_text(row.get(field), LIMITS[limit])
+        if text:
+            out[key] = text
+    return out
+
+
+def private_details(row):
+    """What the page shows for one hotel or guesthouse.
+
+    row: id, address, single, double, notes, country, phone, whatsapp, email, website, booking, lat, lon
+    """
+    out = {}
+    single, double = clean_price(row.get('single')), clean_price(row.get('double'))
+    if single:
+        out['p'] = single
+    if double:
+        out['p2'] = double
+    _common_details(out, row)
+    return out
+
+
+def _common_details(out, row):
+    for key, field, limit in (('ad', 'address', 'address'), ('rn', 'notes', 'notes')):
+        text = clean_text(row.get(field), LIMITS[limit])
+        if text:
+            out[key] = text
+    phone = clean_phone(row.get('country'), row.get('phone'))
+    if phone:
+        out['t'] = phone
+    whatsapp = clean_whatsapp(row.get('whatsapp'))
+    if whatsapp:
+        out['wa'] = whatsapp
+    for key, value in (('em', clean_email_address(row.get('email'))), ('web', clean_url(row.get('website'))),
+                       ('bk', clean_url(row.get('booking')))):
+        if value:
+            out[key] = value
+    if owner_language(row.get('country'), row.get('whatsapp'), row.get('lat'), row.get('lon')) == 'fr':
+        out['lg'] = 'fr'
+
+
+def build_stay_details(albergues, privates, affiliate=None):
+    """The stay-details JSON: {'v', 'aff', 'a': {id: details}, 'p': {id: details}}.
+
+    aff holds the query parameters that go on every Booking.com link (the site's affiliate
+    details), once, so they are not repeated about 1,100 times. The page adds them as it makes a link.
+    """
+    out = {'v': STAY_DETAILS_VERSION, 'aff': dict(affiliate or {}), 'a': {}, 'p': {}}
+    for rows, make, key in ((albergues, albergue_details, 'a'), (privates, private_details, 'p')):
+        for row in sorted(rows, key=lambda r: r['id']):
+            details = make(row)
+            if details:
+                out[key][str(row['id'])] = details
+    return out
+
+
+def load_stay_rows(cursor):
+    """Reads the albergues and private places to stay, with plain SQL."""
+    cursor.execute('SELECT ID, albergueStreetAdress, numberOfBeds, onedPersonRateMin, onedPersonRateMax, rateNotes, '
+                   'kitchenFacilitiesAvailable, communalMealAvailable, washingMachineAvailable, dryingMachineAvailable, '
+                   'privateRoomsAvailable, openingPeriod, checkInTimes, tel1CountryCode, tel1PhoneNumber, whatsAppNumber, '
+                   'email, albergueWebsiteURL, albergueBookingDotComURL, gps_lat, gps_lng FROM albergues WHERE albergueName IS NOT NULL')
+    names = ('id', 'address', 'beds', 'low', 'high', 'notes', 'kitchen', 'meal', 'washer', 'dryer', 'rooms', 'opening',
+             'checkin', 'country', 'phone', 'whatsapp', 'email', 'website', 'booking', 'lat', 'lon')
+    albergues = [dict(zip(names, r)) for r in cursor.fetchall()]
+    cursor.execute('SELECT ID, privateAccommStreetAdress, onedPersonRateMin, twoPersonRateMin, rateNotes, tel1CountryCode, '
+                   'tel1PhoneNumber, whatsAppNumber, email, privateAccommWebsiteURL, privateAccommBookingDotComURL, '
+                   'gps_lat, gps_lng FROM privateAccommDetail WHERE privateAccommName IS NOT NULL')
+    names = ('id', 'address', 'single', 'double', 'notes', 'country', 'phone', 'whatsapp', 'email', 'website', 'booking',
+             'lat', 'lon')
+    privates = [dict(zip(names, r)) for r in cursor.fetchall()]
+    return albergues, privates
+
+
+_stay_cache = {'key': None, 'body': None}
+
+
+def get_stay_details_json(connection, affiliate=None):
+    """The stay details as compact text, rebuilt only when the database file changes."""
+    name = str(connection.settings_dict['NAME'])
+    try:
+        stat = os.stat(name)
+        key = (name, stat.st_mtime_ns, stat.st_size, json.dumps(affiliate or {}, sort_keys=True))
+    except OSError:
+        key = (name, None, None, json.dumps(affiliate or {}, sort_keys=True))
+    with _lock:
+        if _stay_cache['key'] != key or _stay_cache['body'] is None:
+            with connection.cursor() as cursor:
+                albergues, privates = load_stay_rows(cursor)
+            body = json.dumps(build_stay_details(albergues, privates, affiliate), ensure_ascii=False, separators=(',', ':'))
+            _stay_cache.update(key=key, body=body)
+        return _stay_cache['body']

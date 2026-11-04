@@ -67,6 +67,8 @@
   }
 
   function formatKm(metres) { return (metres / 1000).toFixed(1) + ' km'; }
+  // Whole metres with a comma between thousands: "1,534 m".
+  function formatMetres(n) { return String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ',') + ' m'; }
 
   // Minutes after midnight (0 to 1439) as "07:30", and back. parseClock accepts "7:30" and "0730";
   // anything else gives null.
@@ -195,6 +197,7 @@
 
   var graphs = typeof WeakMap === 'function' ? new WeakMap() : null;
   var MAX_STOP_METRES = 60000;
+  var LONG_DAY_METRES = 30000;   // a day longer than this is called a long day
 
   function graph(data) {
     var g = graphs && graphs.get(data);
@@ -202,7 +205,10 @@
     g = { byId: {}, out: {}, next: {}, order: {}, cache: {}, end: null };
     var routes = data.routes || { paths: [], next: {} };
     routes.paths.forEach(function (r) {
-      var p = { id: r[0], o: r[1], d: r[2], stage: r[3], sd: r[4], sw: r[5], fd: r[6], fw: r[7], shape: r[8] };
+      // r[9..12] (climb, descent, first and last height) are left off a path the guide has no heights for
+      var p = { id: r[0], o: r[1], d: r[2], stage: r[3], sd: r[4], sw: r[5], fd: r[6], fw: r[7], shape: r[8],
+        up: r[12] === undefined ? null : r[9], dn: r[12] === undefined ? null : r[10],
+        e0: r[12] === undefined ? null : r[11], e1: r[12] === undefined ? null : r[12] };
       g.byId[p.id] = p;
       (g.out[p.o] = g.out[p.o] || []).push(p.id);
     });
@@ -236,10 +242,12 @@
     return g;
   }
 
-  // Metres, weighted distance and end places of a chain of path ids, or null if it is not a
-  // walkable chain (unknown path, paths that do not join, a path used twice).
+  // Metres, weighted distance, climb and descent and end places of a chain of path ids, or null if it is
+  // not a walkable chain (unknown path, paths that do not join, a path used twice). The climb and descent
+  // are counted the way the stage pages count them: each path's own, plus the step from one path's last
+  // height to the next one's first. They are null when the guide has no heights for some path.
   function chainTotals(chain, data) {
-    var g = graph(data), m = 0, w = 0, seen = {};
+    var g = graph(data), m = 0, w = 0, up = 0, down = 0, heights = true, seen = {};
     if (!Array.isArray(chain) || !chain.length) return null;
     for (var i = 0; i < chain.length; i += 1) {
       var p = g.byId[chain[i]];
@@ -253,8 +261,20 @@
       }
       m += whole ? p.sd : p.sd - p.fd;
       w += whole ? p.sw : p.sw - p.fw;
+      if (p.up === null) {
+        heights = false;
+      } else {
+        up += p.up;
+        down += p.dn;
+        var before = i > 0 ? g.byId[chain[i - 1]] : null;
+        if (before && before.e1 !== null) {
+          var step = p.e0 - before.e1;
+          if (step > 0) up += step; else down -= step;
+        }
+      }
     }
-    return { metres: m, weighted: w, from: g.byId[chain[0]].o, to: g.byId[chain[chain.length - 1]].d };
+    return { metres: m, weighted: w, up: heights ? up : null, down: heights ? down : null,
+      from: g.byId[chain[0]].o, to: g.byId[chain[chain.length - 1]].d };
   }
 
   // Places a day can begin, in route order.
@@ -396,11 +416,11 @@
     var stops = [];
     Object.keys(seen).forEach(function (id) {
       var place = Number(id), found = routesBetween(from, place, data).routes;
-      var offered = found.map(function (chain) { var t = chainTotals(chain, data); return { chain: chain, metres: t.metres, weighted: t.weighted }; })
+      var offered = found.map(function (chain) { var t = chainTotals(chain, data); return { chain: chain, metres: t.metres, weighted: t.weighted, up: t.up, down: t.down }; })
         .sort(function (a, b) { return a.metres - b.metres; });
       if (!offered.length || offered[0].metres > limit) return;
       stops.push({ place: place, name: data.places[place], metres: offered[0].metres, weighted: offered[0].weighted,
-        chain: offered[0].chain, routes: offered.map(function (o) { return o.chain; }) });
+        up: offered[0].up, down: offered[0].down, chain: offered[0].chain, routes: offered.map(function (o) { return o.chain; }) });
     });
     return stops.sort(function (a, b) { return a.metres - b.metres; });
   }
@@ -450,6 +470,13 @@
   // ---------------------------------------------------------------- working out each day
 
   // One entry per day: dates, places, distance, time, and anything that looks wrong.
+  // A walking day's climb and descent in whole metres (null when the guide has no heights), and whether it is a long day.
+  function setClimb(info, total) {
+    info.up = total && total.up !== null ? Math.round(total.up) : null;
+    info.down = total && total.down !== null ? Math.round(total.down) : null;
+    info.long = info.metres !== null && info.metres > LONG_DAY_METRES;
+  }
+
   function layout(state, data) {
     var infos = [], here = null, negative = {}, negativeCount = 0;
     function typedPlace(value) {
@@ -467,7 +494,7 @@
       var info = {
         index: i, type: day.t, same: same, no: offset + 1, part: 1, parts: 1,
         date: state.startDate ? addDays(state.startDate, offset) : null,
-        start: null, end: null, metres: null, seconds: null, stage: null, warning: '', invalid: ''
+        start: null, end: null, metres: null, seconds: null, up: null, down: null, long: false, stage: null, warning: '', invalid: ''
       };
       if (day.t === 's') {
         var st = data.stages[String(day.stage)];
@@ -476,6 +503,7 @@
         info.end = { id: st.finish, name: data.places[st.finish] };
         info.metres = st.m;
         info.seconds = walkingSeconds(st.w, state.pace, data.flat);
+        setClimb(info, chainTotals(st.paths, data));
         if (here && here.id !== st.start) {
           info.warning = 'This day starts at ' + info.start.name + ', but the day before ended at ' + here.name + '.';
         }
@@ -491,6 +519,7 @@
           info.end = { id: total.to, name: data.places[total.to] };
           info.metres = total.metres;
           info.seconds = walkingSeconds(total.weighted, state.pace, data.flat);
+          setClimb(info, total);
           if (here && here.id !== total.from) {
             info.warning = 'This day starts at ' + info.start.name + ', but the day before ended at ' + here.name + '.';
           }
@@ -529,7 +558,7 @@
   // `days` are calendar days (a journey on the same day as the day before does not add one); `entries`
   // counts every row of the plan. A night counts as chosen when any row of that day has a stay.
   function totals(state, data) {
-    var l = layout(state, data), t = { days: 0, entries: state.days.length, walking: 0, rest: 0, travel: 0, stays: 0, metres: 0, seconds: 0 };
+    var l = layout(state, data), t = { days: 0, entries: state.days.length, walking: 0, rest: 0, travel: 0, stays: 0, metres: 0, seconds: 0, up: 0, down: 0, climb: true, long: 0 };
     var group = -1, nights = {};
     l.days.forEach(function (info, i) {
       if (!info.same) group += 1;
@@ -537,6 +566,9 @@
       if (info.type === 's' || info.type === 'c') {
         t.walking++;
         if (info.metres !== null) { t.metres += info.metres; t.seconds += info.seconds; }
+        if (info.up === null || info.down === null) { if (info.metres !== null) t.climb = false; }   // a sum of the days as shown
+        else { t.up += info.up; t.down += info.down; }
+        if (info.long) t.long++;
       }
       else if (info.type === 'r') t.rest++;
       else t.travel++;
@@ -600,6 +632,68 @@
       if (s[2] !== placeId) return;
       (s[0] === 0 ? out.albergues : out.privates).push({ k: s[0] === 0 ? 'a' : 'p', id: s[1], name: s[3] });
     });
+    return out;
+  }
+
+  // ---------------------------------------------------------------- what the guide says about a place to stay
+  // The details come from /plan/stays.json (see camino/planner.py): p price, px top price, p2 double, n beds,
+  // f facility letters, ad address, op opening, ci check-in, rn price note, t phone, wa WhatsApp, em, web, bk.
+
+  var FACILITIES = { k: 'Kitchen', m: 'Communal meal', w: 'Washing machine', d: 'Dryer', r: 'Private rooms' };
+  var FACILITIES_SHORT = { k: 'Kitchen', m: 'Meal', w: 'Washer', d: 'Dryer', r: 'Private rooms' };
+
+  function money(n) { return '\u20ac' + (n % 1 ? n.toFixed(2) : String(n)); }
+
+  function facilityNames(letters, short) {
+    var words = short ? FACILITIES_SHORT : FACILITIES;
+    return String(letters || '').split('').filter(function (c) { return words[c]; }).map(function (c) { return words[c]; });
+  }
+
+  // The price, beds and facilities on one line, for the list of places: "from \u20ac16 \u00b7 32 beds \u00b7 Kitchen".
+  function stayLine(kind, d) {
+    if (!d) return '';
+    var parts = [];
+    if (kind === 'a') {
+      if (d.p) parts.push(d.px && d.px > d.p ? money(d.p) + ' to ' + money(d.px) : 'from ' + money(d.p));
+      if (d.n) parts.push(d.n + (d.n === 1 ? ' bed' : ' beds'));
+      parts = parts.concat(facilityNames(d.f, true));
+    } else {
+      if (d.p) parts.push('single from ' + money(d.p));
+      if (d.p2) parts.push('double from ' + money(d.p2));
+    }
+    return parts.join(' \u00b7 ');
+  }
+
+  // "+34987123456" as people write it: "+34 987 123 456".
+  function formatPhone(t) {
+    var m = /^\+(\d+)$/.exec(String(t || ''));
+    if (!m) return String(t || '');
+    var d = m[1];
+    if (d.indexOf('34') === 0 && d.length === 11) return '+34 ' + d.slice(2, 5) + ' ' + d.slice(5, 8) + ' ' + d.slice(8);
+    if (d.indexOf('33') === 0 && d.length === 11) return '+33 ' + d.slice(2, 3) + ' ' + d.slice(3, 5) + ' ' + d.slice(5, 7) + ' ' + d.slice(7, 9) + ' ' + d.slice(9);
+    if (d.indexOf('351') === 0 && d.length === 12) return '+351 ' + d.slice(3, 6) + ' ' + d.slice(6, 9) + ' ' + d.slice(9);
+    return '+' + d;
+  }
+
+  // A Booking.com link with the site's affiliate details added, the way the town pages make it (camino/models.py).
+  function bookingLink(base, affiliate) {
+    var url;
+    try { url = new URL(String(base || '')); } catch (error) { return null; }
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') return null;
+    Object.keys(affiliate || {}).forEach(function (key) { url.searchParams.set(key, affiliate[key]); });
+    return url.toString();
+  }
+
+  // The ways to reach a place: [{key, label, href, text}] in the order a walker is likely to use them.
+  function stayLinks(d, affiliate) {
+    var out = [];
+    if (!d) return out;
+    if (d.t) out.push({ key: 'call', label: 'Call', href: 'tel:' + d.t, text: formatPhone(d.t) });
+    if (d.wa) out.push({ key: 'whatsapp', label: 'WhatsApp', href: 'https://wa.me/' + d.wa, text: 'WhatsApp' });
+    if (d.em) out.push({ key: 'email', label: 'Email', href: 'mailto:' + d.em, text: 'Email' });
+    if (d.web) out.push({ key: 'website', label: 'Website', href: d.web, text: 'Website' });
+    var booking = d.bk ? bookingLink(d.bk, affiliate) : null;
+    if (booking) out.push({ key: 'booking', label: 'Booking.com', href: booking, text: 'Booking.com' });
     return out;
   }
 
@@ -862,6 +956,77 @@
     return errors;
   }
 
+  // ---------------------------------------------------------------- reading a plan file back in
+
+  var STAY_KINDS = { albergue: 'a', private: 'p', custom: 'c' };
+
+  function knownStay(kind, id, data) {
+    return data.stays.some(function (row) { return row[1] === id && row[0] === (kind === 'a' ? 0 : 1); });
+  }
+
+  // One plan of an itinerary file as the planner keeps it. What the file cannot say is set to the usual: the
+  // dates follow on from the first day, and a journey is "the same day" only when its date is the day before's.
+  function planFromFile(plan, data) {
+    var rows = plan.days.slice().sort(function (a, b) { return a.ordinal - b.ordinal; });
+    var raw = { v: 1, name: plan.name, days: [] }, fileDates = [], skipped = [], pace = null, notes = [];
+    rows.forEach(function (row, n) {
+      var route = JSON.parse(row.route), date = isIsoDate(route.date) ? route.date : null;
+      if (pace === null) pace = route.pace;
+      var day;
+      if (route.isRestDay) {
+        day = { t: 'r' };
+        if (!raw.days.length) day.at = row.start_name;
+      } else if (!route.paths.length) {
+        var travel = route.travel || {};
+        day = { t: 't', from: row.start_name, to: row.end_name, mode: travel.mode, arr: travel.arrivalMinutes,
+          ref: travel.reference, notes: travel.notes, same: !!(date && raw.days.length && date === fileDates[fileDates.length - 1]) };
+        if (route.departureMinutes !== 480) day.dep = route.departureMinutes;   // 8:00 is what a journey with no time is written with
+      } else {
+        if (!chainTotals(route.paths, data)) { skipped.push(n + 1); return; }
+        var stage = stageForChain(route.paths, data);
+        day = stage ? { t: 's', stage: stage } : { t: 'c', paths: route.paths };
+      }
+      if (row.stay) {
+        var stay = JSON.parse(row.stay), kind = STAY_KINDS[stay.kind];
+        if (kind !== 'c' && !knownStay(kind, stay.id, data)) kind = 'c';   // not a place this guide has: keep its name
+        day.stay = { k: kind, id: kind === 'c' ? 0 : stay.id, name: stay.name, status: stay.status,
+          ref: stay.reference, notes: stay.notes, contact: stay.contact };
+      }
+      raw.days.push(day);
+      fileDates.push(date);
+    });
+    raw.startDate = fileDates[0] || '';
+    raw.pace = pace;
+    var state = clean(raw, data);
+    if (skipped.length) {
+      notes.push(skipped.length === 1 ? 'Day ' + skipped[0] + ' was left out, because its route is not in this guide.'
+        : skipped.length + ' days were left out (days ' + skipped.join(', ') + '), because their routes are not in this guide.');
+    }
+    var l = layout(state, data);
+    if (fileDates.some(function (d, i) { return (d || '') !== ((l.days[i] && l.days[i].date) || ''); })) {
+      notes.push('The dates were changed so that each day follows on from the one before.');
+    }
+    if (pace !== null && state.pace !== Math.round(pace * 10) / 10) notes.push('The walking pace was set back to the usual, because the file\'s pace is outside what this page offers.');
+    return { state: state, name: state.name, days: state.days.length, skipped: skipped, notes: notes };
+  }
+
+  // The plans in an itinerary file: one this page wrote, or a backup from the app (its other contents are ignored).
+  // { ok: true, plans: [{ state, name, days, skipped, notes }] } or { ok: false, message }.
+  function readFile(doc, data) {
+    var errors = checkFile(doc);
+    if (errors.length) {
+      return { ok: false, message: errors[0] === 'Not a Camino backup file.' ? 'This is not a Camino itinerary or backup file.'
+        : 'This file cannot be opened: ' + errors[0] + '.' };
+    }
+    if (doc.source && typeof doc.source.guideFingerprint === 'string' && doc.source.guideFingerprint !== data.guide) {
+      return { ok: false, message: 'This file was made for a different edition of the guide, so its days cannot be opened here.' };
+    }
+    var plans = doc.plans.filter(function (p) { return p.days.length; }).map(function (p) { return planFromFile(p, data); })
+      .filter(function (p) { return p.days; });
+    if (!plans.length) return { ok: false, message: 'There are no days in this file that this page can open.' };
+    return { ok: true, plans: plans };
+  }
+
   function fileName(state) {
     var slug = String(state.name || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'itinerary';
     return 'camino-itinerary-' + slug + '.json';
@@ -874,13 +1039,14 @@
     setRestPlace: setRestPlace, setStayDetails: setStayDetails,
     newState: newState, clean: clean, layout: layout, dayLabel: dayLabel, dayRef: dayRef, totals: totals,
     stageIds: stageIds, siblings: siblings, staysAt: staysAt, placeIdByName: placeIdByName,
+    formatMetres: formatMetres, LONG_DAY_METRES: LONG_DAY_METRES, money: money, facilityNames: facilityNames, stayLine: stayLine, formatPhone: formatPhone, bookingLink: bookingLink, stayLinks: stayLinks,
     startFor: startFor, stageEnds: stageEnds, stayCount: stayCount, stageForChain: stageForChain, addRoute: addRoute,
     chainTotals: chainTotals, chainKey: chainKey, routePlaces: routePlaces, routesBetween: routesBetween, stopsFrom: stopsFrom,
     routeLabel: routeLabel, routeLabels: routeLabels, guideEnd: guideEnd, metresToEnd: metresToEnd,
     setDayRoute: setDayRoute, refitStart: refitStart, moveRest: moveRest, progress: progress, endBefore: endBefore, addCustom: addCustom, setCustomRoute: setCustomRoute,
     addStage: addStage, addRest: addRest, addTravel: addTravel, removeDay: removeDay, moveDay: moveDay,
     setStage: setStage, setTravel: setTravel, setStay: setStay, setStayStatus: setStayStatus, setMeta: setMeta,
-    buildFile: buildFile, checkFile: checkFile, fileName: fileName,
+    buildFile: buildFile, checkFile: checkFile, readFile: readFile, fileName: fileName,
     formatKm: formatKm, formatDuration: formatDuration, walkingSeconds: walkingSeconds, addDays: addDays, isIsoDate: isIsoDate
   };
 });

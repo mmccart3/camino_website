@@ -11,6 +11,7 @@
   var Plan = window.CaminoPlan;
   var Share = window.CaminoShare;   // plan codes and QR codes: the page works without them
   var QR = window.CaminoQR;
+  var Msg = window.CaminoMessage;   // the "Ask for a bed" message: the page works without it
   var root = document.getElementById('plan-root');
   var dataElement = document.getElementById('plan-data');
   if (!Plan || !root || !dataElement) return;
@@ -28,7 +29,8 @@
   var STAY_NAMES = { a: 'Albergue', p: 'Hotel or guesthouse', c: 'Your own choice' };
 
   var storageWorks = true;
-  var ui = { fromPlace: null, stayIndex: -1, insertAt: null, editAt: null, restAt: null, undo: null, far: false, openStop: null, shared: null, openMore: {} };
+  var ui = { fromPlace: null, stayIndex: -1, insertAt: null, editAt: null, restAt: null, undo: null, far: false, openStop: null, shared: null, openMore: {}, details: null, detailsLoading: false, openPick: null,
+    savedAt: null, savedId: null, persisted: null, keepAsk: null, confirmDelete: null };
   var MODE_LABELS = { flight: 'Flight', train: 'Train', bus: 'Bus', taxi: 'Taxi', ferry: 'Ferry', other: 'Other' };
   var state = loadState();
 
@@ -40,6 +42,7 @@
     var raw = null, notice = '';
     try { raw = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null'); } catch (error) { raw = null; }
     if (!raw || !raw.state) return Plan.newState(data);
+    if (typeof raw.at === 'string' && !isNaN(Date.parse(raw.at))) ui.savedAt = new Date(raw.at);
     var saved = Plan.clean(raw.state, data);
     var before = Array.isArray(raw.state.days) ? raw.state.days.length : 0;
     if (saved.days.length < before) {
@@ -54,11 +57,14 @@
 
   function saveState() {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ guide: data.guide, state: state }));
+      var now = new Date();
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ guide: data.guide, state: state, at: now.toISOString() }));
       storageWorks = true;
+      ui.savedAt = now;
     } catch (error) {
       storageWorks = false;
     }
+    if (root.classList.contains('plan-ready')) renderKeepStatus();
   }
 
   // ------------------------------------------------------------------ small DOM helpers
@@ -152,6 +158,7 @@
     renderDays();
     renderAdd();
     renderSend();
+    renderKeep();
     if (keep) {
       var target = keep === 'first-stop'
         ? (root.querySelector('#plan-stops .plan-stop') || $('plan-add-rest'))
@@ -174,14 +181,23 @@
     var box = $('plan-shared'), shared = ui.shared;
     box.hidden = !shared;
     if (!shared) return;
-    var bad = !!shared.error;
-    $('plan-shared-title').textContent = bad ? 'This plan code cannot be opened' : 'A plan has been shared with you';
+    var bad = !!shared.error, several = !!shared.plans && shared.plans.length > 1;
+    $('plan-shared-title').textContent = bad ? (shared.file ? 'This file cannot be opened' : 'This plan code cannot be opened')
+      : (shared.file ? 'Choose a plan from ' + shared.file : 'A plan has been shared with you');
+    $('plan-shared-pick-row').hidden = bad || !several;
+    if (!bad && several) {
+      var pick = $('plan-shared-pick');
+      pick.innerHTML = '';
+      shared.plans.forEach(function (plan, n) {
+        pick.appendChild(el('option', { value: String(n), selected: n === shared.index, text: plan.name + ' (' + plural(plan.days, 'day') + ')' }));
+      });
+    }
     $('plan-shared-error').textContent = bad ? shared.error : '';
     $('plan-shared-error').hidden = !bad;
     $('plan-shared-name').hidden = bad;
     $('plan-shared-detail').hidden = bad;
     $('plan-shared-open').hidden = bad;
-    $('plan-shared-keep').textContent = bad ? 'Close' : 'Keep my plan';
+    $('plan-shared-keep').textContent = bad ? 'Close' : (shared.file ? 'Cancel' : 'Keep my plan');
     var replace = $('plan-shared-replace');
     replace.hidden = true;
     if (bad) return;
@@ -194,7 +210,7 @@
         (other.startDate ? ', starting ' + formatDate(other.startDate) : '') + '.');
       detail.push(t.stays + ' of ' + plural(t.days, 'night') + ' chosen.');
     }
-    $('plan-shared-detail').textContent = detail.join(' ');
+    $('plan-shared-detail').textContent = detail.concat(shared.notes || []).join(' ');
     if (state.days.length) {
       replace.textContent = 'You already have a plan on this device (' + plural(Plan.totals(state, data).days, 'day') + '). ' +
         'Opening this one replaces it. You can undo that straight afterwards.';
@@ -218,6 +234,12 @@
     $('plan-pace-hint').textContent = hint;
   }
 
+  // "1,534 m up, 1,680 m down", or '' when the guide has no heights for the day
+  function climbText(up, down) {
+    if (up === null || up === undefined || down === null || down === undefined) return '';
+    return Plan.formatMetres(up) + ' up, ' + Plan.formatMetres(down) + ' down';
+  }
+
   function stat(value, label) {
     return el('div', { 'class': 'plan-stat' }, [
       el('span', { 'class': 'plan-stat-value', text: value }),
@@ -237,8 +259,13 @@
     box.appendChild(stat(String(t.walking), t.walking === 1 ? 'walking day' : 'walking days'));
     box.appendChild(stat(Plan.formatKm(t.metres), 'on foot'));
     box.appendChild(stat(Plan.formatDuration(t.seconds), 'walking time'));
+    if (t.walking && t.climb) box.appendChild(stat(Plan.formatMetres(t.up), 'climbing'));
+    if (t.walking && t.climb) box.appendChild(stat(Plan.formatMetres(t.down), 'descending'));
+    if (t.long) box.appendChild(stat(String(t.long), t.long === 1 ? 'long day' : 'long days'));
     box.appendChild(stat(String(t.rest + t.travel), 'rest or travel'));
     box.appendChild(stat(t.stays + ' of ' + t.days, 'nights chosen'));
+    var note = $('plan-climb-note');
+    if (note) note.hidden = !(t.walking && t.climb);
   }
 
   function dayTitle(info) {
@@ -306,6 +333,66 @@
     ]);
   }
 
+  // ------------------------------------------------------------------ what the guide says about a place to stay
+
+  var stayNames = {};
+  data.stays.forEach(function (row) { stayNames[(row[0] === 0 ? 'a' : 'p') + row[1]] = row[3]; });
+  var detailsUrl = $('plan-stay-dialog').getAttribute('data-details-url');
+
+  // The guide's details for a place, once /plan/stays.json has arrived (and only for the place the plan named).
+  function detailFor(kind, id, name) {
+    if (!ui.details || (kind !== 'a' && kind !== 'p')) return null;
+    if (name !== undefined && stayNames[kind + id] !== name) return null;
+    return (ui.details[kind] && ui.details[kind][String(id)]) || null;
+  }
+
+  function linkItem(link, name) {
+    var phone = link.key === 'call';
+    return el('a', { 'class': 'plan-link plan-link-' + link.key, href: link.href, target: phone || link.key === 'email' ? null : '_blank', rel: 'noopener',
+      'aria-label': link.label + ' ' + name, text: phone ? 'Call ' + link.text : link.text });
+  }
+
+  // The ways to reach a place. On a day's own card (day index given) the first is "Ask for a bed".
+  function linkRow(d, name, dayIndex) {
+    var links = Plan.stayLinks(d, ui.details && ui.details.aff).map(function (link) { return linkItem(link, name); });
+    if (dayIndex !== undefined && Msg && Msg.canAsk(d)) {
+      links.unshift(el('button', { type: 'button', 'class': 'plan-link plan-link-ask', 'data-act': 'askbed', 'data-focus': 'day-' + dayIndex + '-askbed',
+        'aria-label': 'Ask ' + name + ' for a bed', text: 'Ask for a bed' }));
+    }
+    return links.length ? el('span', { 'class': 'plan-links' }, links) : null;
+  }
+
+  // Under a chosen place: its price and beds, and the ways to reach it.
+  function fillGuide(box, stay, dayIndex) {
+    box.innerHTML = '';
+    var d = stay ? detailFor(stay.k, stay.id, stay.name) : null;
+    var line = d ? Plan.stayLine(stay.k, d) : '';
+    var links = d ? linkRow(d, stay.name, dayIndex) : null;
+    box.hidden = !(line || links);
+    if (line) box.appendChild(el('span', { 'class': 'plan-stay-line', text: line }));
+    if (links) box.appendChild(links);
+  }
+
+  function loadDetails() {
+    if (ui.details || ui.detailsLoading || !detailsUrl || typeof fetch !== 'function') return;
+    ui.detailsLoading = true;
+    fetch(detailsUrl, { credentials: 'omit' })
+      .then(function (response) { if (!response.ok) throw new Error('no details'); return response.json(); })
+      .then(function (json) {
+        if (!json || json.v !== 1 || !json.a || !json.p) return;
+        ui.details = json;
+        var dialog = $('plan-stay-dialog');
+        if (dialog.open || dialog.hasAttribute('open')) renderStayList();
+        var cards = $('plan-days').children;
+        state.days.forEach(function (day, k) {
+          var box = cards[k] && cards[k].querySelector('.plan-stay-guide');
+          if (box) fillGuide(box, day.stay, k);
+        });
+      })
+      .catch(function () { /* offline and never saved: the list keeps showing names only */ })
+      .then(function () { ui.detailsLoading = false; });
+  }
+
   function fillStay(container, info, day, i) {
     var name = Plan.dayRef(info);
     container.innerHTML = '';
@@ -321,6 +408,9 @@
       container.appendChild(status);
       container.appendChild(button('Change', 'stay', { 'data-focus': 'day-' + i + '-stay', 'aria-label': 'Change where to stay on ' + name }));
       container.appendChild(button('Remove', 'stay-clear', { 'aria-label': 'Remove the stay on ' + name }));
+      var guide = el('div', { 'class': 'plan-stay-guide', hidden: true });
+      fillGuide(guide, day.stay, i);
+      container.appendChild(guide);
       container.appendChild(stayDetails(day.stay, i, name));
     } else {
       container.appendChild(button('Choose where to stay in ' + info.end.name, 'stay', { 'data-focus': 'day-' + i + '-stay', 'class': 'plan-btn plan-btn-quiet' }));
@@ -341,12 +431,14 @@
     var head = el('div', { 'class': 'plan-day-head' }, [
       el('span', { 'class': 'plan-day-no', text: Plan.dayLabel(info) }),
       info.date ? el('span', { 'class': 'plan-day-date', text: formatDate(info.date) }) : null,
-      info.type === 's' && KIND_LABELS[info.stage.kind] ? chip(KIND_LABELS[info.stage.kind], info.stage.kind) : null
+      info.type === 's' && KIND_LABELS[info.stage.kind] ? chip(KIND_LABELS[info.stage.kind], info.stage.kind) : null,
+      walking && info.long ? chip('Long day', 'long') : null
     ]);
     var body = [head, el('h4', { 'class': 'plan-day-title', tabindex: '-1', 'data-focus': 'day-' + i + '-title', text: dayTitle(info) })];
 
     if (walking && info.metres !== null) {
-      body.push(el('p', { 'class': 'plan-day-meta', text: Plan.formatKm(info.metres) + ' on foot, about ' + Plan.formatDuration(info.seconds) }));
+      var climb = climbText(info.up, info.down);
+      body.push(el('p', { 'class': 'plan-day-meta', text: Plan.formatKm(info.metres) + ' on foot, about ' + Plan.formatDuration(info.seconds) + (climb ? ', ' + climb : '') }));
     } else if (info.type === 't') {
       var from = el('input', { type: 'text', 'class': 'plan-input', list: 'plan-places', value: day.from, autocomplete: 'off',
         placeholder: 'Where from?', 'data-act': 'from', 'data-focus': 'day-' + i + '-from', maxlength: '100' });
@@ -418,7 +510,7 @@
         found.forEach(function (chain, n) {
           var t = Plan.chainTotals(chain, data);
           pick.appendChild(el('option', { value: chain.join(','), selected: Plan.chainKey(chain, data) === mine,
-            text: (foundLabels[n] || info.end.name) + ' (' + Plan.formatKm(t.metres) + ')' }));
+            text: (foundLabels[n] || info.end.name) + ' (' + Plan.formatKm(t.metres) + (t.up !== null ? ', ' + Plan.formatMetres(t.up) + ' up' : '') + ')' }));
         });
         actions.appendChild(pick);
       }
@@ -454,7 +546,8 @@
     if (current === stop.place) tags.push(chip('Where it ends now', 'alt'));
     if (ends[stop.place]) tags.push(chip('Guidebook stage end', 'stage'));
     if (routes.length > 1) tags.push(chip(routes.length + ' routes', 'alt'));
-    var meta = Plan.formatKm(stop.metres) + ', about ' + Plan.formatDuration(seconds) + (stays ? ', ' + plural(stays, 'place') + ' to stay' : '');
+    var meta = Plan.formatKm(stop.metres) + ', about ' + Plan.formatDuration(seconds) + (stop.up !== null && stop.up !== undefined ? ', ' + Plan.formatMetres(stop.up) + ' up' : '') +
+      (stays ? ', ' + plural(stays, 'place') + ' to stay' : '');
     var item = el('li', { 'class': 'plan-stop-item' }, [el('button', {
       type: 'button', 'class': 'plan-stop', 'data-act': 'stop', 'data-place': String(stop.place),
       'aria-expanded': routes.length > 1 ? String(open) : null
@@ -471,7 +564,7 @@
         var time = Plan.formatDuration(Plan.walkingSeconds(t.weighted, state.pace, data.flat));
         sub.appendChild(el('li', {}, [el('button', { type: 'button', 'class': 'plan-option', 'data-act': 'stop-route', 'data-chain': chain.join(',') }, [
           el('span', { 'class': 'plan-option-name', text: labels[n] || stop.name }),
-          el('span', { 'class': 'plan-option-meta', text: Plan.formatKm(t.metres) + ', about ' + time })
+          el('span', { 'class': 'plan-option-meta', text: Plan.formatKm(t.metres) + ', about ' + time + (t.up !== null ? ', ' + Plan.formatMetres(t.up) + ' up' : '') })
         ])]));
       });
       item.appendChild(sub);
@@ -669,9 +762,8 @@
     box.hidden = !message;
   }
 
-  function download() {
-    var file;
-    try { file = makeFile(); } catch (error) { say(error.message, true); return; }
+  // Hands the file to the browser as a download.
+  function downloadFile(file) {
     var blob = new Blob([file.text], { type: 'application/json' });
     var url = URL.createObjectURL(blob);
     var link = el('a', { href: url, download: file.name });
@@ -679,6 +771,12 @@
     link.click();
     document.body.removeChild(link);
     setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+  }
+
+  function download() {
+    var file;
+    try { file = makeFile(); } catch (error) { say(error.message, true); return; }
+    downloadFile(file);
     say('Saved ' + file.name + '. Now open it in the app (steps below).', false);
   }
 
@@ -692,6 +790,392 @@
         if (error && error.name === 'AbortError') return;
         say('Sharing did not work here. Use Download instead.', true);
       });
+  }
+
+
+  // ------------------------------------------------------------------ keeping a plan
+  //
+  // The plan being worked on is saved in this browser after every change (STORAGE_KEY). On top of that the
+  // visitor can keep named copies in this browser (LIBRARY_KEY), save a copy as a file wherever they like
+  // (a folder on their computer, or one their cloud drive keeps in step), and open such a file again. Nothing
+  // is sent anywhere, and there is no account.
+
+  var LIBRARY_KEY = 'camino-plans-v1';
+  var MAX_SAVED = 20;
+
+  function readLibrary() {
+    var raw = null;
+    try { raw = JSON.parse(localStorage.getItem(LIBRARY_KEY) || 'null'); } catch (error) { raw = null; }
+    var list = raw && Array.isArray(raw.plans) ? raw.plans : [];
+    return list.filter(function (p) { return p && typeof p.id === 'string' && typeof p.name === 'string' && p.state && typeof p.state === 'object'; });
+  }
+
+  function writeLibrary(list) {
+    try { localStorage.setItem(LIBRARY_KEY, JSON.stringify({ v: 1, plans: list })); return true; } catch (error) { return false; }
+  }
+
+  function stamp(when) {
+    var d = when instanceof Date ? when : new Date(when);
+    if (isNaN(d.getTime())) return '';
+    try { return d.toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }); } catch (error) { return d.toISOString(); }
+  }
+
+  function keepSay(message, isError) {
+    var box = $('plan-keep-msg');
+    box.textContent = message;
+    box.className = 'plan-send-msg' + (isError ? ' plan-error' : '');
+    box.hidden = !message;
+  }
+
+  function renderKeepStatus() {
+    var line = state.days.length ? 'Your plan is saved in this browser, on this device, after every change' +
+      (ui.savedAt ? ' (last at ' + stamp(ui.savedAt) + ')' : '') + '.' : 'Add a day and your plan is saved in this browser, on this device, after every change.';
+    $('plan-keep-status').textContent = storageWorks ? line : 'This browser cannot save your plan, so keep a copy as a file.';
+    var note = $('plan-keep-storage');
+    if (ui.persisted === true) note.textContent = 'Your browser has agreed to keep what is saved here until you clear its site data.';
+    else note.textContent = 'A browser can clear what it keeps when it is short of space, and Safari clears it after a week without a visit. Save a copy as a file to be safe.';
+    note.hidden = !state.days.length && !readLibrary().length;
+    var empty = !state.days.length;
+    $('plan-save-copy').disabled = empty;
+    $('plan-save-browser').disabled = empty;
+    $('plan-print-go').disabled = empty;
+  }
+
+  function savedMeta(p) {
+    var bits = [plural(p.days || 0, 'day')];
+    if (p.startDate) bits.push('from ' + formatDate(p.startDate));
+    bits.push('saved ' + stamp(p.savedAt));
+    var meta = bits.join(', ') + '.';
+    if (p.guide && p.guide !== data.guide) meta += ' Made for an older edition of the guide, so check each day.';
+    return meta;
+  }
+
+  var savedSignature = '';
+
+  function renderSaved() {
+    var list = readLibrary().sort(function (a, b) { return String(b.savedAt).localeCompare(String(a.savedAt)); });
+    var box = $('plan-saved-list');
+    // Drawn again only when something in it changed: a list that is rebuilt while the visitor presses one of its
+    // buttons (the name field losing focus redraws the page) would lose the click.
+    var signature = JSON.stringify([ui.confirmDelete, list.map(function (p) { return [p.id, p.name, p.savedAt, p.days, p.startDate, p.guide]; })]);
+    if (signature === savedSignature) return;
+    savedSignature = signature;
+    box.innerHTML = '';
+    list.forEach(function (p) {
+      var asking = ui.confirmDelete === p.id;
+      box.appendChild(el('li', { 'class': 'plan-saved-item' }, [
+        el('span', { 'class': 'plan-saved-text' }, [
+          el('span', { 'class': 'plan-saved-name', text: p.name }),
+          el('span', { 'class': 'plan-saved-meta', text: savedMeta(p) })
+        ]),
+        el('span', { 'class': 'plan-saved-buttons' }, [
+          el('button', { type: 'button', 'class': 'plan-btn plan-btn-small', 'data-saved': 'open', 'data-id': p.id, 'aria-label': 'Open ' + p.name, text: 'Open' }),
+          el('button', { type: 'button', 'class': 'plan-btn plan-btn-small' + (asking ? ' plan-btn-danger' : ''), 'data-saved': 'delete', 'data-id': p.id,
+            'aria-label': (asking ? 'Really delete ' : 'Delete ') + p.name, text: asking ? 'Delete it for good?' : 'Delete' })
+        ])
+      ]));
+    });
+    $('plan-saved-empty').hidden = list.length > 0;
+  }
+
+  function renderAsk() {
+    var ask = ui.keepAsk, box = $('plan-keep-ask');
+    box.hidden = !ask;
+    if (ask) {
+      $('plan-keep-ask-text').textContent = 'You already have a saved plan called "' + ask.existing.name + '" (' + plural(ask.existing.days || 0, 'day') +
+        ', saved ' + stamp(ask.existing.savedAt) + '). Replace it with this one, or keep both?';
+    }
+  }
+
+  function renderKeep() {
+    renderKeepStatus();
+    renderSaved();
+    renderAsk();
+  }
+
+  function askPersistence() {
+    if (!(navigator.storage && navigator.storage.persist && navigator.storage.persisted)) return;
+    navigator.storage.persisted().then(function (already) { return already || navigator.storage.persist(); })
+      .then(function (granted) { ui.persisted = !!granted; renderKeepStatus(); }, function () { /* the note stays as it was */ });
+  }
+
+  function newSavedId() { return 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+
+  // Puts a copy of the plan into the saved list, as `name` (replacing the one with `id` if given).
+  function storeCopy(name, id) {
+    var list = readLibrary(), t = Plan.totals(state, data);
+    var entry = { id: id || newSavedId(), name: name, savedAt: new Date().toISOString(), guide: data.guide, days: t.days,
+      startDate: state.startDate, state: JSON.parse(JSON.stringify(state)) };
+    var next = list.filter(function (p) { return p.id !== entry.id; });
+    if (!id && next.length >= MAX_SAVED) { keepSay('You have ' + MAX_SAVED + ' saved plans here, which is the most this page keeps. Delete one first.', true); return false; }
+    next.push(entry);
+    if (!writeLibrary(next)) { keepSay('This browser would not save it. Use "Save a copy" to keep a file instead.', true); return false; }
+    ui.savedId = entry.id;
+    ui.keepAsk = null;
+    ui.confirmDelete = null;
+    renderKeep();
+    askPersistence();
+    return entry;
+  }
+
+  function saveInBrowser() {
+    if (!state.days.length) return;
+    var name = (String(state.name || '').trim() || 'My Camino');
+    var same = readLibrary().filter(function (p) { return p.name.trim().toLowerCase() === name.toLowerCase(); })[0];
+    if (same && same.id !== ui.savedId) {
+      ui.keepAsk = { name: name, existing: same };
+      keepSay('', false);
+      renderAsk();
+      var first = $('plan-keep-replace');
+      if (first) first.focus();
+      return;
+    }
+    var entry = storeCopy(name, same ? same.id : null);
+    if (entry) { keepSay('Saved "' + name + '" in this browser.', false); announce('Saved in this browser.'); }
+  }
+
+  function uniqueName(name) {
+    var taken = readLibrary().map(function (p) { return p.name.trim().toLowerCase(); }), n = 2;
+    while (taken.indexOf((name + ' (' + n + ')').toLowerCase()) >= 0) n += 1;
+    return name + ' (' + n + ')';
+  }
+
+  // Saves the plan as a file: through the browser's save dialog where it has one (so the visitor chooses the
+  // folder, perhaps one their cloud drive keeps in step), otherwise as a download.
+  function saveCopy() {
+    var file;
+    try { file = makeFile(); } catch (error) { keepSay(error.message + ' Put that right to save a file, or use "Save in this browser".', true); return; }
+    function viaDownload() {
+      downloadFile(file);
+      keepSay('Saved ' + file.name + ' to your downloads. Keep it somewhere safe.', false);
+    }
+    if (typeof window.showSaveFilePicker !== 'function') { viaDownload(); return; }
+    window.showSaveFilePicker({ suggestedName: file.name, types: [{ description: 'Camino itinerary', accept: { 'application/json': ['.json'] } }] })
+      .then(function (handle) {
+        return handle.createWritable().then(function (out) {
+          return out.write(file.text).then(function () { return out.close(); });
+        }).then(function () { keepSay('Saved ' + handle.name + '. Keep it somewhere safe.', false); });
+      })
+      .catch(function (error) {
+        if (error && error.name === 'AbortError') return;
+        viaDownload();
+      });
+  }
+
+  // A field being typed in keeps what is in it when the page is drawn again. A whole plan arriving must not: let go of it.
+  function releaseFocus() {
+    var active = document.activeElement;
+    if (active && active !== document.body && root.contains(active) && typeof active.blur === 'function') active.blur();
+  }
+
+  // Opens a plan from a saved copy or a file, in place of the plan on the page (Undo is offered).
+  function openPlan(next, label, notes, savedId) {
+    var replacing = state.days.length > 0;
+    releaseFocus();
+    ui.shared = null;
+    ui.fromPlace = null;
+    ui.insertAt = null;
+    ui.openStop = null;
+    ui.far = false;
+    keepSay('', false);
+    say('', false);
+    update(next, 'plan-name', 'Opened ' + label + '.', replacing ? 'Opened ' + label + ', in place of your plan.' : '');
+    ui.savedId = savedId || null;
+    ui.notice = (notes || []).join(' ');
+    renderNotice();
+    renderKeep();
+  }
+
+  function openSaved(id) {
+    var entry = readLibrary().filter(function (p) { return p.id === id; })[0];
+    if (!entry) { keepSay('That saved plan is no longer here.', true); renderKeep(); return; }
+    var cleaned = Plan.clean(entry.state, data), notes = [];
+    var before = Array.isArray(entry.state.days) ? entry.state.days.length : 0;
+    if (cleaned.days.length < before) notes.push((before - cleaned.days.length) + ' saved day' + (before - cleaned.days.length === 1 ? ' was' : 's were') + ' dropped because that part of the guide no longer exists.');
+    else if (entry.guide && entry.guide !== data.guide) notes.push('The guide has been updated since you saved this plan. Please check each day.');
+    openPlan(cleaned, '"' + entry.name + '"', notes, entry.id);
+  }
+
+  function deleteSaved(id) {
+    var list = readLibrary(), gone = list.filter(function (p) { return p.id === id; })[0];
+    if (!gone) return;
+    if (!writeLibrary(list.filter(function (p) { return p.id !== id; }))) { keepSay('This browser would not let that go. Try again.', true); return; }
+    if (ui.savedId === id) ui.savedId = null;
+    ui.confirmDelete = null;
+    keepSay('Deleted "' + gone.name + '" from this browser.', false);
+    renderKeep();
+    announce('Deleted.');
+  }
+
+  function openFile(file) {
+    if (!file) return;
+    keepSay('', false);
+    if (file.size > 3000000) { keepSay('That file is too big to be a plan.', true); return; }
+    var reader = new FileReader();
+    reader.onerror = function () { keepSay('That file could not be read.', true); };
+    reader.onload = function () {
+      var doc;
+      try { doc = JSON.parse(String(reader.result)); } catch (error) { keepSay('That is not a plan file: it is not readable text.', true); return; }
+      var result = Plan.readFile(doc, data);
+      if (!result.ok) { ui.shared = { error: result.message, file: file.name }; render('shared-title'); return; }
+      if (result.plans.length === 1) {
+        var only = result.plans[0];
+        openPlan(only.state, '"' + only.name + '"', only.notes, null);
+        return;
+      }
+      ui.shared = { state: result.plans[0].state, plans: result.plans, index: 0, file: file.name, notes: result.plans[0].notes };
+      render('shared-title');
+    };
+    reader.readAsText(file);
+  }
+
+
+  // ------------------------------------------------------------------ the printed sheet
+  //
+  // "Print or save as PDF" (and the browser's own Print) shows only #plan-print, a table built here from the same
+  // layout as the page. Nothing is added to it that the visitor did not choose: booking references, contacts and
+  // notes are on the sheet only when that box is ticked.
+
+  var PRINT_KEY = 'camino-plan-print-v1';
+  var printOptions = { dates: true, stays: true, private: false, detail: 'full' };
+
+  function loadPrintOptions() {
+    var raw = null;
+    try { raw = JSON.parse(localStorage.getItem(PRINT_KEY) || 'null'); } catch (error) { raw = null; }
+    if (!raw || typeof raw !== 'object') return;
+    ['dates', 'stays', 'private'].forEach(function (key) { if (typeof raw[key] === 'boolean') printOptions[key] = raw[key]; });
+    if (raw.detail === 'full' || raw.detail === 'summary') printOptions.detail = raw.detail;
+  }
+
+  function showPrintOptions() {
+    $('plan-print-dates').checked = printOptions.dates;
+    $('plan-print-stays').checked = printOptions.stays;
+    $('plan-print-private').checked = printOptions.private;
+    $('plan-print-full').checked = printOptions.detail === 'full';
+    $('plan-print-summary').checked = printOptions.detail === 'summary';
+  }
+
+  function readPrintOptions() {
+    printOptions.dates = $('plan-print-dates').checked;
+    printOptions.stays = $('plan-print-stays').checked;
+    printOptions.private = $('plan-print-private').checked;
+    printOptions.detail = $('plan-print-summary').checked ? 'summary' : 'full';
+    try { localStorage.setItem(PRINT_KEY, JSON.stringify(printOptions)); } catch (error) { /* it is only a convenience */ }
+  }
+
+  function printDate(iso) {
+    try {
+      return new Date(iso + 'T00:00:00Z').toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+    } catch (error) {
+      return iso;
+    }
+  }
+
+  // What a day's route cell says: where, and for a journey how and when.
+  function printRoute(info, day, full) {
+    var kids = [];
+    if (info.invalid) return [el('span', { 'class': 'plan-print-none', text: dayTitle(info) + ': not finished yet' })];
+    if (info.type === 'r') {
+      kids.push(el('span', { 'class': 'plan-print-place', text: dayTitle(info) }));
+    } else if (info.type === 't') {
+      var from = info.start ? info.start.name : '', to = info.end ? info.end.name : '';
+      kids.push(el('span', { 'class': 'plan-print-place', text: dayTitle(info) + (from || to ? ': ' + from + ' to ' + to : '') }));
+      if (full) {
+        var times = [];
+        if (day.dep !== undefined) times.push('leaves ' + Plan.formatClock(day.dep));
+        if (day.arr !== undefined) times.push('arrives ' + Plan.formatClock(day.arr));
+        if (times.length) kids.push(el('span', { 'class': 'plan-print-small', text: times.join(', ') }));
+        if (printOptions.private && day.ref) kids.push(el('span', { 'class': 'plan-print-small', text: 'Reference: ' + day.ref }));
+        if (printOptions.private && day.notes) kids.push(el('span', { 'class': 'plan-print-small', text: day.notes }));
+      }
+    } else {
+      kids.push(el('span', { 'class': 'plan-print-place', text: dayTitle(info) }));
+      var notes = [];
+      if (info.type === 's' && KIND_LABELS[info.stage.kind]) notes.push(KIND_LABELS[info.stage.kind]);
+      if (info.long) notes.push('long day');
+      if (full && notes.length) kids.push(el('span', { 'class': 'plan-print-small', text: cap(notes.join(', ')) }));
+    }
+    return kids;
+  }
+
+  function printStay(day, full) {
+    var stay = day.stay;
+    if (!stay) return [el('span', { 'class': 'plan-print-none', text: 'Not chosen yet' })];
+    var kids = [el('span', { 'class': 'plan-print-place', text: stay.name })];
+    if (full) {
+      kids.push(el('span', { 'class': 'plan-print-small', text: STAY_NAMES[stay.k] + ', ' + stay.status.toLowerCase() }));
+      if (printOptions.private) {
+        if (stay.ref) kids.push(el('span', { 'class': 'plan-print-small', text: 'Reference: ' + stay.ref }));
+        if (stay.contact) kids.push(el('span', { 'class': 'plan-print-small', text: 'Contact: ' + stay.contact }));
+        if (stay.notes) kids.push(el('span', { 'class': 'plan-print-small', text: stay.notes }));
+      }
+    }
+    return kids;
+  }
+
+  function buildPrint() {
+    var sheet = $('plan-print');
+    sheet.innerHTML = '';
+    var layout = Plan.layout(state, data), t = Plan.totals(state, data), p = Plan.progress(state, data);
+    var full = printOptions.detail === 'full', dates = printOptions.dates && !!state.startDate, stays = printOptions.stays;
+    sheet.appendChild(el('h2', { 'class': 'plan-print-title', text: state.name || 'My Camino' }));
+    if (!state.days.length) {
+      sheet.appendChild(el('p', { text: 'No days planned yet.' }));
+      return;
+    }
+    var sub = [];
+    if (p.start && p.end) sub.push(p.start.name + ' to ' + p.end.name);
+    sub.push(plural(t.days, 'day'));
+    if (dates) {
+      var first = layout.days[0].date, last = layout.days[layout.days.length - 1].date;
+      if (first) sub.push(first === last ? formatDate(first) : formatDate(first) + ' to ' + formatDate(last));
+    }
+    sheet.appendChild(el('p', { 'class': 'plan-print-sub', text: sub.join(', ') }));
+    var totals = [];
+    if (t.walking) {
+      totals.push(Plan.formatKm(t.metres) + ' on foot over ' + plural(t.walking, 'walking day'));
+      if (full) {
+        totals.push('about ' + Plan.formatDuration(t.seconds) + ' of walking at ' + state.pace.toFixed(1) + ' km/h');
+        if (t.climb) totals.push(Plan.formatMetres(t.up) + ' up, ' + Plan.formatMetres(t.down) + ' down');
+        if (t.long) totals.push(plural(t.long, 'long day'));
+      }
+    }
+    if (t.rest) totals.push(plural(t.rest, 'rest day'));
+    if (t.travel) totals.push(plural(t.travel, 'travel day'));
+    if (stays) totals.push(t.stays + ' of ' + plural(t.days, 'night') + ' chosen');
+    sheet.appendChild(el('p', { 'class': 'plan-print-totals', text: totals.join('. ') + '.' }));
+
+    var heads = [['Day', ''], dates ? ['Date', ''] : null, ['Route', 'plan-print-route'], ['Distance', 'plan-print-num'],
+      full ? ['Time', 'plan-print-num'] : null, full ? ['Climb', 'plan-print-num'] : null, stays ? ['Where to stay', 'plan-print-stay'] : null].filter(Boolean);
+    var table = el('table', { 'class': 'plan-print-table' }, [
+      el('thead', {}, [el('tr', {}, heads.map(function (h) { return el('th', { scope: 'col', 'class': h[1] || null, text: h[0] }); }))])
+    ]);
+    var body = el('tbody');
+    layout.days.forEach(function (info, i) {
+      var day = state.days[i], walking = info.type === 's' || info.type === 'c';
+      var cells = [el('td', { 'class': 'plan-print-day', text: Plan.dayLabel(info) })];
+      if (dates) cells.push(el('td', { 'class': 'plan-print-date', text: info.date ? printDate(info.date) : '' }));
+      cells.push(el('td', { 'class': 'plan-print-route' }, printRoute(info, day, full)));
+      cells.push(el('td', { 'class': 'plan-print-num', text: walking && info.metres !== null ? Plan.formatKm(info.metres) : '' }));
+      if (full) {
+        cells.push(el('td', { 'class': 'plan-print-num', text: walking && info.seconds !== null ? Plan.formatDuration(info.seconds) : '' }));
+        cells.push(el('td', { 'class': 'plan-print-num' }, walking && info.up !== null
+          ? [el('span', { 'class': 'plan-print-line', text: Plan.formatMetres(info.up) + ' up' }), el('span', { 'class': 'plan-print-line', text: Plan.formatMetres(info.down) + ' down' })] : []));
+      }
+      if (stays) cells.push(el('td', { 'class': 'plan-print-stay' }, printStay(day, full)));
+      body.appendChild(el('tr', { 'class': 'plan-print-' + (walking ? 'walk' : (info.type === 'r' ? 'rest' : 'travel')) }, cells));
+    });
+    table.appendChild(body);
+    sheet.appendChild(table);
+    var foot = 'Planned at ' + location.host + location.pathname + ' on ' + new Date().toLocaleDateString() +
+      '. Distances and times are estimates for a walking pace of ' + state.pace.toFixed(1) + ' km/h on the flat. Check opening times, prices and availability before you go.';
+    sheet.appendChild(el('p', { 'class': 'plan-print-foot', text: foot }));
+  }
+
+  function printPlan() {
+    readPrintOptions();
+    buildPrint();
+    window.print();
   }
 
   // ------------------------------------------------------------------ sharing by QR code or link
@@ -783,8 +1267,38 @@
 
   // ------------------------------------------------------------------ the stay chooser
 
-  function stayItem(kind, id, name) {
-    return el('li', {}, [el('button', { type: 'button', 'class': 'plan-pick', 'data-pick-kind': kind, 'data-pick-id': String(id), text: name })]);
+  // The facts and the ways to reach a place, opened from its Details button.
+  function pickPanel(kind, id, d, name, placeId, townName) {
+    var facts = [];
+    function fact(label, value) { if (value) facts.push(el('dt', { text: label }), el('dd', { text: value })); }
+    fact('Address', d.ad);
+    fact('Open', d.op);
+    fact('Check-in', d.ci);
+    fact('Facilities', Plan.facilityNames(d.f).join(', '));
+    fact('Price note', d.rn);
+    var kids = [];
+    if (facts.length) kids.push(el('dl', { 'class': 'plan-facts' }, facts));
+    var links = linkRow(d, name);
+    if (links) kids.push(links);
+    if (placeId > 0) {
+      kids.push(el('p', { 'class': 'plan-pick-town' }, [el('a', { href: '/location/' + placeId + '/', target: '_blank', rel: 'noopener',
+        text: 'More about ' + townName + ' in the guide' })]));
+    }
+    return el('div', { 'class': 'plan-pick-panel' }, kids);
+  }
+
+  function stayItem(kind, id, name, placeId, townName) {
+    var d = detailFor(kind, id), line = Plan.stayLine(kind, d), key = kind + id;
+    var open = !!d && ui.openPick === key;
+    var pick = el('button', { type: 'button', 'class': 'plan-pick', 'data-pick-kind': kind, 'data-pick-id': String(id), 'data-pick-name': name }, [
+      el('span', { 'class': 'plan-pick-name', text: name }),
+      line ? el('span', { 'class': 'plan-pick-line', text: line }) : null
+    ]);
+    var info = d ? el('button', { type: 'button', 'class': 'plan-pick-info', 'data-info': key, 'aria-expanded': open ? 'true' : 'false',
+      'aria-label': 'Details of ' + name, text: 'Details' }) : null;
+    var kids = [el('div', { 'class': 'plan-pick-row' }, [pick, info])];
+    if (open) kids.push(pickPanel(kind, id, d, name, placeId, townName));
+    return el('li', {}, kids);
   }
 
   function renderStayList() {
@@ -794,12 +1308,12 @@
     var found = info.end.id > 0 ? Plan.staysAt(info.end.id, data) : { albergues: [], privates: [] };
     function match(s) { return !query || s.name.toLowerCase().indexOf(query) >= 0; }
     var albergues = found.albergues.filter(match), privates = found.privates.filter(match);
-    var list = $('plan-stay-list');
+    var list = $('plan-stay-list'), scrolled = list.scrollTop;
     list.innerHTML = '';
     function group(title, items, kind) {
       if (!items.length) return;
       list.appendChild(el('li', { 'class': 'plan-pick-group', text: title }));
-      items.forEach(function (s) { list.appendChild(stayItem(kind, s.id, s.name)); });
+      items.forEach(function (s) { list.appendChild(stayItem(kind, s.id, s.name, info.end.id, info.end.name)); });
     }
     group('Albergues', albergues, 'a');
     group('Hotels and guesthouses', privates, 'p');
@@ -807,6 +1321,8 @@
     $('plan-stay-empty').hidden = !!(albergues.length + privates.length);
     $('plan-stay-empty').textContent = total ? 'Nothing matches that. Try fewer letters.' : 'The guide has no places to stay listed for ' + info.end.name + '. Add your own below.';
     $('plan-stay-search-row').hidden = total < 8;
+    $('plan-stay-note').hidden = !(ui.details && total);
+    list.scrollTop = scrolled;
   }
 
   function openStay(index) {
@@ -818,7 +1334,9 @@
     $('plan-stay-search').value = '';
     $('plan-stay-status').value = current ? current.status : 'Considering';
     $('plan-stay-own').value = current && current.k === 'c' ? current.name : '';
+    ui.openPick = null;
     renderStayList();
+    loadDetails();
     var dialog = $('plan-stay-dialog');
     if (typeof dialog.showModal === 'function') dialog.showModal(); else dialog.setAttribute('open', '');
   }
@@ -836,6 +1354,120 @@
       ['ref', 'notes', 'contact'].forEach(function (key) { if (old[key]) stay[key] = old[key]; });
     }
     update(Plan.setStay(state, i, stay, data), 'day-' + i + '-stay', 'Stay chosen for ' + ref(i) + '.');
+  }
+
+  // ------------------------------------------------------------------ ask for a bed
+
+  var HELPER_KEY = 'camino-plan-helper-v1';   // the name and the number of people, kept in this browser only
+
+  function loadHelper() {
+    var saved = null;
+    try { saved = JSON.parse(localStorage.getItem(HELPER_KEY) || 'null'); } catch (error) { saved = null; }
+    var people = Math.floor(Number(saved && saved.people));
+    return { name: Msg ? Msg.cleanName(saved && saved.name) : '', people: people >= 1 && people <= 10 ? people : 1 };
+  }
+
+  function saveHelper() {
+    try { localStorage.setItem(HELPER_KEY, JSON.stringify({ name: Msg.cleanName($('plan-bed-name').value), people: wholeNumber($('plan-bed-people').value) || 1 })); } catch (error) { /* it is only a convenience */ }
+  }
+
+  function wholeNumber(text) {
+    var n = Number(String(text).trim());
+    return String(text).trim() !== '' && n === Math.floor(n) ? n : NaN;
+  }
+
+  // What the form says now, or what is wrong with it.
+  function bedForm() {
+    var stay = ui.bed.stay, d = ui.bed.d;
+    var form = { language: Msg.languageFor(d), arrival: $('plan-bed-date').value, yourName: $('plan-bed-name').value,
+      nights: wholeNumber($('plan-bed-nights').value), people: wholeNumber($('plan-bed-people').value),
+      room: stay.k === 'p' || (!$('plan-bed-room-row').hidden && $('plan-bed-room').value === 'room') ? 'room' : 'dormitory',
+      placeName: stay.name };
+    if (!Msg.parseDate(form.arrival)) form.problem = 'Choose your arrival date to write the message.';
+    else if (!(form.nights >= 1 && form.nights <= Msg.MAX_NIGHTS)) form.problem = 'Nights must be a whole number from 1 to ' + Msg.MAX_NIGHTS + '.';
+    else if (!(form.people >= 1 && form.people <= Msg.MAX_PEOPLE)) form.problem = 'People must be a whole number from 1 to ' + Msg.MAX_PEOPLE + '.';
+    return form;
+  }
+
+  function draftOf(form, channel) {
+    return form.problem ? null : Msg.build({ language: form.language, channel: channel, placeName: form.placeName, arrival: form.arrival,
+      nights: form.nights, people: form.people, room: form.room, yourName: form.yourName });
+  }
+
+  function setLink(anchor, href) {
+    if (href) { anchor.setAttribute('href', href); anchor.removeAttribute('aria-disabled'); }
+    else { anchor.removeAttribute('href'); anchor.setAttribute('aria-disabled', 'true'); }
+  }
+
+  // Redraws the message (unless the visitor has changed it) and the buttons that send it.
+  function refreshBed() {
+    if (!ui.bed) return;
+    var d = ui.bed.d, form = bedForm(), whatsapp = draftOf(form, 'whatsapp'), email = draftOf(form, 'email');
+    var text = $('plan-bed-text');
+    if (!ui.bed.edited) text.value = whatsapp ? whatsapp.body : '';
+    $('plan-bed-problem').hidden = !form.problem;
+    $('plan-bed-problem').textContent = form.problem || '';
+    $('plan-bed-meaning').textContent = whatsapp ? whatsapp.meaning : '';
+    $('plan-bed-language').textContent = 'This message is in ' + (form.language === 'fr' ? 'French' : 'Spanish') + ', the language of the place.';
+    $('plan-bed-reset').hidden = !ui.bed.edited;
+    var message = text.value, ready = message.trim() !== '';
+    var wa = $('plan-bed-whatsapp'), mail = $('plan-bed-email');
+    wa.hidden = !d.wa;
+    mail.hidden = !d.em;
+    var waLink = null, mailLink = null;
+    try { if (d.wa && ready) waLink = Msg.whatsAppLink(d.wa, message); } catch (error) { waLink = null; }
+    try { if (d.em && ready) mailLink = Msg.emailLink(d.em, email ? email.subject : '', ui.bed.edited || !email ? message : email.body); } catch (error) { mailLink = null; }
+    setLink(wa, waLink);
+    setLink(mail, mailLink);
+    $('plan-bed-copy').disabled = !ready;
+  }
+
+  function openBed(index) {
+    var stay = state.days[index] && state.days[index].stay;
+    var d = stay ? detailFor(stay.k, stay.id, stay.name) : null;
+    if (!Msg || !d || !Msg.canAsk(d)) return;
+    var info = Plan.layout(state, data).days[index], saved = loadHelper();
+    ui.bed = { i: index, stay: stay, d: d, edited: false };
+    $('plan-bed-title').textContent = 'Ask ' + stay.name + ' for a bed';
+    $('plan-bed-date').value = info && info.date ? info.date : '';
+    $('plan-bed-nights').value = '1';
+    $('plan-bed-people').value = String(saved.people);
+    $('plan-bed-name').value = saved.name;
+    var rooms = stay.k === 'a' && (d.f || '').indexOf('r') >= 0;   // an albergue offers a room only when the guide says it has them
+    $('plan-bed-room-row').hidden = !rooms;
+    $('plan-bed-room').value = 'dormitory';
+    $('plan-bed-msg').hidden = true;
+    refreshBed();
+    var dialog = $('plan-bed-dialog');
+    if (typeof dialog.showModal === 'function') dialog.showModal(); else dialog.setAttribute('open', '');
+    $('plan-bed-' + ($('plan-bed-date').value ? 'text' : 'date')).focus();
+  }
+
+  function closeBed() {
+    var index = ui.bed ? ui.bed.i : -1;
+    closeDialog($('plan-bed-dialog'));
+    ui.bed = null;
+    var back = index >= 0 ? root.querySelector('[data-focus="day-' + index + '-askbed"]') : null;
+    if (back) back.focus();
+  }
+
+  function copyMessage() {
+    var text = $('plan-bed-text'), note = $('plan-bed-msg');
+    function done(ok) {
+      note.hidden = false;
+      note.textContent = ok ? 'Message copied.' : 'Could not copy. Select the message and copy it yourself.';
+      note.className = 'plan-send-msg' + (ok ? '' : ' plan-error');
+      saveHelper();
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text.value).then(function () { done(true); }, function () { done(legacyCopy(text)); });
+    } else {
+      done(legacyCopy(text));
+    }
+  }
+
+  function legacyCopy(field) {
+    try { field.focus(); field.select(); return !!document.execCommand('copy'); } catch (error) { return false; }
   }
 
   // ------------------------------------------------------------------ events
@@ -1032,6 +1664,7 @@
         cap(ref(i)) + ' removed.', 'Removed ' + ref(i) + ' (' + gone + ').');
     }
     else if (act === 'stay') openStay(i);
+    else if (act === 'askbed') openBed(i);
     else if (act === 'stay-clear') update(Plan.setStay(state, i, null, data), 'day-' + i + '-stay', 'Stay removed.');
   });
 
@@ -1111,12 +1744,39 @@
     if (box.open) ui.openMore[key] = true; else delete ui.openMore[key];
   }, true);
 
+  ['plan-bed-date', 'plan-bed-nights', 'plan-bed-people', 'plan-bed-room', 'plan-bed-name'].forEach(function (id) {
+    $(id).addEventListener('input', function () { refreshBed(); });
+    $(id).addEventListener('change', function () { refreshBed(); saveHelper(); });
+  });
+  $('plan-bed-text').addEventListener('input', function () { if (ui.bed) { ui.bed.edited = true; refreshBed(); } });
+  $('plan-bed-reset').addEventListener('click', function () { if (ui.bed) { ui.bed.edited = false; refreshBed(); $('plan-bed-text').focus(); } });
+  $('plan-bed-copy').addEventListener('click', copyMessage);
+  $('plan-bed-whatsapp').addEventListener('click', saveHelper);
+  $('plan-bed-email').addEventListener('click', saveHelper);
+  $('plan-bed-close').addEventListener('click', closeBed);
+  $('plan-bed-dialog').addEventListener('click', function (e) { if (e.target === e.currentTarget) closeBed(); });
+  $('plan-bed-dialog').addEventListener('cancel', function () { ui.bed = null; });
+
   $('plan-stay-search').addEventListener('input', renderStayList);
   $('plan-stay-list').addEventListener('click', function (e) {
+    var toggle = e.target.closest ? e.target.closest('button[data-info]') : null;
+    if (toggle) {
+      var key = toggle.getAttribute('data-info');
+      ui.openPick = ui.openPick === key ? null : key;
+      renderStayList();
+      var again = $('plan-stay-list').querySelector('[data-info="' + key + '"]');
+      if (again) again.focus();
+      var shown = $('plan-stay-list').querySelector('.plan-pick-panel');
+      if (shown) {   // bring the place and its details to the top of the list
+        var item = shown.parentNode, box = $('plan-stay-list');
+        box.scrollTop += item.getBoundingClientRect().top - box.getBoundingClientRect().top;
+      }
+      return;
+    }
     var target = e.target.closest ? e.target.closest('button[data-pick-kind]') : null;
     if (!target) return;
     chooseStay({ k: target.getAttribute('data-pick-kind'), id: Number(target.getAttribute('data-pick-id')),
-      name: target.textContent, status: $('plan-stay-status').value });
+      name: target.getAttribute('data-pick-name'), status: $('plan-stay-status').value });
   });
   $('plan-stay-own-form').addEventListener('submit', function (e) {
     e.preventDefault();
@@ -1144,7 +1804,13 @@
   $('plan-shared-open').addEventListener('click', function () {
     var shared = ui.shared;
     if (!shared || !shared.state) return;
+    if (shared.file) {
+      var chosen = shared.plans[shared.index];
+      openPlan(chosen.state, '"' + chosen.name + '"', chosen.notes, null);
+      return;
+    }
     var replacing = state.days.length > 0;
+    releaseFocus();
     ui.shared = null;
     ui.fromPlace = null;
     ui.insertAt = null;
@@ -1153,6 +1819,59 @@
     ui.notice = '';
     say('', false);
     update(shared.state, 'plan-name', 'Opened the shared plan.', replacing ? 'Opened the shared plan, in place of yours.' : '');
+  });
+  $('plan-shared-pick').addEventListener('change', function (e) {
+    var shared = ui.shared;
+    if (!shared || !shared.plans) return;
+    shared.index = Number(e.target.value) || 0;
+    shared.state = shared.plans[shared.index].state;
+    shared.notes = shared.plans[shared.index].notes;
+    renderShared();
+  });
+
+  ['plan-print-dates', 'plan-print-stays', 'plan-print-private', 'plan-print-full', 'plan-print-summary'].forEach(function (id) {
+    $(id).addEventListener('change', readPrintOptions);
+  });
+  $('plan-print-go').addEventListener('click', printPlan);
+  // The browser's own Print (Ctrl+P, or its menu) gets the same sheet.
+  window.addEventListener('beforeprint', function () { readPrintOptions(); buildPrint(); });
+
+  $('plan-save-copy').addEventListener('click', saveCopy);
+  $('plan-save-browser').addEventListener('click', saveInBrowser);
+  $('plan-open-file').addEventListener('click', function () { $('plan-file').click(); });
+  $('plan-file').addEventListener('change', function (e) {
+    var file = e.target.files && e.target.files[0];
+    openFile(file);
+    e.target.value = '';   // choosing the same file again must work
+  });
+  $('plan-keep-replace').addEventListener('click', function () {
+    var ask = ui.keepAsk;
+    if (!ask) return;
+    var entry = storeCopy(ask.name, ask.existing.id);
+    if (entry) keepSay('Replaced "' + ask.name + '" in this browser.', false);
+  });
+  $('plan-keep-both').addEventListener('click', function () {
+    var ask = ui.keepAsk;
+    if (!ask) return;
+    var name = uniqueName(ask.name);
+    var entry = storeCopy(name, null);
+    if (entry) keepSay('Saved this plan as "' + name + '" next to the other.', false);
+  });
+  $('plan-keep-cancel').addEventListener('click', function () {
+    ui.keepAsk = null;
+    renderAsk();
+    $('plan-save-browser').focus();
+  });
+  $('plan-saved-list').addEventListener('click', function (e) {
+    var target = e.target.closest ? e.target.closest('button[data-saved]') : null;
+    if (!target) return;
+    var id = target.getAttribute('data-id');
+    if (target.getAttribute('data-saved') === 'open') { ui.confirmDelete = null; openSaved(id); return; }
+    if (ui.confirmDelete === id) { deleteSaved(id); return; }
+    ui.confirmDelete = id;
+    renderSaved();
+    var again = root.querySelector('#plan-saved-list button[data-saved="delete"][data-id="' + id + '"]');
+    if (again) again.focus();
   });
   $('plan-shared-keep').addEventListener('click', function () {
     ui.shared = null;
@@ -1170,6 +1889,7 @@
     ui.far = false;
     ui.notice = '';
     say('', false);
+    ui.savedId = null;
     update(Plan.newState(data), 'plan-name', 'Plan cleared.');
   });
 
@@ -1181,6 +1901,12 @@
   });
   $('plan-pace').min = data.pace.min;
   $('plan-pace').max = data.pace.max;
+  loadPrintOptions();
+  showPrintOptions();
   root.classList.add('plan-ready');
+  if (navigator.storage && navigator.storage.persisted) {
+    navigator.storage.persisted().then(function (yes) { ui.persisted = !!yes; renderKeepStatus(); }, function () { /* unknown */ });
+  }
   render(readLink() ? 'shared-title' : undefined);
+  if (state.days.some(function (d) { return d.stay && d.stay.k !== 'c'; })) loadDetails();
 }());

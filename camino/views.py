@@ -14,7 +14,7 @@ from django.urls import reverse
 from . import planner, seo
 from .models import (
     Stage, Path, ElevationPoint, MapLocationCoord, Location,
-    Albergue, PrivateAccomm, TrackPoint
+    Albergue, PrivateAccomm, TrackPoint, BOOKING_AFFILIATE_PARAMS
 )
 
 # camino/views.py
@@ -216,6 +216,18 @@ def plan(request):
     return render(request, 'camino/plan.html', context)
 
 
+def plan_stays(request):
+    """Prices, beds, facilities and contact links for the places to stay, for the planner's stay picker.
+
+    Kept apart from the planner page so the page stays light: the planner asks for this the first
+    time it needs it, and the service worker keeps a copy for use offline.
+    """
+    body = planner.get_stay_details_json(connection, BOOKING_AFFILIATE_PARAMS)
+    response = HttpResponse(body, content_type='application/json; charset=utf-8')
+    response['Cache-Control'] = 'public, max-age=3600'
+    return response
+
+
 def search(request):
     query = request.GET.get('q', '').strip()[:80]
     town_results, stage_results = [], []
@@ -323,6 +335,7 @@ def service_worker(request):
         '/',
         reverse('towns'),
         reverse('plan'),
+        reverse('plan_stays'),
         reverse('offline'),
         reverse('offline_pack'),
         static('camino/js/pwa.js'),
@@ -331,6 +344,7 @@ def service_worker(request):
         static('camino/js/plan-core.js'),
         static('camino/js/qr.js'),
         static('camino/js/plan-share.js'),
+        static('camino/js/plan-message.js'),
         static('camino/js/plan.js'),
         static('camino/css/plan.css'),
         static('camino/chart.umd.min.js'),
@@ -357,6 +371,7 @@ def robots_txt(request):
         'Allow: /\n'
         'Disallow: /search/\n'
         'Disallow: /offline-pack.json\n'
+        'Disallow: /plan/stays.json\n'
         f'Sitemap: {origin}/sitemap.xml\n'
     )
     return HttpResponse(body, content_type='text/plain; charset=utf-8')

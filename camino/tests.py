@@ -13,12 +13,13 @@ import unittest
 from decimal import Decimal
 from pathlib import Path
 from types import SimpleNamespace
+from urllib.parse import parse_qs, urlparse
 
 from django.conf import settings
 from django.test import Client, RequestFactory, SimpleTestCase
 
 from . import seo, views
-from .models import Albergue, PrivateAccomm, Stage, clean_email, google_maps_url
+from .models import BOOKING_AFFILIATE_PARAMS, Albergue, PrivateAccomm, Stage, clean_email, google_maps_url
 
 
 class SeoHelperTests(SimpleTestCase):
@@ -109,14 +110,21 @@ class PwaEndpointTests(SimpleTestCase):
         body = self.client.get('/sw.js').content.decode()
         urls = json.loads(re.search(r'const PRECACHE_URLS = (\[.*?\]);', body, re.S).group(1))
         self.assertIn('/plan/', urls)
-        for name in ('plan-core.js', 'qr.js', 'plan-share.js', 'plan.js', 'plan.css'):
+        for name in ('plan-core.js', 'qr.js', 'plan-share.js', 'plan-message.js', 'plan.js', 'plan.css'):
             self.assertTrue(any(u.endswith('/' + name) for u in urls), name)
+
+    def test_the_stay_details_are_saved_for_offline_use(self):
+        body = self.client.get('/sw.js').content.decode()
+        urls = json.loads(re.search(r'const PRECACHE_URLS = (\[.*?\]);', body, re.S).group(1))
+        self.assertIn('/plan/stays.json', urls)
+        self.assertIn("path === '/plan/stays.json'", body)   # and the worker answers it from the saved copy when offline
 
     def test_robots_points_to_sitemap(self):
         response = self.client.get('/robots.txt')
         self.assertEqual(response.status_code, 200)
         self.assertIn('Sitemap: ', response.content.decode())
         self.assertIn('Disallow: /search/', response.content.decode())
+        self.assertIn('Disallow: /plan/stays.json', response.content.decode())
 
     def test_offline_page_renders_without_indexing(self):
         response = self.client.get('/offline/')
@@ -181,7 +189,13 @@ class PlannerPageContractTests(SimpleTestCase):
         self.assertLess(template.index('plan-core.js'), template.index('camino/js/plan-share.js'))
         self.assertLess(template.index('camino/js/qr.js'), template.index('camino/js/plan.js'))
         self.assertLess(template.index('camino/js/plan-share.js'), template.index('camino/js/plan.js'))
+        self.assertLess(template.index('camino/js/plan-message.js'), template.index('camino/js/plan.js'))   # the "Ask for a bed" message
         self.assertIn('id="plan-data" type="application/json"', template)
+
+    def test_the_stay_picker_knows_where_to_load_the_details_from(self):
+        template = self.read('templates', 'camino', 'plan.html')
+        self.assertIn('data-details-url="{% url \'plan_stays\' %}"', template)
+        self.assertIn('id="plan-stay-note"', template)
 
     def test_the_menu_links_to_the_planner(self):
         base = self.read('templates', 'camino', 'base.html')
@@ -269,7 +283,51 @@ class LiveDatabaseSmokeTests(unittest.TestCase):
         self.assertGreater(len(data['stays']), 100)
         self.assertGreater(len(data['routes']['paths']), 200)  # the walking routes between towns
         self.assertTrue(all(str(row[1]) in data['places'] and str(row[2]) in data['places'] for row in data['routes']['paths']))
+        self.assertTrue(any(len(row) == 13 for row in data['routes']['paths']))  # climb, descent and heights are there
         self.assertNotIn('<', match.group(1))  # nothing in the data can end the script tag
+
+    def test_plan_stays_json_describes_the_places_to_stay(self):
+        response = self.client.get('/plan/stays.json')
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('application/json', response['Content-Type'])
+        self.assertEqual(response['Cache-Control'], 'public, max-age=3600')
+        self.assertLess(len(response.content), 350_000)
+        data = json.loads(response.content)
+        self.assertEqual(data['v'], 1)
+        self.assertEqual(data['aff'], BOOKING_AFFILIATE_PARAMS)
+        self.assertGreater(len(data['a']), 400)
+        self.assertGreater(len(data['p']), 500)
+        # the places the planner lists are the ones it has details for
+        html = self.get('/plan/')
+        plan = json.loads(re.search(r'<script id="plan-data" type="application/json">(.*?)</script>', html, re.S).group(1))
+        listed = {('a' if kind == 0 else 'p', str(ident)) for kind, ident, _, _ in plan['stays']}
+        have = {(k, i) for k in ('a', 'p') for i in data[k]}
+        self.assertGreater(len(listed & have), 0.95 * len(listed))
+
+    def test_plan_stays_json_matches_the_database(self):
+        data = json.loads(self.client.get('/plan/stays.json').content)
+        albergue = Albergue.objects.filter(rate_1p_min__gt=0, beds__gt=0).order_by('id').first()
+        detail = data['a'][str(albergue.id)]
+        self.assertEqual(detail['p'], float(albergue.rate_1p_min))
+        self.assertEqual(detail['n'], albergue.beds)
+        private = PrivateAccomm.objects.filter(rate_1p_min__gt=0).order_by('id').first()
+        self.assertEqual(data['p'][str(private.id)]['p'], float(private.rate_1p_min))
+
+    def test_the_booking_links_the_page_makes_match_the_town_pages(self):
+        """The page adds the affiliate details to the plain address in the file; the town pages add them in Python."""
+        data = json.loads(self.client.get('/plan/stays.json').content)
+        checked = 0
+        for model, kind in ((Albergue, 'a'), (PrivateAccomm, 'p')):
+            for place in model.objects.exclude(booking_url__isnull=True).order_by('id')[:400]:
+                detail = data[kind].get(str(place.id), {})
+                if 'bk' not in detail or not place.valid_booking_url:
+                    continue
+                page = parse_qs(urlparse(detail['bk']).query)
+                page.update({key: [value] for key, value in data['aff'].items()})
+                self.assertEqual(page, parse_qs(urlparse(place.valid_booking_url).query), place.id)
+                self.assertEqual(urlparse(detail['bk']).path, urlparse(place.valid_booking_url).path)
+                checked += 1
+        self.assertGreater(checked, 50)
 
     def test_towns_page_lists_towns(self):
         html = self.get('/towns/')

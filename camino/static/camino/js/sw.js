@@ -58,6 +58,10 @@ self.addEventListener('fetch', (event) => {
     const path = url.pathname;
     // Never keep the worker itself or the offline pack list.
     if (path === '/sw.js' || path === '/offline-pack.json') return;
+    if (path === '/plan/stays.json') {
+      event.respondWith(networkFirstData(event, request));
+      return;
+    }
     if (request.mode === 'navigate' || (request.headers.get('accept') || '').includes('text/html')) {
       event.respondWith(networkFirstPage(event, request));
     } else if (path.startsWith('/static/')) {
@@ -101,6 +105,22 @@ function networkFirstPage(event, request) {
       return (await caches.match(OFFLINE_URL)) || Response.error();
     }
   });
+}
+
+/* The planner's details of each place to stay: current if the network answers, otherwise the
+   copy saved the last time (it is also saved when the worker installs). */
+async function networkFirstData(event, request) {
+  const cache = await caches.open(CACHE_STATIC);
+  const network = fetch(request).then((response) => {
+    if (response.ok) event.waitUntil(cache.put(request.url, response.clone()));
+    return response;
+  });
+  const timeout = new Promise((resolve) => setTimeout(() => resolve(null), NETWORK_TIMEOUT_MS));
+  const response = await Promise.race([network.catch(() => null), timeout]);
+  if (response && response.ok) return response;
+  const saved = await cache.match(request.url);
+  if (saved) return saved;
+  return response || network;
 }
 
 async function storePage(url, response) {

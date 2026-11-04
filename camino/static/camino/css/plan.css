@@ -134,6 +134,7 @@
 .plan-chip-valley { background: #e0f2fe; color: #075985; }
 .plan-chip-mountain { background: #fee2e2; color: #991b1b; }
 .plan-chip-alt { background: #ede9fe; color: #5b21b6; }
+.plan-chip-long { background: #ffedd5; color: #9a3412; }
 
 /* Adding a day */
 .plan-start-picker { margin: 0.9rem 0; }
@@ -231,18 +232,71 @@
 .plan-dialog-body { padding: 1rem 1.1rem 1.2rem; display: grid; gap: 0.9rem; }
 .plan-dialog-body h3 { margin: 0; color: var(--navy, #1e3a8a); }
 .plan-dialog-body p { margin: 0; }
-.plan-pick-list { list-style: none; margin: 0; padding: 0; max-height: 16rem; overflow-y: auto; border: 1px solid var(--border, #e2e8f0); border-radius: 6px; }
+.plan-pick-list { list-style: none; margin: 0; padding: 0; max-height: min(24rem, 55vh); overflow-y: auto; border: 1px solid var(--border, #e2e8f0); border-radius: 6px; }
 .plan-pick-list:empty { display: none; }
 .plan-pick-group { padding: 0.35rem 0.75rem; background: #f1f5f9; font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #475569; }
 .plan-pick { display: block; width: 100%; min-height: 44px; padding: 0.55rem 0.75rem; text-align: left; font: inherit; color: var(--text, #1e293b); background: #fff; border: 0; border-top: 1px solid var(--border, #e2e8f0); cursor: pointer; }
 .plan-pick:hover { background: #fef3c7; }
+/* The places to stay: a price and bed line, a Details button, and the ways to reach a place */
+.plan-pick-row { display: flex; align-items: stretch; border-top: 1px solid var(--border, #e2e8f0); }
+.plan-pick-row .plan-pick { flex: 1 1 auto; width: auto; min-width: 0; border-top: 0; }
+.plan-pick-name { display: block; font-weight: 600; }
+.plan-pick-line { display: block; margin-top: 0.1rem; font-size: 0.85rem; color: #475569; }
+.plan-pick-info { flex: none; min-width: 5rem; min-height: 44px; padding: 0 0.8rem; font: inherit; font-size: 0.88rem; color: #075985; background: #fff; border: 0; border-left: 1px solid var(--border, #e2e8f0); cursor: pointer; }
+.plan-pick-info:hover { background: #fef3c7; }
+.plan-pick-info[aria-expanded="true"] { background: #f1f5f9; }
+.plan-pick-info:focus-visible, .plan-link:focus-visible { outline: 3px solid var(--gold, #d97706); outline-offset: -3px; }
+.plan-pick-panel { padding: 0.65rem 0.75rem 0.8rem; background: #f8fafc; border-top: 1px solid var(--border, #e2e8f0); font-size: 0.9rem; color: #334155; }
+.plan-facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 0.25rem 0.8rem; margin: 0 0 0.7rem; }
+.plan-facts dt { color: #64748b; }
+.plan-facts dd { margin: 0; overflow-wrap: anywhere; }
+.plan-links { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.plan-link { display: inline-flex; align-items: center; min-height: 44px; padding: 0 0.8rem; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; color: #0f172a; font-size: 0.9rem; text-decoration: none; }
+.plan-link:hover { background: #fef3c7; }
+.plan-pick-panel .plan-pick-town { margin: 0.7rem 0 0; font-size: 0.85rem; }
+.plan-stay-guide { flex: 1 1 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem 0.8rem; font-size: 0.85rem; color: #475569; }
+.plan-stay-guide[hidden] { display: none; }
+.plan-stay-guide .plan-link { min-height: 36px; padding: 0 0.65rem; font-size: 0.85rem; }
 .plan-own label { display: block; margin-bottom: 0.25rem; font-size: 0.85rem; font-weight: 600; }
 .plan-own-row { display: flex; gap: 0.5rem; }
 .plan-own-row .plan-input { flex: 1; }
 
+/* The sheet that is printed or saved as a PDF: built by the page (buildPrint in plan.js), shown only on paper. */
+.plan-print { display: none; }
+.plan-print-options { margin: 0.75rem 0; padding: 0.6rem 0.9rem 0.75rem; border: 1px solid var(--border, #e2e8f0); border-radius: 8px; }
+.plan-print-options legend { padding: 0 0.4rem; font-weight: 600; color: var(--navy, #1e3a8a); }
+.plan-check { display: block; margin: 0.4rem 0; }
+.plan-check input { margin-right: 0.45rem; }
+.plan-print-private-hint { margin: -0.2rem 0 0.5rem 1.65rem; font-size: 0.85rem; }
+
 @media print {
-  .plan-add, .plan-send, .plan-reset-row, .plan-day-actions, .plan-stay .plan-btn, .plan-status { display: none !important; }
-  .plan-day { break-inside: avoid; box-shadow: none; }
+  @page { margin: 14mm 12mm; }
+  .site-nav { display: none !important; }
+  #plan-root > :not(#plan-print) { display: none !important; }
+  body { background: #fff !important; }
+  main { padding: 0 !important; margin: 0 !important; max-width: none !important; }
+  .plan { max-width: none; padding: 0; margin: 0; }
+  .plan-print { display: block; color: #000; font-size: 9.5pt; line-height: 1.35; text-align: left; }
+  .plan-print-title { margin: 0 0 1mm; font-size: 19pt; color: #000; text-align: left; }
+  .plan-print-sub { margin: 0 0 1mm; font-size: 11pt; font-weight: 600; }
+  .plan-print-totals { margin: 0 0 4mm; color: #333; }
+  .plan-print-table { width: 100%; border-collapse: collapse; table-layout: auto; }
+  .plan-print-table th { padding: 1.5mm 2mm; text-align: left; font-size: 8.5pt; text-transform: uppercase; letter-spacing: 0.03em; border-bottom: 1.5pt solid #000; }
+  .plan-print-table td { padding: 2mm; vertical-align: top; border-bottom: 0.5pt solid #999; }
+  .plan-print-table thead { display: table-header-group; }
+  .plan-print-table tr { break-inside: avoid; page-break-inside: avoid; }
+  .plan-print-table th:nth-child(1), .plan-print-table td:nth-child(1) { white-space: nowrap; }
+  .plan-print-table .plan-print-num { white-space: nowrap; text-align: right; }
+  .plan-print-table .plan-print-day { font-weight: 700; }
+  .plan-print-table .plan-print-date { white-space: nowrap; }
+  .plan-print-table .plan-print-route { width: 34%; }
+  .plan-print-table .plan-print-stay { width: 30%; }
+  .plan-print-line { display: block; }
+  .plan-print-rest td, .plan-print-travel td { background: #f1f1f1; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .plan-print-place { font-weight: 600; }
+  .plan-print-small { display: block; font-size: 8.5pt; color: #444; }
+  .plan-print-none { color: #666; font-style: italic; }
+  .plan-print-foot { margin: 5mm 0 0; font-size: 8.5pt; color: #444; }
 }
 
 /* Changing a day, and the line above the download button */
@@ -272,3 +326,29 @@
 .plan-textarea { min-height: 4.5rem; resize: vertical; }
 .plan-travel-more { margin-top: 0.8rem; padding-top: 0.7rem; border-top: 1px solid var(--border, #e2e8f0); }
 .plan-travel-more .plan-hint { margin-top: 0.5rem; }
+
+/* Ask for a bed */
+.plan-dialog [hidden] { display: none !important; }   /* the dialogs sit outside .plan */
+a.plan-btn { text-decoration: none; }
+a.plan-btn[aria-disabled="true"] { opacity: 0.45; pointer-events: none; cursor: not-allowed; }
+.plan-bed-text { min-height: 12rem; line-height: 1.45; }
+.plan-bed-meaning { margin: 0; padding: 0.6rem 0.75rem; border-left: 3px solid #cbd5e1; background: #f8fafc; color: #334155; font-size: 0.92rem; }
+.plan-bed-send { margin: 0; }
+.plan-link-ask { cursor: pointer; font: inherit; font-size: 0.9rem; font-weight: 600; color: #fff; background: var(--navy, #1e3a8a); border-color: var(--navy, #1e3a8a); }
+.plan-link-ask:hover { background: #172b69; }
+.plan-stay-guide .plan-link-ask { font-size: 0.85rem; }
+#plan-bed-dialog { max-height: min(92vh, 52rem); }
+.plan-bed-reset { justify-self: start; }
+
+/* Keeping a plan: saved plans in this browser, a copy in a file, opening a file */
+.plan-file-input { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; pointer-events: none; }
+.plan-keep-ask { margin: 0.6rem 0; }
+.plan-keep-ask p { margin: 0 0 0.5rem; }
+.plan-shared-pick { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin: 0.5rem 0; }
+.plan-shared-pick label { font-weight: 600; }
+.plan-saved-list { list-style: none; margin: 0.4rem 0 0.6rem; padding: 0; display: grid; gap: 0.5rem; }
+.plan-saved-item { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.75rem; padding: 0.6rem 0.75rem; border: 1px solid var(--border, #e2e8f0); border-radius: 8px; background: var(--surface, #fff); }
+.plan-saved-text { flex: 1 1 14rem; min-width: 0; display: flex; flex-direction: column; }
+.plan-saved-name { font-weight: 700; color: var(--navy, #1e3a8a); overflow-wrap: anywhere; }
+.plan-saved-meta { font-size: 0.88rem; color: #475569; }
+.plan-saved-buttons { display: flex; flex-wrap: wrap; gap: 0.4rem; }

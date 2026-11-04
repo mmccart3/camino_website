@@ -129,6 +129,56 @@ taxi, ferry, other), when it leaves and arrives, and carry a ticket reference an
 (`stay.reference/contact/notes`; `route.departureMinutes` and `route.travel` for a travel day, which today's app
 drops on restore). A plan code has the stay reference and every travel detail, but not a stay's contact or notes.
 
+The list of places to stay shows what the guide knows about each: a price, beds and facilities on one line, and a
+Details button with the address, opening dates, check-in times and links to call, WhatsApp, email, the website and
+Booking.com (with the site's affiliate details, added by `bookingLink` in `plan-core.js` the way the town pages do
+it). A chosen place shows the same line and links on its day. These come from `/plan/stays.json`
+(`planner.build_stay_details`, about 270 KB), which the page loads the first time it needs it, not with the page; the
+service worker saves it when it installs and answers from that copy offline. Without it the picker shows names only.
+Nothing in it changes the guide fingerprint, so plans and plan codes made earlier still open.
+
+A chosen place that has a WhatsApp number or an email address also has an "Ask for a bed" button. It opens a short
+form (arrival date, which is that day's date when the plan has dates; nights; people; bed or private room, offered
+only for an albergue the guide records as having private rooms; and an optional name) and writes the message the phone
+app writes: polite, in the owner's language (Spanish, or French where `lg` is `fr` in `/plan/stays.json`, which
+`planner.owner_language` works out with the app's own rules), asking for the price and for a reply in English, with an
+English "What this says". The visitor can edit it, then send it from their own WhatsApp or email program (the buttons
+are plain `wa.me` and `mailto:` links) or copy it. Nothing is sent by the page. The wording and its tests are the app's
+(`plan-message.js`, `jstests/plan-message.test.js`; the source is `lib/services/booking_message.dart` in the app
+project, so change the two together). The name and the number of people are remembered in this browser only.
+
+Each walking day shows its climb and descent ("1,534 m up, 768 m down"), the summary adds the totals, the list of towns
+ahead shows the climb to each, and a walking day over 30 km is marked "Long day" (`LONG_DAY_METRES` in `plan-core.js`).
+The figures are worked out the way the stage pages work them out: every step up along the guide's elevation points is
+climb, every other step is descent, laid end to end across a day's paths. The page data carries four more numbers per
+path (climb, descent, first and last height, from `elevation_points`; `planner.climb_of`) and the page adds up whatever
+chain of paths the visitor chooses, counting the step between one path's last height and the next one's first. A test
+checks all 44 stages against the stage-page method. They do not go in the plan file or the plan code and do not change
+the guide fingerprint. Note that the app's walking-day screen measures the climb from the track points, which come out
+about 7% lower, so the two will not agree to the metre.
+
+The "Keep your plan" card is about not losing a plan. The plan being worked on is saved in this browser after every
+change (`camino-plan-v1`, with the time of the last save). "Save in this browser" also keeps named copies
+(`camino-plans-v1`, up to 20; saving under a name that is already taken asks whether to replace it or keep both) and
+asks the browser to keep them (`navigator.storage.persist()`, only when the visitor presses the button). The list
+says plainly that a browser may clear what it keeps (Safari after a week without a visit) and points to the file.
+"Save a copy..." writes the same itinerary file as "Download itinerary file", through the browser's save dialog
+where it has one (Chrome and Edge, so the visitor can choose a folder their cloud drive keeps in step) and as a download
+elsewhere. "Open a plan file..." reads such a file, or a backup made by the app, back in (`readFile` in `plan-core.js`):
+each plan in it can be chosen, days whose routes this guide does not have are left out and said so, a place to stay
+the guide does not know keeps its name as the visitor's own choice, dates are made to follow on from the first day, and a
+file made for a different edition of the guide is refused. Opening replaces the plan on the page and offers Undo. What
+the file cannot say is lost: a same-day journey in a plan with no dates comes back as a day of its own. There is no account,
+no server storage and no Google Drive link on purpose: the plan has booking references in it and the page sends nothing anywhere.
+
+The "Print or save as PDF" card makes a clean sheet with the browser's own print window (so "Save as PDF" is the
+PDF; there is no PDF library). `buildPrint` in `plan.js` fills `#plan-print`, a table of the days built from the same
+layout as the page; it is hidden on screen, and a print stylesheet (the end of `plan.css`) hides everything else, so
+Ctrl+P prints the same sheet (`beforeprint`). The visitor chooses whether to show dates, places to stay, and booking
+references, contacts and notes (off unless ticked, because paper gets seen), and whether each day is in full (time,
+climb, where to stay) or a short line. The choices are remembered in this browser (`camino-plan-print-v1`). The
+column heads repeat on each page and a day is never split across two.
+
 A plan can be shared as a QR code or a link ("Share as QR code" on the send card). The code holds the choices
 (stage numbers, routes, places to stay, dates, pace, and any booking references and travel details) in a few hundred
 bytes, never distances or times, and goes in
@@ -143,7 +193,7 @@ decoding its output with OpenCV, `python camino/jstests/qr_decode_check.py`).
 
 - `camino/planner.py` works out each stage's distance and walking time from the track points, using the
   same arithmetic as the app, and builds the data embedded in the page, including a graph of how the
-  paths join (`routes`) so the page can build a day between any two towns. `camino/test_planner.py` checks
+  paths join (`routes`, with each path's climb and descent) so the page can build a day between any two towns. `camino/test_planner.py` checks
   it against the stored stage distances and times, and that walking every stage through the graph gives
   the same figures.
 - `camino/static/camino/js/plan-core.js` holds the planner's rules and the file builder;

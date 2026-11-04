@@ -25,6 +25,10 @@
   <section class="plan-card plan-shared" id="plan-shared" aria-labelledby="plan-shared-title" hidden>
     <h3 id="plan-shared-title" tabindex="-1" data-focus="shared-title">A plan has been shared with you</h3>
     <p class="plan-shared-name" id="plan-shared-name"></p>
+    <p class="plan-shared-pick" id="plan-shared-pick-row" hidden>
+      <label for="plan-shared-pick">Plans in this file</label>
+      <select id="plan-shared-pick" class="plan-input"></select>
+    </p>
     <p class="plan-hint" id="plan-shared-detail"></p>
     <p class="plan-warning" id="plan-shared-replace" hidden></p>
     <p class="plan-error" id="plan-shared-error" role="alert" hidden></p>
@@ -54,6 +58,7 @@
   </section>
 
   <section id="plan-summary" class="plan-summary" aria-label="Plan totals" hidden></section>
+  <p id="plan-climb-note" class="plan-hint plan-climb-note" hidden>Climb and descent come from the guide's height profiles, worked out the same way as on each stage page. A walking day over 30 km is marked as a long day.</p>
 
   <ol id="plan-days" class="plan-days" aria-label="Your days" hidden></ol>
 
@@ -111,12 +116,56 @@
     <p class="plan-hint">Opening the same file twice does not make a second copy.</p>
   </section>
 
+  <section class="plan-card plan-keep" aria-labelledby="plan-keep-title">
+    <h3 id="plan-keep-title">Keep your plan</h3>
+    <p class="plan-hint" id="plan-keep-status"></p>
+    <p class="plan-hint" id="plan-keep-storage" hidden></p>
+    <div class="plan-send-actions">
+      <button type="button" class="plan-btn plan-btn-primary" id="plan-save-copy">Save a copy…</button>
+      <button type="button" class="plan-btn" id="plan-save-browser">Save in this browser</button>
+      <button type="button" class="plan-btn" id="plan-open-file">Open a plan file…</button>
+      <input type="file" id="plan-file" class="plan-file-input" accept=".json,application/json" tabindex="-1" aria-hidden="true">
+    </div>
+    <div class="plan-warning plan-keep-ask" id="plan-keep-ask" role="group" aria-labelledby="plan-keep-ask-text" hidden>
+      <p id="plan-keep-ask-text"></p>
+      <div class="plan-send-actions">
+        <button type="button" class="plan-btn plan-btn-small" id="plan-keep-replace">Replace it</button>
+        <button type="button" class="plan-btn plan-btn-small" id="plan-keep-both">Keep both</button>
+        <button type="button" class="plan-btn plan-btn-small" id="plan-keep-cancel">Cancel</button>
+      </div>
+    </div>
+    <p class="plan-send-msg" id="plan-keep-msg" role="status" hidden></p>
+    <h4 class="plan-steps-title" id="plan-saved-title">Saved in this browser</h4>
+    <ul class="plan-saved-list" id="plan-saved-list" aria-labelledby="plan-saved-title"></ul>
+    <p class="plan-hint" id="plan-saved-empty">Nothing saved here yet.</p>
+    <p class="plan-hint">A saved file has your booking references and notes in it. Keep it private, and keep it somewhere you trust, such as a folder on your computer or in your own cloud drive.</p>
+  </section>
+
+  <section class="plan-card plan-printing" aria-labelledby="plan-printing-title">
+    <h3 id="plan-printing-title">Print or save as PDF</h3>
+    <p class="plan-hint">Makes a clean sheet of your plan to carry or to give to someone. In the print window, choose "Save as PDF" in place of a printer to keep it as a PDF.</p>
+    <fieldset class="plan-print-options">
+      <legend>What to put on the sheet</legend>
+      <label class="plan-check"><input type="checkbox" id="plan-print-dates" checked> Dates</label>
+      <label class="plan-check"><input type="checkbox" id="plan-print-stays" checked> Places to stay</label>
+      <label class="plan-check"><input type="checkbox" id="plan-print-private"> Booking references, contacts and notes</label>
+      <p class="plan-hint plan-print-private-hint">Anyone who sees the paper or the PDF will see these.</p>
+      <label class="plan-check"><input type="radio" name="plan-print-detail" id="plan-print-full" value="full" checked> Every day in full: time, climb and where you stay</label>
+      <label class="plan-check"><input type="radio" name="plan-print-detail" id="plan-print-summary" value="summary"> Summary: one short line for each day</label>
+    </fieldset>
+    <div class="plan-send-actions">
+      <button type="button" class="plan-btn plan-btn-primary" id="plan-print-go">Print or save as PDF…</button>
+    </div>
+  </section>
+
+  <section class="plan-print" id="plan-print" aria-hidden="true"></section>
+
   <p class="plan-reset-row"><button type="button" class="plan-btn plan-btn-quiet" id="plan-reset">Start again</button></p>
 
   <datalist id="plan-places"></datalist>
 </div>
 
-<dialog id="plan-stay-dialog" class="plan-dialog" aria-labelledby="plan-stay-title">
+<dialog id="plan-stay-dialog" class="plan-dialog" aria-labelledby="plan-stay-title" data-details-url="{% url 'plan_stays' %}">
   <div class="plan-dialog-head">
     <h3 id="plan-stay-title">Where will you stay?</h3>
     <button type="button" class="plan-btn plan-btn-quiet" id="plan-stay-close">Close</button>
@@ -137,6 +186,7 @@
     </div>
     <p class="plan-hint" id="plan-stay-empty" hidden></p>
     <ul class="plan-pick-list" id="plan-stay-list"></ul>
+    <p class="plan-hint" id="plan-stay-note" hidden>Prices, opening dates and phone numbers come from the guide and can change. Check with the place before you rely on them.</p>
     <form id="plan-stay-own-form" class="plan-own">
       <label for="plan-stay-own">Somewhere not listed</label>
       <div class="plan-own-row">
@@ -170,6 +220,42 @@
   </div>
 </dialog>
 
+<dialog id="plan-bed-dialog" class="plan-dialog" aria-labelledby="plan-bed-title">
+  <div class="plan-dialog-head">
+    <h3 id="plan-bed-title">Ask for a bed</h3>
+    <button type="button" class="plan-btn plan-btn-quiet" id="plan-bed-close">Close</button>
+  </div>
+  <div class="plan-dialog-body">
+    <div class="plan-more-grid">
+      <label><span>Arrival date</span><input type="date" id="plan-bed-date" class="plan-input"></label>
+      <label><span>Nights</span><input type="number" id="plan-bed-nights" class="plan-input" min="1" max="14" step="1" inputmode="numeric"></label>
+      <label><span>People</span><input type="number" id="plan-bed-people" class="plan-input" min="1" max="10" step="1" inputmode="numeric"></label>
+      <label id="plan-bed-room-row" hidden><span>Bed type</span>
+        <select id="plan-bed-room" class="plan-input"><option value="dormitory">Bed in a dormitory</option><option value="room">Private room</option></select>
+      </label>
+      <label class="plan-more-wide"><span>Your name (optional)</span><input type="text" id="plan-bed-name" class="plan-input" maxlength="80" autocomplete="name"></label>
+    </div>
+    <p class="plan-error" id="plan-bed-problem" role="alert" hidden></p>
+    <div class="plan-field">
+      <label for="plan-bed-text">Message to the owner</label>
+      <textarea id="plan-bed-text" class="plan-input plan-textarea plan-bed-text" rows="10"></textarea>
+      <p class="plan-hint" id="plan-bed-language"></p>
+    </div>
+    <button type="button" class="plan-btn plan-btn-small plan-bed-reset" id="plan-bed-reset" hidden>Reset message</button>
+    <details class="plan-more">
+      <summary>What this says</summary>
+      <p class="plan-bed-meaning" id="plan-bed-meaning"></p>
+    </details>
+    <div class="plan-send-actions plan-bed-send">
+      <a class="plan-btn plan-btn-primary" id="plan-bed-whatsapp" target="_blank" rel="noopener">Send on WhatsApp</a>
+      <a class="plan-btn plan-btn-primary" id="plan-bed-email">Send by email</a>
+      <button type="button" class="plan-btn" id="plan-bed-copy">Copy message</button>
+    </div>
+    <p class="plan-send-msg" id="plan-bed-msg" role="status" hidden></p>
+    <p class="plan-hint">Nothing is sent until you press Send in WhatsApp or your email program, and you can change the message first. Your name and the number of people are remembered in this browser only.</p>
+  </div>
+</dialog>
+
 <dialog id="plan-reset-dialog" class="plan-dialog plan-dialog-small" aria-labelledby="plan-reset-title">
   <div class="plan-dialog-body">
     <h3 id="plan-reset-title">Start again?</h3>
@@ -185,5 +271,6 @@
 <script src="{% static 'camino/js/plan-core.js' %}" defer></script>
 <script src="{% static 'camino/js/qr.js' %}" defer></script>
 <script src="{% static 'camino/js/plan-share.js' %}" defer></script>
+<script src="{% static 'camino/js/plan-message.js' %}" defer></script>
 <script src="{% static 'camino/js/plan.js' %}" defer></script>
 {% endblock %}

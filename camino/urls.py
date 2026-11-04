@@ -11,6 +11,7 @@ urlpatterns = [
     path('location/<int:location_id>/', views.location_detail, name='location_detail'),
     path('towns/', views.towns, name='towns'),
     path('plan/', views.plan, name='plan'),
+    path('plan/stays.json', views.plan_stays, name='plan_stays'),
     path('search/', views.search, name='search'),
     path('offline/', views.offline, name='offline'),
     path('offline-pack/', views.offline_pack, name='offline_pack'),

@@ -49,7 +49,7 @@ test('walking time follows the app: weighted distance, flat factor, pace, whole 
 });
 
 test('a chain of paths adds every point except the first of the day and of a path that starts another stage', () => {
-  assert.deepStrictEqual(P.chainTotals([11], data), { metres: 9000, weighted: 11000, from: 1, to: 4 });
+  assert.deepStrictEqual(P.chainTotals([11], data), { metres: 9000, weighted: 11000, up: null, down: null, from: 1, to: 4 });
   assert.strictEqual(P.chainTotals([11, 12], data).metres, 20000);          // same stage: the join counts
   assert.strictEqual(P.chainTotals([12], data).metres, 10960);               // alone, its first point adds nothing
   assert.strictEqual(P.chainTotals([12, 14], data).metres, 10960 + 15000);   // another stage: 14's first point adds nothing
@@ -64,6 +64,73 @@ test('every guidebook stage adds up to the figures stored for it', () => {
     assert.ok(Math.abs(t.metres - data.stages[id].m) < 0.001, id);
     assert.ok(Math.abs(t.weighted - data.stages[id].w) < 0.001, id);
   }
+});
+
+// The same guide with heights: each path row also has climb, descent, first height and last height (metres).
+function withHeights(rows) {
+  return Object.assign({}, data, { routes: Object.assign({}, data.routes, {
+    paths: data.routes.paths.map((r, i) => r.concat(rows[i])) }) });
+}
+const dataH = withHeights([[100, 20, 100, 180], [30, 150, 185, 65], [400, 380, 100, 120], [10, 40, 60, 30]]);
+
+test('climb and descent add each path\'s own and the step from one path to the next', () => {
+  assert.deepStrictEqual(P.chainTotals([11], dataH).up, 100);
+  assert.deepStrictEqual(P.chainTotals([11], dataH).down, 20);
+  const joined = P.chainTotals([11, 12], dataH);                 // 180 -> 185 is a 5 m step up
+  assert.strictEqual(joined.up, 100 + 30 + 5);
+  assert.strictEqual(joined.down, 20 + 150);
+  const later = P.chainTotals([12, 14], dataH);                  // 65 -> 60 is a 5 m step down
+  assert.strictEqual(later.up, 30 + 10);
+  assert.strictEqual(later.down, 150 + 40 + 5);
+  const hills = P.chainTotals([13, 14], dataH);                  // 120 -> 60 is a 60 m step down
+  assert.strictEqual(hills.up, 400 + 10);
+  assert.strictEqual(hills.down, 380 + 40 + 60);
+  assert.strictEqual(P.chainTotals([11, 12], dataH).metres, P.chainTotals([11, 12], data).metres); // distance is untouched
+});
+
+test('no climb is given for a chain when any of its paths has no heights', () => {
+  const partly = withHeights([[100, 20, 100, 180], [], [400, 380, 100, 120], [10, 40, 60, 30]]);
+  assert.strictEqual(P.chainTotals([11], partly).up, 100);
+  assert.strictEqual(P.chainTotals([11, 12], partly).up, null);
+  assert.strictEqual(P.chainTotals([11, 12], partly).down, null);
+  assert.strictEqual(P.chainTotals([11, 12], partly).metres, 20000);
+});
+
+test('a day shows its climb and descent in whole metres, and is called long above 30 km', () => {
+  const longer = Object.assign({}, dataH, {
+    stages: Object.assign({}, dataH.stages, { '3': Object.assign({}, dataH.stages['3'], { m: 30500, w: 32000 }) })
+  });
+  const s = P.addStage(P.addStage(P.newState(longer), 1), 3);
+  const days = P.layout(s, longer).days;
+  assert.deepStrictEqual([days[0].up, days[0].down, days[0].long], [135, 170, false]);
+  assert.deepStrictEqual([days[1].up, days[1].down, days[1].long], [10, 40, true]);
+  const t = P.totals(s, longer);
+  assert.strictEqual(t.climb, true);
+  assert.strictEqual(t.long, 1);
+  assert.strictEqual(t.up, 145);
+  assert.strictEqual(t.down, 210);
+  assert.strictEqual(P.totals(P.addStage(P.newState(dataH), 1), dataH).long, 0);
+  const exactly = Object.assign({}, dataH, { stages: Object.assign({}, dataH.stages, { '3': Object.assign({}, dataH.stages['3'], { m: 30000 }) }) });
+  assert.strictEqual(P.layout(P.addStage(P.newState(exactly), 3), exactly).days[0].long, false);   // 30 km exactly is not long
+});
+
+test('a day of your own route has a climb too, and days without heights say so', () => {
+  const own = P.layout(P.addRoute(P.newState(dataH), [11], dataH), dataH).days[0];
+  assert.deepStrictEqual([own.up, own.down], [100, 20]);
+  const bare = P.layout(P.addRoute(P.newState(data), [11], data), data).days[0];
+  assert.deepStrictEqual([bare.up, bare.down, bare.long], [null, null, false]);
+  assert.strictEqual(P.totals(P.addRoute(P.newState(data), [11], data), data).climb, false);
+  const rest = P.layout(P.addRest(plan()), dataH).days;          // a rest day has no climb of its own
+  assert.deepStrictEqual([rest[2].up, rest[2].down, rest[2].long], [null, null, false]);
+});
+
+test('the places you can reach carry the climb of the shortest way there', () => {
+  const stops = P.stopsFrom(1, dataH, 60000);
+  const bravo = stops.find(x => x.name === 'Bravo');
+  assert.deepStrictEqual([bravo.up, bravo.down], [135, 170]);    // by the main road, 20 km, not the hills
+  const midway = stops.find(x => x.name === 'Midway');
+  assert.deepStrictEqual([midway.up, midway.down], [100, 20]);
+  assert.strictEqual(P.stopsFrom(1, data, 60000).find(x => x.name === 'Bravo').up, null);
 });
 
 test('routes between two places follow whole stages; a stage that is exactly the chain is a stage day', () => {
@@ -473,4 +540,177 @@ test('clock times: minutes after midnight and back', () => {
   assert.strictEqual(P.formatClock(1440), ''); assert.strictEqual(P.formatClock(-1), ''); assert.strictEqual(P.formatClock(null), '');
   assert.deepStrictEqual(['9:05', '09:05', '0905', ' 23:59 '].map(P.parseClock), [545, 545, 545, 1439]);
   assert.deepStrictEqual(['', '24:00', '9:60', '9', 'ab:cd', null].map(P.parseClock), [null, null, null, null, null, null]);
+});
+
+// ---------------------------------------------------------------- what the guide says about a place to stay
+
+test('the picker line: price, beds and facilities for an albergue', () => {
+  assert.strictEqual(P.stayLine('a', { p: 16, n: 32, f: 'kmwdr' }), 'from €16 · 32 beds · Kitchen · Meal · Washer · Dryer · Private rooms');
+  assert.strictEqual(P.stayLine('a', { p: 10, px: 15, n: 1 }), '€10 to €15 · 1 bed');
+  assert.strictEqual(P.stayLine('a', { p: 10, px: 10 }), 'from €10');
+  assert.strictEqual(P.stayLine('a', { f: 'zk' }), 'Kitchen');           // a letter the page does not know is ignored
+  assert.strictEqual(P.stayLine('a', {}), '');
+  assert.strictEqual(P.stayLine('a', null), '');
+});
+
+test('the picker line: single and double prices for a private place', () => {
+  assert.strictEqual(P.stayLine('p', { p: 45, p2: 55.5 }), 'single from €45 · double from €55.50');
+  assert.strictEqual(P.stayLine('p', { p2: 60 }), 'double from €60');
+  assert.strictEqual(P.stayLine('p', { n: 4, f: 'k' }), '');               // beds and facilities are an albergue's
+});
+
+test('facilities in full, and in short', () => {
+  assert.deepStrictEqual(P.facilityNames('kmr'), ['Kitchen', 'Communal meal', 'Private rooms']);
+  assert.deepStrictEqual(P.facilityNames('wd', true), ['Washer', 'Dryer']);
+  assert.deepStrictEqual(P.facilityNames(''), []);
+  assert.deepStrictEqual(P.facilityNames(undefined), []);
+});
+
+test('telephone numbers are shown the way people write them', () => {
+  assert.strictEqual(P.formatPhone('+34987123456'), '+34 987 123 456');
+  assert.strictEqual(P.formatPhone('+33617103189'), '+33 6 17 10 31 89');
+  assert.strictEqual(P.formatPhone('+351912345678'), '+351 912 345 678');
+  assert.strictEqual(P.formatPhone('+4415550123'), '+4415550123');
+  assert.strictEqual(P.formatPhone(''), '');
+  assert.strictEqual(P.formatPhone(undefined), '');
+});
+
+// The links the town pages make with attach_booking_affiliate (camino/models.py), worked out by that function.
+const AFFILIATE = {
+  aid: '818289',
+  label: 'affnetcj-15734710_pub-8073556_site-101884570_pname-MM3+Enterprise+Limited_clkid-_cjevent-5b29e765ba1911f180aa00a10a18b8f7',
+  utm_source: 'affnetcj', utm_medium: 'bannerindex', utm_campaign: 'fr', utm_term: 'index-15734710'
+};
+const ENDING = '&label=affnetcj-15734710_pub-8073556_site-101884570_pname-MM3%2BEnterprise%2BLimited_clkid-_cjevent-5b29e765ba1911f180aa00a10a18b8f7&utm_source=affnetcj&utm_medium=bannerindex&utm_campaign=fr&utm_term=index-15734710';
+
+test('Booking.com links get the same affiliate details as the town pages', () => {
+  assert.strictEqual(P.bookingLink('https://www.booking.com/hotel/es/casa.html', AFFILIATE),
+    'https://www.booking.com/hotel/es/casa.html?aid=818289' + ENDING);
+  assert.strictEqual(P.bookingLink('https://www.booking.com/hotel/es/casa.html?lang=en-gb&aid=1', AFFILIATE),
+    'https://www.booking.com/hotel/es/casa.html?lang=en-gb&aid=818289' + ENDING);
+  assert.strictEqual(P.bookingLink('https://www.booking.com/hotel/es/c.html#reviews', AFFILIATE),
+    'https://www.booking.com/hotel/es/c.html?aid=818289' + ENDING + '#reviews');
+});
+
+test('a link that is not a web address is refused, and no affiliate details means none are added', () => {
+  assert.strictEqual(P.bookingLink('javascript:alert(1)', AFFILIATE), null);
+  assert.strictEqual(P.bookingLink('not a link', AFFILIATE), null);
+  assert.strictEqual(P.bookingLink('', AFFILIATE), null);
+  assert.strictEqual(P.bookingLink('https://www.booking.com/h.html', undefined), 'https://www.booking.com/h.html');
+});
+
+test('the ways to reach a place, in the order a walker would use them', () => {
+  const d = { t: '+34987123456', wa: '34987123456', em: 'casa@example.es', web: 'https://casa.example.es/', bk: 'https://www.booking.com/h.html' };
+  const links = P.stayLinks(d, { aid: '1' });
+  assert.deepStrictEqual(links.map((l) => l.key), ['call', 'whatsapp', 'email', 'website', 'booking']);
+  assert.deepStrictEqual(links.map((l) => l.href), ['tel:+34987123456', 'https://wa.me/34987123456', 'mailto:casa@example.es',
+    'https://casa.example.es/', 'https://www.booking.com/h.html?aid=1']);
+  assert.strictEqual(links[0].text, '+34 987 123 456');
+  assert.deepStrictEqual(P.stayLinks({ t: '+34987123456' }, {}).map((l) => l.key), ['call']);
+  assert.deepStrictEqual(P.stayLinks({}, {}), []);
+  assert.deepStrictEqual(P.stayLinks(null, {}), []);
+  assert.deepStrictEqual(P.stayLinks({ bk: 'ftp://x' }, {}), []);
+});
+
+// ---------------------------------------------------------------- reading a plan file back in
+
+// A plan with every kind of day and stay, to save and read back.
+function everything(dated) {
+  let s = P.setMeta(P.addStage(P.addStage(P.newState(data), 1), 3), { name: 'Spring walk', pace: 3.6, startDate: dated ? '2027-04-10' : '' }, data);
+  s = P.setStay(s, 0, { k: 'a', id: 100, name: 'Albergue Bravo', status: 'Booked' }, data);
+  s = P.setStayDetails(s, 0, { ref: 'AB-123', notes: 'Bunk 12, late arrival', contact: '+34 600 000 000' });
+  s = P.addRest(s);
+  s = P.setStay(s, 2, { k: 'c', id: 0, name: 'A friend\'s flat', status: 'Considering' }, data);
+  s = P.addTravel(s, data);
+  s = P.setTravel(s, 3, { to: 'Madrid', mode: 'train', dep: 9 * 60 + 30, arr: 14 * 60, ref: 'Seat 12A', notes: 'Platform 3' });
+  s = P.addTravel(s, data, undefined, true);
+  s = P.setTravel(s, 4, { from: 'Madrid', to: 'Barajas airport', mode: 'taxi' });
+  s = P.addRoute(s, [14], data);
+  return s;
+}
+const inFile = (state) => JSON.parse(JSON.stringify(P.buildFile(state, data, NOW)));
+
+test('a plan saved to a file reads back as the same plan, with and without dates', () => {
+  for (const dated of [true, false]) {
+    const original = everything(dated);
+    const read = P.readFile(inFile(original), data);
+    assert.strictEqual(read.ok, true);
+    assert.strictEqual(read.plans.length, 1);
+    const back = read.plans[0].state;
+    assert.deepStrictEqual(P.buildFile(back, data, NOW), P.buildFile(original, data, NOW), 'the same file again');
+    assert.deepStrictEqual(back.days.map(d => d.t), original.days.map(d => d.t));
+    assert.strictEqual(back.name, 'Spring walk');
+    assert.strictEqual(back.pace, 3.6);
+    assert.strictEqual(back.startDate, dated ? '2027-04-10' : '');
+    assert.deepStrictEqual(back.days[0].stay, original.days[0].stay);          // reference, notes and contact come back
+    assert.deepStrictEqual(read.plans[0].notes, []);
+  }
+});
+
+test('a journey on the same day comes back as one only when the plan has dates', () => {
+  assert.strictEqual(P.readFile(inFile(everything(true)), data).plans[0].state.days[4].same, true);
+  assert.strictEqual(P.readFile(inFile(everything(false)), data).plans[0].state.days[4].same, false);
+});
+
+test('a stage day comes back as a stage, an own route as an own route, a first rest day keeps its place', () => {
+  let s = P.addStage(P.addRest(P.newState(data)), 1);
+  s = P.setRestPlace(s, 0, 'St Jean Pied de Port');
+  s = P.addRoute(s, [14], data);
+  const days = P.readFile(inFile(s), data).plans[0].state.days;
+  assert.deepStrictEqual([days[0].t, days[0].at, days[1].t, days[1].stage, days[2].t, days[2].stage], ['r', 'St Jean Pied de Port', 's', 1, 's', 3]);
+  const own = P.readFile(inFile(P.addRoute(P.newState(data), [11], data)), data).plans[0].state.days[0];
+  assert.deepStrictEqual([own.t, own.paths], ['c', [11]]);
+});
+
+test('a file that is not an itinerary, or is for another edition of the guide, is refused plainly', () => {
+  assert.match(P.readFile({}, data).message, /not a Camino/);
+  assert.match(P.readFile(null, data).message, /not a Camino/);
+  assert.match(P.readFile([1, 2], data).message, /not a Camino/);
+  const other = inFile(plan()); other.source.guideFingerprint = 'ffffffffffffffff';
+  assert.match(P.readFile(other, data).message, /different edition/);
+  const broken = inFile(plan()); broken.plans[0].days[0].route = 'not json';
+  assert.match(P.readFile(broken, data).message, /cannot be opened: day 1/);
+  const empty = inFile(plan()); empty.plans[0].days = [];
+  assert.match(P.readFile(empty, data).message, /no days/);
+});
+
+test('a backup from the app, with no source note and other plans, opens each plan with the extras ignored', () => {
+  const doc = inFile(plan());
+  delete doc.source;
+  doc.entries = [{ junk: true }]; doc.locationFavourites = [{ junk: true }];
+  doc.plans.push(inFile(everything(true)).plans[0]);
+  doc.plans.push({ name: 'Nothing yet', days: [] });
+  const read = P.readFile(doc, data);
+  assert.strictEqual(read.ok, true);
+  assert.deepStrictEqual(read.plans.map(p => [p.name, p.days]), [['My Camino', 2], ['Spring walk', 6]]);
+});
+
+test('days whose routes are not in this guide are left out and said so; unknown places to stay keep their names', () => {
+  const doc = inFile(plan());
+  const route = JSON.parse(doc.plans[0].days[1].route);
+  route.paths = [999];
+  doc.plans[0].days[1].route = JSON.stringify(route);
+  doc.plans[0].days[0].stay = JSON.stringify({ id: 424242, kind: 'albergue', name: 'Albergue that went', status: 'Booked', reference: 'X1', notes: '', contact: '' });
+  const read = P.readFile(doc, data);
+  const one = read.plans[0];
+  assert.strictEqual(one.days, 1);
+  assert.deepStrictEqual(one.skipped, [2]);
+  assert.match(one.notes[0], /Day 2 was left out/);
+  assert.deepStrictEqual(one.state.days[0].stay, { k: 'c', id: 0, name: 'Albergue that went', status: 'Booked', ref: 'X1' });
+  assert.strictEqual(P.readFile(Object.assign(doc, { plans: [doc.plans[0]] }), data).ok, true);
+});
+
+test('dates that do not follow on one day after another are straightened, and the pace is kept in range', () => {
+  const doc = inFile(P.setMeta(plan(), { startDate: '2027-04-10' }, data));
+  const route = JSON.parse(doc.plans[0].days[1].route);
+  route.date = '2027-04-20';
+  doc.plans[0].days[1].route = JSON.stringify(route);
+  let one = P.readFile(doc, data).plans[0];
+  assert.strictEqual(one.state.startDate, '2027-04-10');
+  assert.ok(one.notes.some(n => /dates were changed/.test(n)));
+  const fast = inFile(plan());
+  fast.plans[0].days.forEach((d) => { const r = JSON.parse(d.route); r.pace = 8; d.route = JSON.stringify(r); });
+  one = P.readFile(fast, data).plans[0];
+  assert.strictEqual(one.state.pace, data.pace.default);
+  assert.ok(one.notes.some(n => /pace/.test(n)));
 });

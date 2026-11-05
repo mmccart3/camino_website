@@ -19,7 +19,7 @@ from django.conf import settings
 from django.test import Client, RequestFactory, SimpleTestCase
 
 from . import seo, views
-from .models import BOOKING_AFFILIATE_PARAMS, Albergue, PrivateAccomm, Stage, clean_email, google_maps_url
+from .models import BOOKING_AFFILIATE_PARAMS, Albergue, MapLocationCoord, PrivateAccomm, Stage, clean_email, google_maps_url
 
 
 class SeoHelperTests(SimpleTestCase):
@@ -285,6 +285,20 @@ class LiveDatabaseSmokeTests(unittest.TestCase):
         self.assertNotIn(settings.APP_VERSION, html.split('<footer')[0])  # version only in the footer
         ld = re.search(r'<script type="application/ld\+json">(.*?)</script>', html, re.S)
         self.assertEqual(json.loads(ld.group(1))['@type'], 'WebSite')
+
+    def test_the_three_routes_from_saint_jean_share_one_map_and_its_hotspots(self):
+        """1a, 1b and 1c are drawn on the same map picture, so the same places must be clickable on all three."""
+        spots, links = {}, {}
+        for ref in ('1a', '1b', '1c'):
+            stage = Stage.objects.get(stage_display_reference=ref)
+            spots[ref] = set(MapLocationCoord.objects.filter(stage_id=stage.id).values_list(
+                'location_id', 'top_left_x', 'top_left_y', 'bottom_right_x', 'bottom_right_y'))
+            links[ref] = self.get(f'/stage/{stage.id}/').count('class="hotspot"')
+        self.assertGreaterEqual(len(spots['1a']), 13)
+        self.assertEqual(spots['1b'], spots['1a'])
+        self.assertEqual(spots['1c'], spots['1a'])   # 1c once had only the five on the Valcarlos side
+        self.assertEqual(links['1c'], len(spots['1c']))   # and every one of them is drawn on the page
+        self.assertEqual(links['1b'], links['1a'])
 
     def test_plan_page_embeds_the_whole_guide(self):
         html = self.get('/plan/')

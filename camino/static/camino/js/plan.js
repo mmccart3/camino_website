@@ -346,20 +346,57 @@
     return (ui.details[kind] && ui.details[kind][String(id)]) || null;
   }
 
+  // A small icon from the page's sprite (_icons.html, the same one the place pages in the guide use).
+  function icon(id) {
+    var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('class', 'btn-icon');
+    svg.setAttribute('aria-hidden', 'true');
+    svg.setAttribute('focusable', 'false');
+    var use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+    use.setAttribute('href', '#' + id);
+    svg.appendChild(use);
+    return svg;
+  }
+
+  // The same buttons as a place's own page in the guide (styles in base.html), so a link looks the same on both.
+  // The plan-link classes are only hooks for the tests; the look comes from btn and btn-*.
   function linkItem(link, name) {
-    var phone = link.key === 'call';
-    return el('a', { 'class': 'plan-link plan-link-' + link.key, href: link.href, target: phone || link.key === 'email' ? null : '_blank', rel: 'noopener',
-      'aria-label': link.label + ' ' + name, text: phone ? 'Call ' + link.text : link.text });
+    var key = link.key, logo = root.getAttribute('data-wa-logo'), kids, label;
+    if (key === 'booking') {
+      kids = [el('span', { text: link.text })];
+      label = 'Booking.com for ' + name;
+    } else if (key === 'whatsapp') {
+      label = 'Message ' + name + ' on WhatsApp';
+      if (logo) {
+        var img = el('img', { src: logo, alt: '', width: '86', height: '20' });
+        img.addEventListener('error', function () { img.replaceWith(el('span', { text: 'WhatsApp' })); });   // never a blank button
+        kids = [img];
+      } else {
+        kids = [el('span', { text: 'WhatsApp' })];
+      }
+    } else if (key === 'call') {
+      kids = [icon('i-phone'), el('span', { text: link.text })];
+      label = 'Call ' + name + ', ' + link.text;
+    } else if (key === 'email') {
+      kids = [icon('i-email'), el('span', { text: 'Email' })];
+      label = 'Email ' + name;
+    } else {
+      kids = [icon('i-language'), el('span', { text: 'Website' })];
+      label = 'Website of ' + name;
+    }
+    var look = { booking: 'booking', whatsapp: 'wa', call: 'phone', email: 'email', website: 'web' }[key];
+    return el('a', { 'class': 'btn btn-' + look + ' plan-link plan-link-' + key, href: link.href, target: key === 'call' || key === 'email' ? null : '_blank', rel: 'noopener',
+      'aria-label': label }, kids);
   }
 
   // The ways to reach a place. On a day's own card (day index given) the first is "Ask for a bed".
   function linkRow(d, name, dayIndex) {
     var links = Plan.stayLinks(d, ui.details && ui.details.aff).map(function (link) { return linkItem(link, name); });
     if (dayIndex !== undefined && Msg && Msg.canAsk(d)) {
-      links.unshift(el('button', { type: 'button', 'class': 'plan-link plan-link-ask', 'data-act': 'askbed', 'data-focus': 'day-' + dayIndex + '-askbed',
-        'aria-label': 'Ask ' + name + ' for a bed', text: 'Ask for a bed' }));
+      links.unshift(el('button', { type: 'button', 'class': 'btn btn-ask plan-link plan-link-ask', 'data-act': 'askbed', 'data-focus': 'day-' + dayIndex + '-askbed',
+        'aria-label': 'Ask ' + name + ' for a bed' }, [el('span', { text: 'Ask for a bed' })]));
     }
-    return links.length ? el('span', { 'class': 'plan-links' }, links) : null;
+    return links.length ? el('div', { 'class': 'plan-links' }, links) : null;
   }
 
   // Under a chosen place: its price and beds, and the ways to reach it.

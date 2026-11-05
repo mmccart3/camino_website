@@ -6,7 +6,7 @@
 {% endblock %}
 
 {% block content %}
-<div class="plan" id="plan-root" data-version="{{ APP_VERSION }}">
+<div class="plan" id="plan-root" data-version="{{ APP_VERSION }}" data-wa-logo="{% static 'camino/img/whatsapp-logo-green.svg' %}">
   <div class="plan-intro">
     <h2>Plan your Camino</h2>
     <p>
@@ -259,8 +259,8 @@
       <p class="plan-bed-meaning" id="plan-bed-meaning"></p>
     </details>
     <div class="plan-send-actions plan-bed-send">
-      <a class="plan-btn plan-btn-primary" id="plan-bed-whatsapp" target="_blank" rel="noopener">Send on WhatsApp</a>
-      <a class="plan-btn plan-btn-primary" id="plan-bed-email">Send by email</a>
+      <a class="btn btn-wa plan-send-btn" id="plan-bed-whatsapp" target="_blank" rel="noopener" aria-label="Send on WhatsApp"><span>Send on</span><img src="{% static 'camino/img/whatsapp-logo-green.svg' %}" alt="" width="86" height="20"></a>
+      <a class="btn btn-email plan-send-btn" id="plan-bed-email"><svg class="btn-icon" aria-hidden="true" focusable="false"><use href="#i-email"></use></svg><span>Send by email</span></a>
       <button type="button" class="plan-btn" id="plan-bed-copy">Copy message</button>
     </div>
     <p class="plan-send-msg" id="plan-bed-msg" role="status" hidden></p>
@@ -278,6 +278,8 @@
     </div>
   </div>
 </dialog>
+
+{% include 'camino/_icons.html' %}
 
 <script id="plan-data" type="application/json">{{ plan_json|safe }}</script>
 <script src="{% static 'camino/js/plan-core.js' %}" defer></script>

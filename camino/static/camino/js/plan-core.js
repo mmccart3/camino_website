@@ -689,12 +689,13 @@
   function stayLinks(d, affiliate) {
     var out = [];
     if (!d) return out;
-    if (d.t) out.push({ key: 'call', label: 'Call', href: 'tel:' + d.t, text: formatPhone(d.t) });
-    if (d.wa) out.push({ key: 'whatsapp', label: 'WhatsApp', href: 'https://wa.me/' + d.wa, text: 'WhatsApp' });
-    if (d.em) out.push({ key: 'email', label: 'Email', href: 'mailto:' + d.em, text: 'Email' });
-    if (d.web) out.push({ key: 'website', label: 'Website', href: d.web, text: 'Website' });
+    // The order the place's own page in the guide uses: Booking.com, WhatsApp, phone, email, website.
     var booking = d.bk ? bookingLink(d.bk, affiliate) : null;
     if (booking) out.push({ key: 'booking', label: 'Booking.com', href: booking, text: 'Booking.com' });
+    if (d.wa) out.push({ key: 'whatsapp', label: 'WhatsApp', href: 'https://wa.me/' + d.wa, text: 'WhatsApp' });
+    if (d.t) out.push({ key: 'call', label: 'Call', href: 'tel:' + d.t, text: formatPhone(d.t) });
+    if (d.em) out.push({ key: 'email', label: 'Email', href: 'mailto:' + d.em, text: 'Email' });
+    if (d.web) out.push({ key: 'website', label: 'Website', href: d.web, text: 'Website' });
     return out;
   }
 

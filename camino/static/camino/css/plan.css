@@ -245,18 +245,19 @@
 .plan-pick-info { flex: none; min-width: 5rem; min-height: 44px; padding: 0 0.8rem; font: inherit; font-size: 0.88rem; color: #075985; background: #fff; border: 0; border-left: 1px solid var(--border, #e2e8f0); cursor: pointer; }
 .plan-pick-info:hover { background: #fef3c7; }
 .plan-pick-info[aria-expanded="true"] { background: #f1f5f9; }
-.plan-pick-info:focus-visible, .plan-link:focus-visible { outline: 3px solid var(--gold, #d97706); outline-offset: -3px; }
+.plan-pick-info:focus-visible { outline: 3px solid var(--gold, #d97706); outline-offset: -3px; }
 .plan-pick-panel { padding: 0.65rem 0.75rem 0.8rem; background: #f8fafc; border-top: 1px solid var(--border, #e2e8f0); font-size: 0.9rem; color: #334155; }
 .plan-facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 0.25rem 0.8rem; margin: 0 0 0.7rem; }
 .plan-facts dt { color: #64748b; }
 .plan-facts dd { margin: 0; overflow-wrap: anywhere; }
-.plan-links { display: flex; flex-wrap: wrap; gap: 0.4rem; }
-.plan-link { display: inline-flex; align-items: center; min-height: 44px; padding: 0 0.8rem; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; color: #0f172a; font-size: 0.9rem; text-decoration: none; }
-.plan-link:hover { background: #fef3c7; }
+/* The ways to reach a place are the guide's own buttons: .btn, .btn-booking, .btn-wa, .btn-phone, .btn-email and .btn-web, with
+   the grid and sizes shared with the place pages (base.html, .plan-links next to .accomm-actions). Only "Ask for a bed" is the planner's. */
+.plan-links .btn-ask { background: var(--navy, #1e3a8a); color: #fff; font-family: inherit; cursor: pointer; }
+.plan-links .btn-ask:hover { background: #172b69; }
 .plan-pick-panel .plan-pick-town { margin: 0.7rem 0 0; font-size: 0.85rem; }
 .plan-stay-guide { flex: 1 1 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem 0.8rem; font-size: 0.85rem; color: #475569; }
 .plan-stay-guide[hidden] { display: none; }
-.plan-stay-guide .plan-link { min-height: 36px; padding: 0 0.65rem; font-size: 0.85rem; }
+.plan-stay-guide .plan-links { flex: 1 1 100%; }
 .plan-own label { display: block; margin-bottom: 0.25rem; font-size: 0.85rem; font-weight: 600; }
 .plan-own-row { display: flex; gap: 0.5rem; }
 .plan-own-row .plan-input { flex: 1; }
@@ -338,9 +339,11 @@ a.plan-btn[aria-disabled="true"] { opacity: 0.45; pointer-events: none; cursor: 
 .plan-bed-text { min-height: 12rem; line-height: 1.45; }
 .plan-bed-meaning { margin: 0; padding: 0.6rem 0.75rem; border-left: 3px solid #cbd5e1; background: #f8fafc; color: #334155; font-size: 0.92rem; }
 .plan-bed-send { margin: 0; }
-.plan-link-ask { cursor: pointer; font: inherit; font-size: 0.9rem; font-weight: 600; color: #fff; background: var(--navy, #1e3a8a); border-color: var(--navy, #1e3a8a); }
-.plan-link-ask:hover { background: #172b69; }
-.plan-stay-guide .plan-link-ask { font-size: 0.85rem; }
+/* Send on WhatsApp / Send by email, in the same colours; the height and type match the Copy message button beside them. */
+.plan-send-actions .plan-send-btn { display: inline-flex; align-items: center; justify-content: center; gap: 0.4rem; box-sizing: border-box; min-height: 44px; margin: 0; padding: 0 1rem; border: 1px solid transparent; border-radius: 6px; font-size: 0.92rem; line-height: 1.2; }
+.plan-send-actions .plan-send-btn.btn-wa { border-color: #cbd5e1; color: #0f172a; }
+.plan-send-actions .plan-send-btn[aria-disabled="true"] { opacity: 0.45; pointer-events: none; cursor: not-allowed; }
+.plan-send-actions .plan-send-btn:focus-visible { outline: 3px solid #f59e0b; outline-offset: 2px; }
 #plan-bed-dialog { max-height: min(92vh, 52rem); }
 .plan-bed-reset { justify-self: start; }
 

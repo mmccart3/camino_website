@@ -767,16 +767,21 @@
   gap: 0.3rem;
 }
 
-.accomm-actions {
-  /* Every button is the same size; rows wrap as the card narrows. */
+.accomm-actions,
+.plan-links {
+  /* Every button is the same size; rows wrap as the card narrows.
+     .plan-links is the same set of buttons on the trip planner (plan.html). */
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(8.75rem, 1fr));
   gap: 0.5rem;
+}
+.accomm-actions {
   border-top: 1px solid var(--border);
   padding-top: 0.85rem;
   margin-top: 0.5rem;
 }
-.accomm-actions .btn {
+.accomm-actions .btn,
+.plan-links .btn {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -792,15 +797,18 @@
   white-space: nowrap;
   overflow: hidden;
 }
-.accomm-actions .btn span {
+.accomm-actions .btn span,
+.plan-links .btn span {
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .accomm-actions .btn-wa,
-.accomm-actions .btn-map {
+.accomm-actions .btn-map,
+.plan-links .btn-wa {
   border-color: #cbd5e1;
 }
-.accomm-actions .btn:focus-visible {
+.accomm-actions .btn:focus-visible,
+.plan-links .btn:focus-visible {
   outline: 2px solid #0f172a;
   outline-offset: 2px;
 }

@@ -599,13 +599,13 @@ test('a link that is not a web address is refused, and no affiliate details mean
   assert.strictEqual(P.bookingLink('https://www.booking.com/h.html', undefined), 'https://www.booking.com/h.html');
 });
 
-test('the ways to reach a place, in the order a walker would use them', () => {
+test('the ways to reach a place, in the order the place page in the guide shows them', () => {
   const d = { t: '+34987123456', wa: '34987123456', em: 'casa@example.es', web: 'https://casa.example.es/', bk: 'https://www.booking.com/h.html' };
   const links = P.stayLinks(d, { aid: '1' });
-  assert.deepStrictEqual(links.map((l) => l.key), ['call', 'whatsapp', 'email', 'website', 'booking']);
-  assert.deepStrictEqual(links.map((l) => l.href), ['tel:+34987123456', 'https://wa.me/34987123456', 'mailto:casa@example.es',
-    'https://casa.example.es/', 'https://www.booking.com/h.html?aid=1']);
-  assert.strictEqual(links[0].text, '+34 987 123 456');
+  assert.deepStrictEqual(links.map((l) => l.key), ['booking', 'whatsapp', 'call', 'email', 'website']);
+  assert.deepStrictEqual(links.map((l) => l.href), ['https://www.booking.com/h.html?aid=1', 'https://wa.me/34987123456', 'tel:+34987123456',
+    'mailto:casa@example.es', 'https://casa.example.es/']);
+  assert.strictEqual(links[2].text, '+34 987 123 456');
   assert.deepStrictEqual(P.stayLinks({ t: '+34987123456' }, {}).map((l) => l.key), ['call']);
   assert.deepStrictEqual(P.stayLinks({}, {}), []);
   assert.deepStrictEqual(P.stayLinks(null, {}), []);

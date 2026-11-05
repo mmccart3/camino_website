@@ -197,6 +197,21 @@ class PlannerPageContractTests(SimpleTestCase):
         self.assertIn('data-details-url="{% url \'plan_stays\' %}"', template)
         self.assertIn('id="plan-stay-note"', template)
 
+    def test_the_stay_buttons_have_what_they_are_drawn_with(self):
+        """The ways to reach a place are the guide's own buttons, so the page carries the icon sprite and the WhatsApp logo."""
+        template = self.read('templates', 'camino', 'plan.html')
+        script = self.read('static', 'camino', 'js', 'plan.js')
+        sprite = self.read('templates', 'camino', '_icons.html')
+        base = self.read('templates', 'camino', 'base.html')
+        self.assertIn("{% include 'camino/_icons.html' %}", template)
+        self.assertIn("data-wa-logo=\"{% static 'camino/img/whatsapp-logo-green.svg' %}\"", template)
+        used = set(re.findall(r"icon\('(i-[a-z]+)'\)", script))
+        self.assertGreaterEqual(len(used), 3)
+        for symbol in sorted(used):
+            self.assertIn(f'id="{symbol}"', sprite, symbol)
+        for rule in ('.plan-links .btn {', '.plan-links .btn-wa'):   # the look is shared with the place pages
+            self.assertIn(rule, base, rule)
+
     def test_the_menu_links_to_the_planner(self):
         base = self.read('templates', 'camino', 'base.html')
         self.assertEqual(base.count("{% url 'plan' %}"), 2)  # menu and footer

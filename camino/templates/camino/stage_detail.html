@@ -87,6 +87,15 @@
 {% endif %}
 
 <!-- Interactive Elevation Profile Card -->
+<style>
+  /* The place names are drawn in rows above the plot (see the waypoint plugin below), so the charts are taller than the plot alone needs. */
+  .elevation-card .chart-container { height: 280px; }
+  .scrub-chart-area { height: 280px; }
+  @media (max-width: 520px) {
+    .elevation-card .chart-container { height: 340px; }
+    .scrub-chart-area { height: clamp(240px, 42vh, 290px); }   /* the drawer must still fit a short phone */
+  }
+</style>
 <div class="card elevation-card">
   <div class="elevation-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
     <div>
@@ -101,9 +110,12 @@
   </div>
 
   {% if has_elevation_data %}
-    <div class="chart-container" style="position: relative; height: 260px; width: 100%;">
+    <div class="chart-container">
       <canvas id="elevationChart"></canvas>
     </div>
+    <p id="chartNamesNote" class="elevation-hint" style="display: none; margin: 0.5rem 0 0;">
+      Not every place name fits on the chart. Touch the chart near a marker to see its name, or use the list of places below.
+    </p>
   {% else %}
     <p><small>Elevation data pending for this stage.</small></p>
   {% endif %}
@@ -138,7 +150,7 @@
     </div>
 
     <!-- Expanded Drawer Canvas -->
-    <div class="scrub-chart-area" style="position: relative; height: 240px; width: 100%;">
+    <div class="scrub-chart-area">
       <canvas id="scrubChartCanvas"></canvas>
     </div>
 
@@ -434,7 +446,7 @@
     const maxDist = dataPoints[dataPoints.length - 1].x;
 
     const yMin = Math.max(0, Math.floor((minEle - 60) / 50) * 50);
-    const yMax = Math.ceil((maxEle + 90) / 50) * 50;
+    const yMax = Math.ceil((maxEle + 40) / 50) * 50;   // the place names now sit above the plot, so little headroom is needed
 
     // Helper: Sync highlights across DOM elements
     window.setStageHighlight = function(locationId) {
@@ -455,54 +467,154 @@
     };
 
     // Shared Waypoint Plugin (Defined first so both charts can use it safely)
+    //
+    // The place names go in rows above the plot. A name that would run into one already placed drops to the
+    // next row up, and one that fits on no row is left off (its marker is still drawn, and its name shows
+    // when the marker is touched or hovered, and in the list below). The start and the finish are placed
+    // first, so they always have a name. Long names are shortened with "…" to keep the rows few.
+    const LABEL_FONT = 'bold 10px sans-serif';
+    const LABEL_ROW = 13;   // height of one row of names, in px
+    const LABEL_GAP = 6;    // space between two names on a row, in px
+
+    function maxLabelRows(chart) {
+      return chart.width < 520 ? 6 : 4;
+    }
+
+    function layOutLabels(ctx, left, right, xOf, maxRows) {
+      ctx.save();
+      ctx.font = LABEL_FONT;
+      const maxWidth = right - left < 520 ? 120 : 170;
+      const isEnd = i => (i === 0 || i === waypoints.length - 1) ? 0 : 1;
+      const order = waypoints.map((wp, i) => i).sort((a, b) => isEnd(a) - isEnd(b) || a - b);
+      const rows = [];   // the names already on each row, as [from, to]
+      const placed = {};
+      let used = 0;
+
+      order.forEach(i => {
+        const wp = waypoints[i];
+        const xPos = xOf(wp.km);
+        if (!(xPos >= left && xPos <= right)) return;
+
+        let text = wp.name;
+        let width = ctx.measureText(text).width;
+        if (width > maxWidth) {
+          while (text.length > 2 && ctx.measureText(text + '…').width > maxWidth) text = text.slice(0, -1);
+          text = text.trimEnd() + '…';
+          width = ctx.measureText(text).width;
+        }
+        const from = Math.min(Math.max(xPos - width / 2, left), Math.max(left, right - width));
+        const to = from + width;
+
+        for (let r = 0; r < maxRows; r++) {
+          const row = rows[r] || (rows[r] = []);
+          if (row.every(([a, b]) => to + LABEL_GAP <= a || from - LABEL_GAP >= b)) {
+            row.push([from, to]);
+            placed[i] = { row: r, text, from, width };
+            used = Math.max(used, r + 1);
+            break;
+          }
+        }
+      });
+      ctx.restore();
+      return { placed, rows: used };
+    }
+
     const waypointPlugin = {
       id: 'waypointMarkers',
+      beforeLayout(chart) {
+        // Leave room above the plot for the rows of names this width needs. Until the plot's real edges are known
+        // (afterLayout, below) they are estimated from the width of the altitude axis.
+        const known = chart.$labelEdges && chart.$labelEdges.width === chart.width ? chart.$labelEdges : null;
+        const left = known ? known.left : 58;
+        const right = known ? known.right : chart.width - 12;
+        const { rows } = layOutLabels(chart.ctx, left, right,
+          km => left + (maxDist > 0 ? Math.min(km, maxDist) / maxDist : 0) * (right - left), maxLabelRows(chart));
+        chart.$labelRows = Math.max(1, rows);
+        chart.options.layout.padding.top = chart.$labelRows * LABEL_ROW + 8;
+      },
+      afterLayout(chart) {
+        // The plot's real edges are known now. If the names need a different number of rows than the estimate left
+        // room for, lay the chart out once more with the real edges.
+        const { left, right } = chart.chartArea;
+        chart.$labelEdges = { width: chart.width, left, right };
+        const { rows } = layOutLabels(chart.ctx, left, right,
+          km => chart.scales.x.getPixelForValue(Math.min(km, maxDist)), maxLabelRows(chart));
+        if (Math.max(1, rows) !== chart.$labelRows && !chart.$labelRetried) {
+          chart.$labelRetried = true;
+          setTimeout(() => { chart.update('none'); chart.$labelRetried = false; }, 0);
+        }
+      },
       afterDraw(chart) {
         const { ctx, chartArea: { top, bottom, left, right }, scales: { x, y } } = chart;
+        // A marker's distance is rounded to 0.1 km, so the finish can land a hair beyond the end of the axis; keep it on the chart
+        const px = km => x.getPixelForValue(Math.min(km, maxDist));
+        const { placed } = layOutLabels(ctx, left, right, px, chart.$labelRows || 1);
+        const note = chart.canvas.id === 'elevationChart' ? document.getElementById('chartNamesNote') : null;
+        if (note) {
+          const inPlot = waypoints.filter(wp => { const xp = px(wp.km); return xp >= left && xp <= right; }).length;
+          note.style.display = Object.keys(placed).length < inPlot ? '' : 'none';
+        }
+        const baseline = row => top - 6 - row * LABEL_ROW;   // row 0 sits just above the plot, the others stack up from it
+        const matches = wp => (wp.location_id && String(wp.location_id) === String(activeLocationId)) ||
+                              (!wp.location_id && activeLocationId === wp.name);
         ctx.save();
 
+        // Dashed drop lines first, so that a name drawn over one hides it
         waypoints.forEach((wp, i) => {
-          const xPos = x.getPixelForValue(wp.km);
-          const yPos = y.getPixelForValue(wp.elevation);
+          const xPos = px(wp.km);
+          if (xPos < left || xPos > right) return;
+          const isMatch = matches(wp);
+          ctx.beginPath();
+          ctx.setLineDash(isMatch ? [] : [3, 3]);
+          ctx.strokeStyle = isMatch ? '#d97706' : 'rgba(100, 116, 139, 0.45)';
+          ctx.lineWidth = isMatch ? 2.5 : 1;
+          ctx.moveTo(xPos, placed[i] ? baseline(placed[i].row) + 3 : top);
+          ctx.lineTo(xPos, bottom);
+          ctx.stroke();
+        });
 
-          if (xPos >= left && xPos <= right) {
-            const isMatch = (wp.location_id && String(wp.location_id) === String(activeLocationId)) ||
-                            (!wp.location_id && activeLocationId === wp.name);
+        // Point markers
+        ctx.setLineDash([]);
+        waypoints.forEach(wp => {
+          const xPos = px(wp.km);
+          if (xPos < left || xPos > right) return;
+          const isMatch = matches(wp);
+          ctx.beginPath();
+          ctx.arc(xPos, y.getPixelForValue(wp.elevation), isMatch ? 7 : 4, 0, Math.PI * 2);
+          ctx.fillStyle = isMatch ? '#d97706' : '#12284c';
+          ctx.fill();
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = isMatch ? 2.5 : 1.5;
+          ctx.stroke();
+        });
 
-            // Dashed drop line
-            ctx.beginPath();
-            ctx.setLineDash(isMatch ? [] : [3, 3]);
-            ctx.strokeStyle = isMatch ? '#d97706' : 'rgba(100, 116, 139, 0.45)';
-            ctx.lineWidth = isMatch ? 2.5 : 1;
-            ctx.moveTo(xPos, top + 30);
-            ctx.lineTo(xPos, bottom);
-            ctx.stroke();
-
-            // Point marker
-            ctx.setLineDash([]);
-            ctx.beginPath();
-            ctx.arc(xPos, yPos, isMatch ? 7 : 4, 0, Math.PI * 2);
-            ctx.fillStyle = isMatch ? '#d97706' : '#12284c';
-            ctx.fill();
-            ctx.strokeStyle = '#ffffff';
-            ctx.lineWidth = isMatch ? 2.5 : 1.5;
-            ctx.stroke();
-
-            // Label
-            ctx.font = isMatch ? 'bold 12px sans-serif' : 'bold 10px sans-serif';
-            ctx.fillStyle = isMatch ? '#d97706' : '#1e293b';
-
-            if (i === 0 || xPos - left < 30) {
-              ctx.textAlign = 'left';
-            } else if (i === waypoints.length - 1 || right - xPos < 30) {
-              ctx.textAlign = 'right';
-            } else {
-              ctx.textAlign = 'center';
-            }
-
-            const labelY = (i % 2 === 0) ? top + 10 : top + 24;
-            ctx.fillText(wp.name, xPos, labelY);
-          }
+        // Names: all of them on a pale backing, then the one being pointed at on top, in full
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'alphabetic';
+        ctx.font = LABEL_FONT;
+        waypoints.forEach((wp, i) => {
+          const p = placed[i];
+          if (!p) return;
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+          ctx.fillRect(p.from - 2, baseline(p.row) - 9, p.width + 4, 12);
+          ctx.fillStyle = '#1e293b';
+          ctx.fillText(p.text, p.from, baseline(p.row));
+        });
+        waypoints.forEach((wp, i) => {
+          if (!matches(wp)) return;
+          const xPos = px(wp.km);
+          if (xPos < left || xPos > right) return;
+          ctx.font = 'bold 12px sans-serif';
+          const width = ctx.measureText(wp.name).width;
+          const from = Math.min(Math.max(xPos - width / 2, left), Math.max(left, right - width));
+          const y0 = baseline(placed[i] ? placed[i].row : 0);
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(from - 3, y0 - 11, width + 6, 15);
+          ctx.strokeStyle = '#d97706';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(from - 3, y0 - 11, width + 6, 15);
+          ctx.fillStyle = '#b45309';
+          ctx.fillText(wp.name, from, y0);
         });
         ctx.restore();
       }
@@ -531,6 +643,7 @@
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        layout: { padding: { top: 0 } },   // the waypoint plugin sets the top padding to fit the place names
         interaction: {
           mode: 'nearest',
           axis: 'x',
@@ -695,6 +808,7 @@
             options: {
               responsive: true,
               maintainAspectRatio: false,
+              layout: { padding: { top: 0 } },   // the waypoint plugin sets the top padding to fit the place names
               animation: false,
               events: ['click', 'touchstart', 'touchmove'],
               onClick(event) {

@@ -263,6 +263,15 @@ class AccommodationButtonAssetTests(SimpleTestCase):
         self.assertEqual(pin.read_bytes()[:8], b'\x89PNG\r\n\x1a\n')
 
 
+class StageChartLabelTests(SimpleTestCase):
+    def test_place_names_on_the_elevation_chart_are_laid_out_in_rows(self):
+        """The names go in rows above the plot so that none can be drawn over another (the phone layout depends on it)."""
+        template = (settings.BASE_DIR / 'camino' / 'templates' / 'camino' / 'stage_detail.html').read_text(encoding='utf-8')
+        for piece in ('function layOutLabels', 'chart.options.layout.padding.top', 'id="chartNamesNote"'):
+            self.assertIn(piece, template, piece)
+        self.assertEqual(template.count('layout: { padding: { top: 0 } }'), 2)   # the page's chart and the drawer's
+
+
 class LiveDatabaseSmokeTests(unittest.TestCase):
     """Read-only GET requests against the real camino.sqlite."""
 

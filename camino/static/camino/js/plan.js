@@ -323,15 +323,20 @@
       el('div', { 'class': 'plan-more-grid' }, [
         el('label', {}, [el('span', { text: 'How' }), mode]),
         el('label', {}, [el('span', { text: 'Leaves' }), time('tdep', day.dep, 'Departure time')]),
-        el('label', {}, [el('span', { text: 'Arrives' }), time('tarr', day.arr, 'Arrival time')]),
+        el('label', {}, [el('span', { 'class': 'plan-arrive-caption', text: arrivesCaption(day) }), time('tarr', day.arr, 'Arrival time')]),
         el('label', {}, [el('span', { text: 'Ticket or booking reference' }), el('input', { type: 'text', 'class': 'plan-input', 'data-act': 'tref',
           maxlength: String(Plan.MAX_REF), autocomplete: 'off', value: day.ref || '', 'aria-label': 'Ticket reference for ' + name })]),
         el('label', { 'class': 'plan-more-wide' }, [el('span', { text: 'Notes' }), el('textarea', { 'class': 'plan-input plan-textarea', 'data-act': 'tnotes',
           rows: '2', maxlength: String(Plan.MAX_TRAVEL_NOTES), 'aria-label': 'Notes for ' + name }, [day.notes || ''])])
       ]),
+      el('p', { 'class': 'plan-hint plan-nextday-note', hidden: !Plan.arrivesNextDay(day),
+        text: 'This journey ends the next day. For a journey after it, leave "Same day as the day before" unticked so it gets the next date.' }),
       el('p', { 'class': 'plan-hint', text: 'These go in the plan code and the file. The phone app does not show them yet.' })
     ]);
   }
+
+  // The caption over a journey's arrival time: "Arrives", or "Arrives (next day)" for a night journey.
+  function arrivesCaption(day) { return 'Arrives' + (Plan.arrivesNextDay(day) ? ' (next day)' : ''); }
 
   // ------------------------------------------------------------------ what the guide says about a place to stay
 
@@ -482,6 +487,11 @@
       var to = el('input', { type: 'text', 'class': 'plan-input', list: 'plan-places', value: day.to, autocomplete: 'off',
         placeholder: 'Where to? e.g. Saint Jean Pied de Port', 'data-act': 'to', 'data-focus': 'day-' + i + '-to', maxlength: '100' });
       body.push(el('p', { 'class': 'plan-day-hint', text: 'Flight, train, bus or taxi. Start typing a town on the Camino to pick it from the list, or type any place.' }));
+      // Said only while the day is a single journey: once a second leg is added the person has found the way, and a day of three legs does not say it three times.
+      if (info.parts === 1) {
+        body.push(el('p', { 'class': 'plan-day-hint plan-leg-hint',
+          text: 'Going in more than one leg, such as a bus then two flights? Use "Travel on the same day" below to add each leg as its own journey, each with its own times and reference.' }));
+      }
       body.push(el('div', { 'class': 'plan-travel' }, [
         el('label', {}, [el('span', { text: 'From' }), from]),
         el('label', {}, [el('span', { text: 'To' }), to])
@@ -1136,7 +1146,7 @@
       if (full) {
         var times = [];
         if (day.dep !== undefined) times.push('leaves ' + Plan.formatClock(day.dep));
-        if (day.arr !== undefined) times.push('arrives ' + Plan.formatClock(day.arr));
+        if (day.arr !== undefined) times.push('arrives ' + Plan.formatClock(day.arr) + (Plan.arrivesNextDay(day) ? ' (next day)' : ''));
         if (times.length) kids.push(el('span', { 'class': 'plan-print-small', text: times.join(', ') }));
         if (printOptions.private && day.ref) kids.push(el('span', { 'class': 'plan-print-small', text: 'Reference: ' + day.ref }));
         if (printOptions.private && day.notes) kids.push(el('span', { 'class': 'plan-print-small', text: day.notes }));
@@ -1803,6 +1813,14 @@
       else if (act === 'tnotes') target.value = now.notes || '';
       var heading = target.closest('.plan-day').querySelector('.plan-day-title');
       heading.textContent = dayTitle(Plan.layout(state, data).days[i]);
+      if (act === 'tdep' || act === 'tarr') {
+        // an arrival earlier than the departure means a night journey: say so beside the time, and what it means for the next one
+        var more = target.closest('.plan-travel-more'), caption = more.querySelector('.plan-arrive-caption');
+        var wasNext = caption.textContent !== 'Arrives', isNext = Plan.arrivesNextDay(now);
+        caption.textContent = arrivesCaption(now);
+        more.querySelector('.plan-nextday-note').hidden = !isNext;
+        if (wasNext !== isNext) announce(cap(ref(i)) + (isNext ? ' now arrives the next day.' : ' now arrives the same day.'));
+      }
       renderSend();
     }
   });

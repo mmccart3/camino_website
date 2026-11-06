@@ -212,6 +212,19 @@ class PlannerPageContractTests(SimpleTestCase):
         for rule in ('.plan-links .btn {', '.plan-links .btn-wa'):   # the look is shared with the place pages
             self.assertIn(rule, base, rule)
 
+    def test_a_journey_in_several_legs_is_explained_and_a_night_journey_says_so(self):
+        """A bus then two flights is three journeys on one day, and an arrival before the departure is the next day."""
+        script = self.read('static', 'camino', 'js', 'plan.js')
+        core = self.read('static', 'camino', 'js', 'plan-core.js')
+        template = self.read('templates', 'camino', 'plan.html')
+        self.assertIn('plan-add-travel-same', template)               # the button the hint points to
+        self.assertIn('Travel on the same day', template)
+        self.assertIn('plan-leg-hint', script)
+        self.assertIn('such as a bus then two flights?', script)
+        self.assertIn('function arrivesNextDay', core)
+        self.assertIn("'Arrives' + (Plan.arrivesNextDay(day) ? ' (next day)' : '')", script)
+        self.assertIn("' (next day)' : '')", script)                    # the printed sheet says it too
+
     def test_the_menu_links_to_the_planner(self):
         base = self.read('templates', 'camino', 'base.html')
         self.assertEqual(base.count("{% url 'plan' %}"), 2)  # menu and footer

@@ -542,6 +542,20 @@ test('clock times: minutes after midnight and back', () => {
   assert.deepStrictEqual(['', '24:00', '9:60', '9', 'ab:cd', null].map(P.parseClock), [null, null, null, null, null, null]);
 });
 
+test('a night journey: an arrival earlier than the departure means it ends the next day', () => {
+  assert.strictEqual(P.arrivesNextDay({ t: 't', dep: 22 * 60 + 40, arr: 6 * 60 + 10 }), true);
+  assert.strictEqual(P.arrivesNextDay({ t: 't', dep: 5, arr: 0 }), true);                 // midnight is a time like any other
+  assert.strictEqual(P.arrivesNextDay({ t: 't', dep: 9 * 60, arr: 13 * 60 }), false);
+  assert.strictEqual(P.arrivesNextDay({ t: 't', dep: 9 * 60, arr: 9 * 60 }), false);       // the same minute says nothing
+  assert.strictEqual(P.arrivesNextDay({ t: 't', dep: 0, arr: 0 }), false);
+  assert.strictEqual(P.arrivesNextDay({ t: 't', dep: 600 }), false);                       // one time alone says nothing
+  assert.strictEqual(P.arrivesNextDay({ t: 't', arr: 600 }), false);
+  assert.strictEqual(P.arrivesNextDay({ t: 't', dep: 600, arr: null }), false);
+  assert.strictEqual(P.arrivesNextDay({ t: 't', dep: 1500, arr: 30 }), false);             // not a time of day
+  assert.strictEqual(P.arrivesNextDay(null), false);
+  assert.strictEqual(P.arrivesNextDay(undefined), false);
+});
+
 // ---------------------------------------------------------------- what the guide says about a place to stay
 
 test('the picker line: price, beds and facilities for an albergue', () => {
@@ -650,6 +664,32 @@ test('a plan saved to a file reads back as the same plan, with and without dates
 test('a journey on the same day comes back as one only when the plan has dates', () => {
   assert.strictEqual(P.readFile(inFile(everything(true)), data).plans[0].state.days[4].same, true);
   assert.strictEqual(P.readFile(inFile(everything(false)), data).plans[0].state.days[4].same, false);
+});
+
+test('a bus and two flights on one day: three journeys, one numbered day, each with its own details', () => {
+  let s = plan();                                                                           // two walking days
+  const legs = [
+    { to: 'Biarritz airport', mode: 'bus', dep: 6 * 60, arr: 7 * 60 + 30, ref: 'BUS-1', notes: 'Stop 4' },
+    { to: 'Madrid', mode: 'flight', dep: 9 * 60, arr: 10 * 60 + 30, ref: 'IB123' },
+    { to: 'Lisbon', mode: 'flight', dep: 23 * 60 + 30, arr: 1 * 60 + 15, ref: 'TP456', notes: 'Night flight' }
+  ];
+  legs.forEach((leg, n) => { s = P.setTravel(P.addTravel(s, data, undefined, n > 0), 2 + n, leg); });
+  s = P.setMeta(s, { startDate: '2027-04-10' });
+  const l = P.layout(s, data).days.slice(2);
+  assert.deepStrictEqual(l.map(d => [d.no, d.part, d.parts, d.same]), [[3, 1, 3, false], [3, 2, 3, true], [3, 3, 3, true]]);
+  assert.deepStrictEqual(l.map(d => d.warning), ['', '', ''], 'each leg starts where the one before ended');
+  assert.deepStrictEqual(l.map(d => [d.start.name, d.end.name]), [['Charlie', 'Biarritz airport'], ['Biarritz airport', 'Madrid'], ['Madrid', 'Lisbon']]);
+  assert.deepStrictEqual(l.map(d => d.date), ['2027-04-12', '2027-04-12', '2027-04-12']);
+  assert.deepStrictEqual(s.days.slice(2).map(d => P.arrivesNextDay(d)), [false, false, true]);
+  // the file keeps every leg's own times, reference and notes, and reads back the same
+  const back = P.readFile(inFile(s), data).plans[0].state;
+  assert.deepStrictEqual(back.days.slice(2).map(d => [d.same, d.mode, d.dep, d.arr, d.ref, d.notes || '']),
+    legs.map((leg, n) => [n > 0, leg.mode, leg.dep, leg.arr, leg.ref, leg.notes || '']));
+  assert.deepStrictEqual(P.buildFile(back, data, NOW), P.buildFile(s, data, NOW));
+  // a journey after the night flight is a day of its own: the next date
+  const next = P.setTravel(P.addTravel(s, data), 5, { to: 'Porto' });
+  const after = P.layout(next, data).days[5];
+  assert.deepStrictEqual([after.no, after.part, after.parts, after.date], [4, 1, 1, '2027-04-13']);
 });
 
 test('a stage day comes back as a stage, an own route as an own route, a first rest day keeps its place', () => {

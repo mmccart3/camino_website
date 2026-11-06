@@ -86,6 +86,11 @@
   function cleanMinutes(value) {
     return Number.isInteger(value) && value >= 0 && value <= 1439 ? value : null;
   }
+  // A journey whose arrival time is earlier than its departure time ends the next day (a night flight or train).
+  // The times are times of day only, so this is the one thing they can say about the date.
+  function arrivesNextDay(day) {
+    return !!day && cleanMinutes(day.dep) !== null && cleanMinutes(day.arr) !== null && day.arr < day.dep;
+  }
 
   function formatDuration(seconds) {
     var minutes = Math.round(seconds / 60);
@@ -1051,7 +1056,7 @@
   return {
     STATUSES: STATUSES, MAX_DAYS: MAX_DAYS, MODES: MODES, MAX_REF: MAX_REF, MAX_TRAVEL_NOTES: MAX_TRAVEL_NOTES,
     MAX_STAY_NOTES: MAX_STAY_NOTES, MAX_CONTACT: MAX_CONTACT,
-    formatClock: formatClock, parseClock: parseClock, cleanMinutes: cleanMinutes,
+    formatClock: formatClock, parseClock: parseClock, cleanMinutes: cleanMinutes, arrivesNextDay: arrivesNextDay,
     setRestPlace: setRestPlace, setStayDetails: setStayDetails,
     newState: newState, clean: clean, layout: layout, dayLabel: dayLabel, dayRef: dayRef, totals: totals,
     stageIds: stageIds, siblings: siblings, staysAt: staysAt, placeIdByName: placeIdByName,

@@ -7,8 +7,10 @@ The Camino tables are unmanaged, so Django cannot build a test copy of them. The
 and the SimpleTestCase tests never touch the database. LiveDatabaseSmokeTests is a plain
 unittest case that only performs GET requests against the real camino.sqlite.
 """
+import gzip
 import json
 import re
+import struct
 import unittest
 from decimal import Decimal
 from pathlib import Path
@@ -283,6 +285,58 @@ class StageChartLabelTests(SimpleTestCase):
         for piece in ('function layOutLabels', 'chart.options.layout.padding.top', 'id="chartNamesNote"'):
             self.assertIn(piece, template, piece)
         self.assertEqual(template.count('layout: { padding: { top: 0 } }'), 2)   # the page's chart and the drawer's
+
+
+class PagePerformanceTests(SimpleTestCase):
+    """Keeps the page-speed work (v1.2.53) from being undone by accident."""
+
+    def read(self, *parts):
+        return (settings.BASE_DIR / 'camino' / Path(*parts)).read_text(encoding='utf-8')
+
+    def test_pages_are_compressed_for_browsers_that_accept_it(self):
+        response = self.client.get('/offline/', HTTP_ACCEPT_ENCODING='gzip, deflate')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Encoding'], 'gzip')
+        self.assertIn('Accept-Encoding', response['Vary'])
+        self.assertIn('<html', gzip.decompress(response.content).decode())
+        self.assertNotIn('Content-Encoding', self.client.get('/offline/'))   # and left alone when the browser does not ask
+
+    def test_only_the_stage_pages_use_leaflet(self):
+        html = self.client.get('/offline/').content.decode()
+        self.assertNotIn('unpkg.com', html)
+        self.assertNotIn('leaflet.js', html)
+        base = self.read('templates', 'camino', 'base.html')
+        self.assertNotIn('LEAFLET_JS_URL', base)
+        self.assertNotIn('LEAFLET_CSS_URL', base)
+        town = self.read('templates', 'camino', 'location_detail.html')
+        self.assertNotIn('L.map', town)   # the town page once had map code for a map that is not on the page
+        self.assertNotIn('openstreetmap', town)
+
+    def test_the_stage_page_loads_leaflet_after_the_page_has_loaded(self):
+        stage = self.read('templates', 'camino', 'stage_detail.html')
+        self.assertIn('function loadLeaflet', stage)
+        self.assertIn("window.addEventListener('load'", stage)
+        self.assertIn('{{ LEAFLET_JS_INTEGRITY }}', stage)
+        self.assertIn('{{ LEAFLET_CSS_INTEGRITY }}', stage)
+        self.assertNotIn('<script src="{{ LEAFLET_JS_URL }}"', stage)   # not a script that holds up the page
+        self.assertIn("chart.umd.min.js' %}\" defer>", stage)
+        for name in ('LEAFLET_CSS_INTEGRITY', 'LEAFLET_JS_INTEGRITY'):
+            self.assertRegex(getattr(settings, name), r'^sha256-[A-Za-z0-9+/]{43}=$')
+
+    def test_the_header_uses_the_small_icon(self):
+        html = self.client.get('/offline/').content.decode()
+        self.assertIn('camino/img/icon-96.png', html)
+        self.assertNotIn('icon-192', html)   # the 192 pixel icon is for the manifest only
+        header = (settings.BASE_DIR / 'camino' / 'static' / 'camino' / 'img' / 'icon-96.png').read_bytes()[:24]
+        self.assertEqual(struct.unpack('>II', header[16:24]), (96, 96))
+        urls = json.loads(re.search(r'const PRECACHE_URLS = (\[.*?\]);', self.client.get('/sw.js').content.decode(), re.S).group(1))
+        self.assertTrue(any(u.endswith('/icon-96.png') for u in urls))
+
+    def test_the_planner_keeps_its_empty_cards_out_of_sight_until_the_script_has_built_them(self):
+        css = self.read('static', 'camino', 'css', 'plan.css')
+        self.assertIn('.plan:not(.plan-ready) > .plan-card', css)
+        self.assertIn("classList.add('plan-ready')", self.read('static', 'camino', 'js', 'plan.js'))
+        self.assertIn('id="plan-loading"', self.read('templates', 'camino', 'plan.html'))
 
 
 class LiveDatabaseSmokeTests(unittest.TestCase):

@@ -50,6 +50,7 @@ The website only reads `camino.sqlite`. It has no login, admin or editing pages,
    `python tool/sync_website_database.py --app assets/database/camino.sqlite --website <this project>/camino.sqlite --out <new file> --report-dir docs/website_sync`
    It builds a new file and a report of every row it changed or dropped. Read the report, then copy the new file over `camino.sqlite` here.
 4. Run `python manage.py test camino`, commit `camino.sqlite` and push.
+5. Optional check: `python tool/audit_database.py camino.sqlite --app <camino_app>/assets/database/camino.sqlite` (standard-library Python, read-only). It lists broken links between tables, impossible GPS positions, duplicates, placeholder towns, route-data problems and differences between the two databases, ranked as errors, warnings and notes. `--markdown report.md` saves the report.
 
 Edits made directly in this project's `camino.sqlite` are replaced the next time the sync runs, unless the same edit is also made in the app database. The file still holds some unused Django tables (`auth_*`, `django_*`); they are harmless and the sync leaves them alone.
 

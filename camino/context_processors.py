@@ -20,4 +20,6 @@ def global_context(request):
         'DEFAULT_DESCRIPTION': DEFAULT_DESCRIPTION,
         'LEAFLET_CSS_URL': settings.LEAFLET_CSS_URL,
         'LEAFLET_JS_URL': settings.LEAFLET_JS_URL,
+        'LEAFLET_CSS_INTEGRITY': settings.LEAFLET_CSS_INTEGRITY,
+        'LEAFLET_JS_INTEGRITY': settings.LEAFLET_JS_INTEGRITY,
     }

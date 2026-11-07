@@ -14,13 +14,24 @@
   var Msg = window.CaminoMessage;   // the "Ask for a bed" message: the page works without it
   var root = document.getElementById('plan-root');
   var dataElement = document.getElementById('plan-data');
-  if (!Plan || !root || !dataElement) return;
+  // If the page cannot be built, say so in place of "Loading the planner…"
+  function giveUp() {
+    var loading = document.getElementById('plan-loading');
+    if (loading) loading.hidden = true;
+    var message = root && root.querySelector('.plan-fatal');
+    if (message) message.hidden = false;
+    if (root) root.classList.add('plan-failed');
+  }
+  if (!Plan || !root || !dataElement) {
+    giveUp();
+    return;
+  }
 
   var data;
   try {
     data = JSON.parse(dataElement.textContent);
   } catch (error) {
-    root.querySelector('.plan-fatal').hidden = false;
+    giveUp();
     return;
   }
 

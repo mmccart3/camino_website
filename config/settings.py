@@ -18,7 +18,7 @@ from django.core.exceptions import ImproperlyConfigured
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-APP_VERSION = "v1.2.52"  # Update this as you deploy new iterations
+APP_VERSION = "v1.2.53"  # Update this as you deploy new iterations
 
 # ---------------------------------------------------------------------------
 # Environment-driven settings
@@ -105,6 +105,9 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
+    # Compresses the pages and JSON that Django builds (WhiteNoise already compresses static files).
+    # It sits after WhiteNoise, which answers static requests itself and never reaches it.
+    'django.middleware.gzip.GZipMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
@@ -187,6 +190,9 @@ LEAFLET_VERSION = '1.9.4'
 LEAFLET_BASE_URL = f'https://unpkg.com/leaflet@{LEAFLET_VERSION}/dist'
 LEAFLET_CSS_URL = f'{LEAFLET_BASE_URL}/leaflet.css'
 LEAFLET_JS_URL = f'{LEAFLET_BASE_URL}/leaflet.js'
+# Subresource Integrity hashes for the two files above. Work them out again if LEAFLET_VERSION changes.
+LEAFLET_CSS_INTEGRITY = 'sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY='
+LEAFLET_JS_INTEGRITY = 'sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo='
 LEAFLET_IMAGE_URLS = [
     f'{LEAFLET_BASE_URL}/images/{name}'
     for name in ('layers.png', 'layers-2x.png', 'marker-icon.png', 'marker-icon-2x.png', 'marker-shadow.png')

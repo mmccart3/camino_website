@@ -6,6 +6,16 @@
 .plan-intro h2 { margin: 0 0 0.35rem; }
 .plan-intro p { margin: 0 auto; max-width: 38rem; color: #475569; }
 
+/* plan.js builds most of this page (the stops, the days, the saved plans). Until it has run, only the
+   introduction is shown. The empty cards keep their place but stay out of sight, so nothing on the page
+   jumps when they fill in. plan.js adds .plan-ready as it finishes. */
+.plan:not(.plan-ready) > .plan-card,
+.plan:not(.plan-ready) > .plan-reset-row { visibility: hidden; }
+.plan-failed > .plan-card,
+.plan-failed > .plan-reset-row { display: none; }
+.plan-loading { margin: 0 0 1rem; text-align: center; color: #475569; }
+.plan-ready .plan-loading { display: none; }
+
 .plan-card {
   background: var(--surface, #fff);
   border: 1px solid var(--border, #e2e8f0);

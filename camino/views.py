@@ -349,7 +349,7 @@ def service_worker(request):
         static('camino/css/plan.css'),
         static('camino/chart.umd.min.js'),
         static('camino/fonts/Fiesta.ttf'),
-        static('camino/img/icon-192.png'),
+        static('camino/img/icon-96.png'),
         static('camino/img/favicon-48.png'),
         static('camino/img/whatsapp-logo-green.svg'),
         static('camino/img/google-maps-pin.png'),

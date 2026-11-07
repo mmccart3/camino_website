@@ -235,6 +235,7 @@
   <img id="stage-map-img" 
        src="{% if stage.stage_map_url %}{{ stage.stage_map_url }}{% elif stage.map_url_1920 %}{{ stage.map_url_1920 }}{% else %}{{ stage.map_url_1024 }}{% endif %}" 
        alt="{{ stage.stage_name }} Map" 
+       decoding="async"
        style="width: 100%; height: auto; display: block;" />
 
   <svg id="hotspot-svg" 
@@ -261,6 +262,7 @@
 <!-- 2. Interactive Leaflet Map Container -->
 {% if has_gps_track %}
   <div id="interactive-map-container" style="display: none; position: relative;">
+    <p id="leaflet-status" role="status" style="font-size: 0.9rem; color: #475569; margin: 0 0 0.5rem;" hidden></p>
     <div id="leaflet-stage-map" style="width: 100%; height: 480px; border-radius: 8px; border: 1px solid var(--border);"></div>
     <div style="font-size: 0.78rem; color: #64748b; margin-top: 0.4rem; display: flex; justify-content: space-between;">
       <span>Route track plotted from recorded Camino GPS coordinates.</span>
@@ -343,6 +345,54 @@
   let leafletMap = null;
   let trackPolyline = null;
 
+  // Leaflet (the interactive map library) is only needed once someone opens the interactive map, so it is
+  // not part of the page itself. It is fetched once the page has finished loading, so that it never competes
+  // with the page, or straight away if the interactive map is opened first. The offline service worker
+  // keeps copies of both files, so the map still opens without a connection.
+  const leafletFiles = {
+    css: { url: "{{ LEAFLET_CSS_URL }}", integrity: "{{ LEAFLET_CSS_INTEGRITY }}" },
+    js: { url: "{{ LEAFLET_JS_URL }}", integrity: "{{ LEAFLET_JS_INTEGRITY }}" }
+  };
+  let leafletLoading = null;
+
+  function loadLeaflet() {
+    if (window.L && window.L.map) return Promise.resolve();
+    if (leafletLoading) return leafletLoading;
+    leafletLoading = new Promise((resolve, reject) => {
+      const css = document.createElement('link');
+      css.rel = 'stylesheet';
+      css.href = leafletFiles.css.url;
+      css.integrity = leafletFiles.css.integrity;
+      css.crossOrigin = '';
+      document.head.appendChild(css);
+
+      const script = document.createElement('script');
+      script.src = leafletFiles.js.url;
+      script.integrity = leafletFiles.js.integrity;
+      script.crossOrigin = '';
+      script.onload = () => resolve();
+      script.onerror = () => {
+        leafletLoading = null;   // let a later tap try again
+        css.remove();
+        script.remove();
+        reject(new Error('Leaflet could not be loaded'));
+      };
+      document.head.appendChild(script);
+    });
+    return leafletLoading;
+  }
+
+  if (Array.isArray(gpsTrack) && gpsTrack.length > 0) {
+    const fetchWhenIdle = () => {
+      loadLeaflet().catch(() => { /* quietly retried if the interactive map is opened */ });
+    };
+    if (document.readyState === 'complete') {
+      setTimeout(fetchWhenIdle, 0);
+    } else {
+      window.addEventListener('load', () => setTimeout(fetchWhenIdle, 0), { once: true });
+    }
+  }
+
   const btnIllustrated = document.getElementById('btnShowIllustrated');
   const btnInteractive = document.getElementById('btnShowInteractive');
   const illustratedContainer = document.getElementById('illustrated-map-container');
@@ -419,8 +469,20 @@
       illustratedContainer.style.display = 'none';
       if (interactiveContainer) {
         interactiveContainer.style.display = 'block';
-        initInteractiveMap();
-        setTimeout(() => leafletMap && leafletMap.invalidateSize(), 50);
+        const status = document.getElementById('leaflet-status');
+        const showStatus = (text) => {
+          if (!status) return;
+          status.textContent = text;
+          status.hidden = !text;
+        };
+        if (!leafletMap) showStatus('Loading the map…');
+        loadLeaflet().then(() => {
+          showStatus('');
+          initInteractiveMap();
+          setTimeout(() => leafletMap && leafletMap.invalidateSize(), 50);
+        }).catch(() => {
+          showStatus('The interactive map could not be loaded. Check your connection, then choose Interactive GPS again.');
+        });
       }
     });
   }
@@ -428,7 +490,7 @@
 
 <!-- Chart.js & Elevation Drawer Logic -->
 {% if has_elevation_data %}
-<script src="{% static 'camino/chart.umd.min.js' %}"></script>
+<script src="{% static 'camino/chart.umd.min.js' %}" defer></script>
 <script>
   document.addEventListener('DOMContentLoaded', function() {
     const ctx = document.getElementById('elevationChart');

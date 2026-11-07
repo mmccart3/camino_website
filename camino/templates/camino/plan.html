@@ -3,6 +3,7 @@
 
 {% block head_extra %}
 <link rel="stylesheet" href="{% static 'camino/css/plan.css' %}">
+<noscript><style>.plan > .plan-card, .plan > .plan-reset-row, .plan-loading { display: none; }</style></noscript>
 {% endblock %}
 
 {% block content %}
@@ -16,6 +17,7 @@
     </p>
   </div>
 
+  <p class="plan-loading" id="plan-loading" role="status">Loading the planner…</p>
   <noscript><p class="plan-warning">The planner needs JavaScript. Please turn it on for this site.</p></noscript>
   <p class="plan-error plan-fatal" role="alert" hidden>The planner could not load the guide data. Please reload the page.</p>
   <p class="plan-warning" id="plan-notice" role="status" hidden></p>

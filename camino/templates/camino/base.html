@@ -33,12 +33,9 @@
 
     <!-- Favicon & Mobile Touch Icons -->
 <link rel="icon" type="image/png" sizes="48x48" href="{% static 'camino/img/favicon-48.png' %}">
-<link rel="icon" type="image/png" sizes="192x192" href="{% static 'camino/img/icon-192.png' %}">
 <link rel="apple-touch-icon" href="{% static 'camino/img/apple-touch-icon.png' %}">
 
-<!-- Leaflet.js Interactive Mapping -->
-<link rel="stylesheet" href="{{ LEAFLET_CSS_URL }}" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-<script src="{{ LEAFLET_JS_URL }}" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+{% comment %}Leaflet (the interactive map) is not loaded here: only the stage pages use it, and they load it themselves.{% endcomment %}
 
     <style>
 @font-face {
@@ -1366,7 +1363,7 @@
 
     <!-- Centered Brand -->
     <a href="{% url 'stage_list' %}" class="brand-container">
-      <img src="{% static 'camino/img/icon-192.png' %}" alt="" width="44" height="44" class="brand-icon">
+      <img src="{% static 'camino/img/icon-96.png' %}" alt="" width="44" height="44" class="brand-icon">
       <div class="brand-text">
         <span class="brand-title">Saint Jean to Santiago</span>
         <span class="brand-subtitle">Camino Accommodation Guide</span>

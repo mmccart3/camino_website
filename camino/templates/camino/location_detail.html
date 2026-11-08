@@ -1,6 +1,6 @@
 {% extends 'camino/base.html' %}
 {% load camino_i18n %}
-{% load static %}
+{% load static l10n %}
 
 {% block content %}
 
@@ -222,7 +222,7 @@
     height="600"
     frameborder="0"
     style="border:0; display:block;"
-    src="https://maps.google.com/maps?q={{ location.latitude }},{{ location.longitude }}&hl=en&z=17&output=embed"
+    src="https://maps.google.com/maps?q={{ location.latitude|unlocalize }},{{ location.longitude|unlocalize }}&hl={% if LANGUAGE == 'es' %}es{% else %}en{% endif %}&z=17&output=embed"
     allowfullscreen
     loading="lazy"
     referrerpolicy="no-referrer-when-downgrade">
@@ -230,7 +230,7 @@
   
   <div style="background: #f8fafc; padding: 0.6rem 1rem; border-top: 1px solid #e2e8f0; font-size: 0.85rem; display: flex; justify-content: space-between; align-items: center;">
     <span style="color: #64748b;">{% t "Coordinates: {latitude}, {longitude}" latitude=location.latitude|floatformat:5 longitude=location.longitude|floatformat:5 %}</span>
-    <a href="https://www.google.com/maps/search/?api=1&query={{ location.latitude }},{{ location.longitude }}" 
+    <a href="https://www.google.com/maps/search/?api=1&query={{ location.latitude|unlocalize }},{{ location.longitude|unlocalize }}" 
        target="_blank" 
        rel="noopener"
        style="color: #2563eb; text-decoration: none; font-weight: 600;">

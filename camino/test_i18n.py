@@ -344,6 +344,21 @@ class SpanishPagesTests(unittest.TestCase):
         for attribute in re.findall(r'\b(?:width|height|x|y|cx|cy|r)="([^"]*)"', html):
             self.assertNotRegex(attribute, r'^\d+,\d+$')
 
+    def test_the_google_maps_coordinates_keep_their_decimal_point_in_spanish(self):
+        # A Spanish page that printed 42,87866,-1,56610 sent Google to the wrong place.
+        con = sqlite3.connect('file:%s?mode=ro' % (settings.BASE_DIR / 'camino.sqlite'), uri=True)
+        try:
+            place = con.execute('select ID from locations where latitude is not null and longitude is not null '
+                                'and abs(latitude) > 1 and abs(longitude) > 0.1 order by ID limit 1').fetchone()[0]
+        finally:
+            con.close()
+        coordinates = r'-?\d+\.\d+,-?\d+\.\d+'
+        for path, language in ((f'/location/{place}/', 'en'), (f'/es/location/{place}/', 'es')):
+            html = self.get(path)
+            self.assertRegex(html, r'maps\?q=' + coordinates + '&hl=' + language + '&z=17')       # the embedded map
+            self.assertRegex(html, r'api=1&query=' + coordinates + '"')                               # "Open in Google Maps"
+            self.assertNotRegex(html, r'(?:q|query)=-?\d+,\d')
+
     def test_the_stage_page_script_carries_the_spanish_words(self):
         stage, _ = self.a_stage_and_a_place()
         html = self.get(f'/es/stage/{stage}/')

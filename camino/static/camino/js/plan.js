@@ -427,7 +427,9 @@
       label = tr('Website of {0}', name);
     }
     var look = { booking: 'booking', whatsapp: 'wa', call: 'phone', email: 'email', website: 'web' }[key];
-    return el('a', { 'class': 'btn btn-' + look + ' plan-link plan-link-' + key, href: link.href, target: key === 'call' || key === 'email' ? null : '_blank', rel: 'noopener',
+    return el('a', { 'class': 'btn btn-' + look + ' plan-link plan-link-' + key, href: link.href, target: key === 'call' || key === 'email' ? null : '_blank',
+      // The Booking.com button carries the site's affiliate code, so search engines are told it is a paid link.
+      rel: key === 'booking' ? 'sponsored noopener' : 'noopener',
       'aria-label': label }, kids);
   }
 

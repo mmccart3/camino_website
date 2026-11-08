@@ -16,6 +16,8 @@ import os
 import re
 import threading
 
+from .stage_names import clean_stage_name
+
 FORMAT_VERSION = 1
 DEFAULT_PACE = 4.2
 # lib/services/walking_time.dart: weights are stored for a 7% downhill, so normalise to flat ground.
@@ -335,7 +337,8 @@ def load_elevations(cursor):
 def load_inputs(cursor):
     """Reads everything build_planner_data needs, with plain SQL (about 30,000 track points)."""
     cursor.execute('SELECT ID, stageName, stageStartLocationID, stageFinishLocationID, stageDisplayReference FROM stages')
-    stages = [{'id': r[0], 'name': r[1], 'start': r[2], 'finish': r[3], 'ref': r[4]} for r in cursor.fetchall()]
+    stages = [{'id': r[0], 'name': clean_stage_name(r[1], r[4]), 'start': r[2], 'finish': r[3], 'ref': r[4]}
+              for r in cursor.fetchall()]
     cursor.execute('SELECT pathID, stageID, originLoc, destinationLoc FROM paths')
     paths = [{'id': r[0], 'stage': r[1], 'origin': r[2], 'dest': r[3]} for r in cursor.fetchall()]
     cursor.execute('SELECT ID, locationName, latitude, longitude FROM locations')

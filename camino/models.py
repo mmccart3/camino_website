@@ -1,8 +1,11 @@
 # camino/models.py
+import re
+
 from django.db import models
 from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 
 from . import i18n
+from .stage_names import clean_stage_name
 
 BOOKING_AFFILIATE_PARAMS = {
     'aid': '818289',
@@ -163,6 +166,16 @@ class Stage(models.Model):
         managed = False
         db_table = 'stages'
 
+    @classmethod
+    def from_db(cls, db, field_names, values):
+        """Loads a stage with its name cleaned (see stage_names.py): "16b: Frómista to ..." on stage 16b becomes
+        "Frómista to ...", because the pages already print "Stage 16b:" in front of it."""
+        stage = super().from_db(db, field_names, values)
+        # Only when both columns were loaded: reading a deferred one here would cost a query for every stage.
+        if 'stage_name' in stage.__dict__ and 'stage_display_reference' in stage.__dict__:
+            stage.stage_name = clean_stage_name(stage.stage_name, stage.stage_display_reference)
+        return stage
+
     @property
     def distance_km(self):
         return round(self.distance_meters / 1000, 1) if self.distance_meters else 0
@@ -192,6 +205,18 @@ class Location(models.Model):
     
     def __str__(self):
         return self.location_name
+
+    # Names that mark a holding place rather than a real town (the data audit uses the same rule).
+    PLACEHOLDER_NAME = re.compile(r'^\s*(unassigned|unknown|tbc|todo|placeholder)\b', re.IGNORECASE)
+
+    @property
+    def is_placeholder(self):
+        """True for a holding place such as "Unassigned" (location 290), which keeps stays that are off the
+        route. It has a page, but search engines are told to leave it out: it is not a place anyone visits."""
+        if self.PLACEHOLDER_NAME.match(self.location_name or ''):
+            return True
+        lat, lon = self.latitude, self.longitude
+        return lat is not None and lon is not None and abs(lat) < 0.001 and abs(lon) < 0.001
 
     @property
     def display_name(self):

@@ -15,7 +15,7 @@
     {% endif %}
     {% if alt_prior_stage %}
       <a href="{% url 'stage_detail' alt_prior_stage.id %}" class="btn-nav btn-alt">
-        {% t "⇠ Alt Prior (Stage {display_ref})" display_ref=alt_prior_stage.display_ref %}
+        {% t "⇠ Alternative route: Stage {display_ref}: {stage_name}" display_ref=alt_prior_stage.display_ref stage_name=alt_prior_stage.stage_name|tr %}
       </a>
     {% endif %}
     {% if not prior_stage and not alt_prior_stage %}
@@ -35,7 +35,7 @@
     {% endif %}
     {% if alt_next_stage %}
       <a href="{% url 'stage_detail' alt_next_stage.id %}" class="btn-nav btn-alt">
-        {% t "Alt Next (Stage {display_ref}) ⇢" display_ref=alt_next_stage.display_ref %}
+        {% t "Alternative route: Stage {display_ref}: {stage_name} ⇢" display_ref=alt_next_stage.display_ref stage_name=alt_next_stage.stage_name|tr %}
       </a>
     {% endif %}
     {% if not next_stage and not alt_next_stage %}
@@ -243,7 +243,7 @@
        data-full-src="{{ stage_map.src }}"
        onerror="if(this.getAttribute('srcset')){this.removeAttribute('srcset');this.removeAttribute('sizes');this.src=this.getAttribute('data-full-src');}"{% endif %}{% if stage_map.height %}
        width="{{ stage_map.width }}" height="{{ stage_map.height }}"{% endif %}
-       alt="{% t_attr "{stage_name} Map" stage_name=stage.stage_name|tr %}" 
+       alt="{% t_attr "Illustrated map of Camino Francés stage {ref}: {stage_name}" ref=stage.display_ref stage_name=stage.stage_name|tr %}" 
        decoding="async"
        style="width: 100%; height: auto; display: block;" />
 
@@ -295,7 +295,7 @@
     {% endif %}
     {% if alt_prior_stage %}
       <a href="{% url 'stage_detail' alt_prior_stage.id %}" class="btn-nav btn-alt">
-        {% t "⇠ Alt Prior (Stage {display_ref})" display_ref=alt_prior_stage.display_ref %}
+        {% t "⇠ Alternative route: Stage {display_ref}: {stage_name}" display_ref=alt_prior_stage.display_ref stage_name=alt_prior_stage.stage_name|tr %}
       </a>
     {% endif %}
     {% if not prior_stage and not alt_prior_stage %}
@@ -315,7 +315,7 @@
     {% endif %}
     {% if alt_next_stage %}
       <a href="{% url 'stage_detail' alt_next_stage.id %}" class="btn-nav btn-alt">
-        {% t "Alt Next (Stage {display_ref}) ⇢" display_ref=alt_next_stage.display_ref %}
+        {% t "Alternative route: Stage {display_ref}: {stage_name} ⇢" display_ref=alt_next_stage.display_ref stage_name=alt_next_stage.stage_name|tr %}
       </a>
     {% endif %}
     {% if not next_stage and not alt_next_stage %}

@@ -1,6 +1,7 @@
 # camino/views.py
 import json
 import traceback
+from datetime import date
 from xml.sax.saxutils import escape
 
 from django.conf import settings
@@ -401,6 +402,39 @@ def robots_txt(request):
     return HttpResponse(body, content_type='text/plain; charset=utf-8')
 
 
+# The columns that record the day a place's facilities (café, pharmacy, grocery, cash machine) were last checked.
+FACILITY_CHECK_COLUMNS = ('hasBarCafeCheckedAt', 'hasPharmacyCheckedAt', 'hasGroceryStoreCheckedAt', 'hasAtmCheckedAt')
+
+
+def location_check_dates():
+    """{location id: 'YYYY-MM-DD'}: the latest day any of a place's facilities was checked.
+
+    These are real dates from the guide's data, so a place page's <lastmod> in the sitemap moves only when its
+    facts were checked again, not every time the site is deployed. Places that have no check date are left out
+    (the sitemap then gives no <lastmod> for them), and so is anything that is not a date. If the columns are
+    missing from the database the sitemap simply has no dates.
+    """
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute('SELECT ID, ' + ', '.join(FACILITY_CHECK_COLUMNS) + ' FROM locations')
+            rows = cursor.fetchall()
+    except Exception:
+        return {}
+    dates = {}
+    for location_id, *checked in rows:
+        days = []
+        for value in checked:
+            day = str(value or '').strip()[:10]   # '2026-09-16T10:07:42+00:00' and '2026-10-20' both give the day
+            try:
+                date.fromisoformat(day)
+            except ValueError:
+                continue
+            days.append(day)
+        if days:
+            dates[location_id] = max(days)
+    return dates
+
+
 def sitemap_xml(request):
     origin = seo.site_origin(request)
     routes = [('stage_list', []), ('towns', []), ('plan', []), ('offline_pack', [])]
@@ -410,11 +444,13 @@ def sitemap_xml(request):
         n_private=Count('private_accomm', distinct=True),
         n_paragraphs=Count('paragraphs', distinct=True),
     ).order_by('id')
+    # Holding places such as "Unassigned" are not listed: their pages ask search engines to skip them.
     routes += [
         ('location_detail', [t.id])
         for t in towns_qs
-        if (t.n_albergues or 0) + (t.n_private or 0) + (t.n_paragraphs or 0) > 0
+        if (t.n_albergues or 0) + (t.n_private or 0) + (t.n_paragraphs or 0) > 0 and not t.is_placeholder
     ]
+    checked = location_check_dates()
     # Every page is listed in both languages, each entry pointing at the other language (hreflang).
     rows = []
     for name, args in routes:
@@ -427,8 +463,11 @@ def sitemap_xml(request):
             f'<xhtml:link rel="alternate" hreflang="es" href="{escape(spanish)}"/>'
             f'<xhtml:link rel="alternate" hreflang="x-default" href="{escape(english)}"/>'
         )
-        rows.append(f'<url><loc>{escape(english)}</loc>{links}</url>')
-        rows.append(f'<url><loc>{escape(spanish)}</loc>{links}</url>')
+        # Only place pages have a date (when their facilities were checked); <lastmod> comes right after <loc>.
+        day = checked.get(args[0]) if name == 'location_detail' else None
+        lastmod = f'<lastmod>{day}</lastmod>' if day else ''
+        rows.append(f'<url><loc>{escape(english)}</loc>{lastmod}{links}</url>')
+        rows.append(f'<url><loc>{escape(spanish)}</loc>{lastmod}{links}</url>')
     xml = (
         '<?xml version="1.0" encoding="UTF-8"?>'
         '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" '
@@ -692,7 +731,9 @@ def stage_detail(request, stage_id):
         'has_gps_track': len(gps_track) > 0,
     }
     origin = seo.site_origin(request)
-    context['seo'] = seo.stage_seo(stage, origin, origin + request.path)
+    context['seo'] = seo.stage_seo(
+        stage, origin, origin + request.path, elevation=elevation_stats, stage_map=context['stage_map']
+    )
     return render(request, 'camino/stage_detail.html', context)
 
 

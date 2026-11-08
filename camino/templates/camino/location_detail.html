@@ -145,7 +145,7 @@
         <!-- Action Links -->
         <div class="accomm-actions">
           {% if a.valid_booking_url %}
-            <a href="{{ a.valid_booking_url }}" target="_blank" rel="noopener" class="btn btn-booking"><span>{% t "Booking.com" %}</span></a>
+            <a href="{{ a.valid_booking_url }}" target="_blank" rel="sponsored noopener" class="btn btn-booking"><span>{% t "Booking.com" %}</span></a>
           {% endif %}
           {% if a.whatsapp %}
             <a href="https://wa.me/{{ a.whatsapp|cut:'+'|cut:' ' }}" target="_blank" rel="noopener" class="btn btn-wa" aria-label="{% t_attr "Message {name} on WhatsApp" name=a.name %}"><img src="{% static 'camino/img/whatsapp-logo-green.svg' %}" alt="" width="86" height="20"></a>
@@ -193,7 +193,7 @@
         <!-- Action Links -->
         <div class="accomm-actions">
           {% if p.valid_booking_url %}
-            <a href="{{ p.valid_booking_url }}" target="_blank" rel="noopener" class="btn btn-booking"><span>{% t "Booking.com" %}</span></a>
+            <a href="{{ p.valid_booking_url }}" target="_blank" rel="sponsored noopener" class="btn btn-booking"><span>{% t "Booking.com" %}</span></a>
           {% endif %}
           {% if p.whatsapp %}
             <a href="https://wa.me/{{ p.whatsapp|cut:'+'|cut:' ' }}" target="_blank" rel="noopener" class="btn btn-wa" aria-label="{% t_attr "Message {name} on WhatsApp" name=p.name %}"><img src="{% static 'camino/img/whatsapp-logo-green.svg' %}" alt="" width="86" height="20"></a>

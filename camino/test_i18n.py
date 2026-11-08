@@ -21,6 +21,7 @@ from django.test import Client, SimpleTestCase
 from django.utils import translation
 
 from . import i18n
+from .stage_names import clean_stage_name
 
 CAMINO = Path(__file__).resolve().parent
 ROOT = CAMINO.parent
@@ -229,11 +230,21 @@ class SpanishDataTests(SimpleTestCase):
         finally:
             con.close()
 
+    def stage_names(self):
+        """The stage names the pages show (a name that repeats its own number, "16b: ...", is shown without it)."""
+        con = sqlite3.connect('file:%s?mode=ro' % (settings.BASE_DIR / 'camino.sqlite'), uri=True)
+        try:
+            return [str(clean_stage_name(name, ref)).strip()
+                    for name, ref in con.execute('select stageName, stageDisplayReference from stages')]
+        finally:
+            con.close()
+
     def data_text(self):
         """Text that is looked up by its value, not written in a template or script: stage and place names, and the
         stays' free text (opening periods, check-in times, price notes)."""
         values = set()
-        for sql in ('select stageName from stages', 'select locationName from locations',
+        values.update(self.stage_names())
+        for sql in ('select locationName from locations',
                     'select openingPeriod from albergues', 'select checkInTimes from albergues',
                     'select rateNotes from albergues', 'select rateNotes from privateAccommDetail'):
             values.update(str(v).strip() for v in self.rows(sql) if v and str(v).strip())
@@ -252,7 +263,7 @@ class SpanishDataTests(SimpleTestCase):
 
     def test_every_stage_name_has_spanish(self):
         data = catalogue()
-        names = [n.strip() for n in self.rows('select stageName from stages')]
+        names = self.stage_names()
         self.assertEqual([n for n in names if n not in data['ui'] or n not in data['plan']], [])
 
     def test_the_english_named_places_have_spanish(self):

@@ -166,7 +166,66 @@ def stay_entry(stay, kind, location_name, url):
     return entry
 
 
-def stage_seo(stage, origin, canonical):
+# A picture is offered to link previews (WhatsApp, Facebook, X) only when its shape suits them: those cards are
+# about twice as wide as they are tall and crop anything else. Width divided by height must be inside this range.
+SHARE_IMAGE_RATIO = (1.0, 2.6)
+
+
+def stage_share_image(stage_map):
+    """The stage's illustrated map as the page's link-preview picture, or {} to use the site's default one.
+
+    stage_map is what stage_maps.describe() returns. The map is used only when its address is https, its
+    size is known (so the preview tags can state it) and its shape is in SHARE_IMAGE_RATIO. A very tall map
+    (the 1,794-pixel Roncesvalles stage) or a thin strip (197 pixels high) would be cropped to nothing useful.
+    """
+    stage_map = stage_map or {}
+    url = str(stage_map.get('src') or '').strip()
+    width, height = stage_map.get('width'), stage_map.get('height')
+    if not (url.lower().startswith('https://') and width and height):
+        return {}
+    if not SHARE_IMAGE_RATIO[0] <= width / height <= SHARE_IMAGE_RATIO[1]:
+        return {}
+    return {'image': url, 'image_width': int(width), 'image_height': int(height)}
+
+
+def stage_description(ref, name, km, duration, elevation=None):
+    """The search-result snippet for a stage: distance, time, climb and descent, then what the page holds.
+
+    The fullest version that fits MAX_DESCRIPTION is used. When the stage name is long, the closing sentence
+    is shortened first, then dropped, then the walking time is cut down to the bare distance, so that the
+    climb is kept for as long as it can fit. Only when nothing with the climb fits is the climb left out.
+    """
+    intro = tr('Camino Francés stage {ref}: {name}.', ref=ref, name=name)
+    distance = ''
+    if km:
+        distance = (
+            tr('{km} km, about {duration} walking.', km=decimal(km), duration=duration) if duration
+            else tr('{km} km.', km=decimal(km))
+        )
+    climb = ''
+    if elevation and (elevation.get('ascent_m') or elevation.get('descent_m')):
+        climb = tr('Climbs {up} m, descends {down} m.', up=elevation.get('ascent_m') or 0,
+                   down=elevation.get('descent_m') or 0)
+    long_tail = tr('Elevation profile, route map, villages on the way and where to sleep.')
+    short_tail = tr('Elevation profile, map and places to stay.')
+    base = [part for part in (intro, distance) if part]
+    fact_sets = [base]
+    if climb:
+        bare_distance = tr('{km} km.', km=decimal(km)) if km else ''
+        fact_sets = [
+            [part for part in (intro, distance, climb) if part],
+            [part for part in (intro, bare_distance, climb) if part],
+            base,
+        ]
+    for facts in fact_sets:
+        for tail in (long_tail, short_tail, ''):
+            text = ' '.join(facts + ([tail] if tail else []))
+            if len(text) <= MAX_DESCRIPTION:
+                return text
+    return clip(' '.join(base))
+
+
+def stage_seo(stage, origin, canonical, elevation=None, stage_map=None):
     km = stage.distance_km
     ref = stage.display_ref
     duration = minutes_text(stage.time_minutes)
@@ -175,16 +234,10 @@ def stage_seo(stage, origin, canonical):
         tr('Stage {ref}: {name} ({km} km)', ref=ref, name=name, km=decimal(km)) if km
         else tr('Stage {ref}: {name}', ref=ref, name=name)
     )
-    parts = [tr('Camino Francés stage {ref}: {name}.', ref=ref, name=name)]
-    if km:
-        parts.append(
-            tr('{km} km, about {duration} walking.', km=decimal(km), duration=duration) if duration
-            else tr('{km} km.', km=decimal(km))
-        )
-    parts.append(tr('Elevation profile, route map, villages on the way and where to sleep.'))
     return {
         'title': title,
-        'description': clip(' '.join(parts)),
+        'description': stage_description(ref, name, km, duration, elevation),
+        **stage_share_image(stage_map),
         'jsonld': json_ld({
             '@context': 'https://schema.org',
             '@graph': [breadcrumb([
@@ -233,6 +286,11 @@ def location_seo(location, albergues, private_accomm, parent_stage, origin, cano
     else:
         description = tr('{name} on the Camino Francés: village services, history and practical tips for pilgrims.', name=name)
         title = compose_title(tr('{name} on the Camino Francés', name=name))
+
+    if getattr(location, 'is_placeholder', False):
+        # A holding place for stays that are off the route: the page works, but search engines skip it and
+        # it carries no structured data.
+        return {'title': title, 'description': clip(description), 'noindex': True}
 
     crumbs = [(tr('Stages'), origin + reverse('stage_list'))]
     if parent_stage is not None and stage_url:

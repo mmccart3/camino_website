@@ -4,6 +4,14 @@
   'use strict';
 
   var INFO_KEY = 'camino-pack-info';
+  var I18n = window.CaminoI18n;
+  // The words go through tr(), so the Spanish page can translate them (see i18n.js).
+  function tr(message) {
+    if (window.camT) return window.camT.apply(null, arguments);
+    var args = Array.prototype.slice.call(arguments, 1);
+    return message.replace(/\{(\w+)\}/g, function (all, key) { return args[Number(key)] === undefined ? all : String(args[Number(key)]); });
+  }
+  var spanish = !!I18n && I18n.language() === 'es';
   var root = document.getElementById('pack-root');
   if (!root) return;
 
@@ -29,12 +37,12 @@
   function showSaved() {
     var info = readInfo();
     removeButton.hidden = !info;
-    if (!info) { say('Not saved on this device yet.'); return; }
-    var when = new Date(info.savedAt).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' });
-    var text = info.pages + ' pages' + (info.images ? ' and ' + info.images + ' maps' : '') + ' saved on ' + when + '.';
-    if (info.version !== currentVersion) text += ' The guide has been updated since. Save again to refresh it.';
+    if (!info) { say(tr('Not saved on this device yet.')); return; }
+    var when = new Date(info.savedAt).toLocaleDateString(spanish ? 'es' : undefined, { day: 'numeric', month: 'long', year: 'numeric' });
+    var text = info.images ? tr('{0} pages and {1} maps saved on {2}.', info.pages, info.images, when) : tr('{0} pages saved on {1}.', info.pages, when);
+    if (info.version !== currentVersion) text += ' ' + tr('The guide has been updated since. Save again to refresh it.');
     say(text);
-    startButton.textContent = 'Save again';
+    startButton.textContent = tr('Save again');
   }
 
   async function savePage(cache, url) {
@@ -57,17 +65,17 @@
 
   async function run() {
     if (busy) return;
-    if (!('caches' in window)) { say('This browser cannot save pages for offline use.'); return; }
-    if (!navigator.onLine) { say('Connect to the internet first, then try again.'); return; }
+    if (!('caches' in window)) { say(tr('This browser cannot save pages for offline use.')); return; }
+    if (!navigator.onLine) { say(tr('Connect to the internet first, then try again.')); return; }
     busy = true;
     startButton.disabled = true;
     removeButton.hidden = true;
     progress.hidden = false;
     progress.value = 0;
-    say('Preparing…');
+    say(tr('Preparing…'));
     try {
       if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(function () {});
-      var info = await fetch('/offline-pack.json', { cache: 'no-store' }).then(function (r) {
+      var info = await fetch('/offline-pack.json' + (spanish ? '?lang=es' : ''), { cache: 'no-store' }).then(function (r) {
         if (!r.ok) throw new Error('list unavailable');
         return r.json();
       });
@@ -91,7 +99,7 @@
           }
           done += 1;
           progress.value = done;
-          say('Saving… ' + done + ' of ' + jobs.length);
+          say(tr('Saving… {0} of {1}', done, jobs.length));
         }
       }
       await Promise.all([worker(), worker(), worker(), worker()]);
@@ -99,9 +107,9 @@
       var savedPages = info.pages.length - failedPages;
       writeInfo({ version: info.version, savedAt: Date.now(), pages: savedPages, images: savedImages });
       showSaved();
-      if (failedPages) say(status.textContent + ' ' + failedPages + ' pages could not be saved. Try again later.');
+      if (failedPages) say(status.textContent + ' ' + tr('{0} pages could not be saved. Try again later.', failedPages));
     } catch (error) {
-      say('Could not finish saving. Check your connection and try again.');
+      say(tr('Could not finish saving. Check your connection and try again.'));
     } finally {
       busy = false;
       startButton.disabled = false;
@@ -114,7 +122,7 @@
     if (busy) return;
     if ('caches' in window) await caches.delete('camino-pack');
     writeInfo(null);
-    startButton.textContent = 'Save for offline';
+    startButton.textContent = tr('Save for offline');
     showSaved();
   }
 

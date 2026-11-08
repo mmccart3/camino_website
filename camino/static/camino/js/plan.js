@@ -12,6 +12,19 @@
   var Share = window.CaminoShare;   // plan codes and QR codes: the page works without them
   var QR = window.CaminoQR;
   var Msg = window.CaminoMessage;   // the "Ask for a bed" message: the page works without it
+  var I18n = window.CaminoI18n;     // the words on this page, in the language of the page (i18n.js)
+  // Every phrase the visitor reads goes through tr(), so the Spanish page can translate it: tr('Rest day in {0}', name).
+  // The English text is the one written here; a phrase with no Spanish is shown as written.
+  function tr(message) {
+    if (window.camT) return window.camT.apply(null, arguments);
+    var args = Array.prototype.slice.call(arguments, 1);
+    return message.replace(/\{(\w+)\}/g, function (all, key) { return args[Number(key)] === undefined ? all : String(args[Number(key)]); });
+  }
+  // The same English word with a meaning of its own: trc('stay fact', 'Open') is "Open" as the label of a place's opening dates.
+  function trc(context, message) { return I18n ? I18n.tc.apply(null, arguments) : message; }
+  function num(value) { return I18n ? I18n.num(value) : String(value); }   // 12.5 is 12,5 in Spanish
+  function dateLocale() { return I18n ? I18n.locale() : undefined; }
+  function spanishPage() { return !!I18n && I18n.language() === 'es'; }
   var root = document.getElementById('plan-root');
   var dataElement = document.getElementById('plan-data');
   // If the page cannot be built, say so in place of "Loading the planner…"
@@ -35,7 +48,13 @@
     return;
   }
 
+  // The guide's data holds the stage names in English; show them in the language of the page.
+  Object.keys(data.stages || {}).forEach(function (id) { data.stages[id].name = tr(data.stages[id].name); });
+  // The same for the few markers on the route that are named in English ("Exit to Huarte").
+  Object.keys(data.places || {}).forEach(function (id) { data.places[id] = tr(data.places[id]); });
+
   var STORAGE_KEY = 'camino-plan-v1';
+  // Shown through tr(), so they are the English phrases the Spanish catalogue is keyed by.
   var KIND_LABELS = { valley: 'Low-valley route', mountain: 'Mountain route', alt: 'Alternative route' };
   var STAY_NAMES = { a: 'Albergue', p: 'Hotel or guesthouse', c: 'Your own choice' };
 
@@ -49,6 +68,11 @@
 
   // ------------------------------------------------------------------ saving
 
+  function droppedDaysText(n) {
+    return n === 1 ? tr('1 saved day was dropped because that part of the guide no longer exists.')
+      : tr('{0} saved days were dropped because that part of the guide no longer exists.', n);
+  }
+
   function loadState() {
     var raw = null, notice = '';
     try { raw = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null'); } catch (error) { raw = null; }
@@ -57,10 +81,9 @@
     var saved = Plan.clean(raw.state, data);
     var before = Array.isArray(raw.state.days) ? raw.state.days.length : 0;
     if (saved.days.length < before) {
-      notice = (before - saved.days.length) + ' saved day' + (before - saved.days.length === 1 ? ' was' : 's were') +
-        ' dropped because that part of the guide no longer exists.';
+      notice = droppedDaysText(before - saved.days.length);
     } else if (raw.guide && raw.guide !== data.guide) {
-      notice = 'The guide has been updated since you saved this plan. Please check each day.';
+      notice = tr('The guide has been updated since you saved this plan. Please check each day.');
     }
     ui.notice = notice;
     return saved;
@@ -103,11 +126,12 @@
 
   function chip(label, kind) { return el('span', { 'class': 'plan-chip plan-chip-' + kind, text: label }); }
 
-  function plural(n, one, many) { return n + ' ' + (n === 1 ? one : (many || one + 's')); }
+  // "1 day" / "5 days": the English phrase with {0} is what is translated, so the Spanish plural is its own phrase.
+  function plural(n, one, many) { return tr('{0} ' + (n === 1 ? one : (many || one + 's')), n); }
 
   function formatDate(iso) {
     try {
-      return new Date(iso + 'T00:00:00Z').toLocaleDateString(undefined, {
+      return new Date(iso + 'T00:00:00Z').toLocaleDateString(dateLocale(), {
         weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC'
       });
     } catch (error) {
@@ -121,7 +145,7 @@
   // Looked up in `st` (the plan as it will be, or as it is now) because the numbers depend on the plan.
   function ref(i, st) {
     var info = Plan.layout(st || state, data).days[i];
-    return info ? Plan.dayRef(info) : 'day ' + (i + 1);
+    return info ? Plan.dayRef(info) : tr('day {0}', i + 1);
   }
   function cap(text) { return text.charAt(0).toUpperCase() + text.slice(1); }
 
@@ -181,7 +205,7 @@
   function renderNotice() {
     var messages = [];
     if (ui.notice) messages.push(ui.notice);
-    if (!storageWorks) messages.push('This browser cannot save your plan, so it will be lost when you close the page. Download the file before you leave.');
+    if (!storageWorks) messages.push(tr('This browser cannot save your plan, so it will be lost when you close the page. Download the file before you leave.'));
     var box = $('plan-notice');
     box.textContent = messages.join(' ');
     box.hidden = !messages.length;
@@ -193,8 +217,8 @@
     box.hidden = !shared;
     if (!shared) return;
     var bad = !!shared.error, several = !!shared.plans && shared.plans.length > 1;
-    $('plan-shared-title').textContent = bad ? (shared.file ? 'This file cannot be opened' : 'This plan code cannot be opened')
-      : (shared.file ? 'Choose a plan from ' + shared.file : 'A plan has been shared with you');
+    $('plan-shared-title').textContent = bad ? (shared.file ? tr('This file cannot be opened') : tr('This plan code cannot be opened'))
+      : (shared.file ? tr('Choose a plan from {0}', shared.file) : tr('A plan has been shared with you'));
     $('plan-shared-pick-row').hidden = bad || !several;
     if (!bad && several) {
       var pick = $('plan-shared-pick');
@@ -208,23 +232,25 @@
     $('plan-shared-name').hidden = bad;
     $('plan-shared-detail').hidden = bad;
     $('plan-shared-open').hidden = bad;
-    $('plan-shared-keep').textContent = bad ? 'Close' : (shared.file ? 'Cancel' : 'Keep my plan');
+    $('plan-shared-keep').textContent = bad ? tr('Close') : (shared.file ? tr('Cancel') : tr('Keep my plan'));
     var replace = $('plan-shared-replace');
     replace.hidden = true;
     if (bad) return;
     var other = shared.state, t = Plan.totals(other, data), p = Plan.progress(other, data);
     $('plan-shared-name').textContent = other.name;
     var detail = [];
-    if (!t.days) detail.push('It has no days yet.');
+    if (!t.days) detail.push(tr('It has no days yet.'));
     else {
-      detail.push(plural(t.days, 'day') + (p.start && p.end ? ', from ' + p.start.name + ' to ' + p.end.name : '') +
-        (other.startDate ? ', starting ' + formatDate(other.startDate) : '') + '.');
-      detail.push(t.stays + ' of ' + plural(t.days, 'night') + ' chosen.');
+      var bits = [plural(t.days, 'day')];
+      if (p.start && p.end) bits.push(tr('from {0} to {1}', p.start.name, p.end.name));
+      if (other.startDate) bits.push(tr('starting {0}', formatDate(other.startDate)));
+      detail.push(bits.join(', ') + '.');
+      detail.push(tr('{0} of {1} chosen.', t.stays, plural(t.days, 'night')));
     }
     $('plan-shared-detail').textContent = detail.concat(shared.notes || []).join(' ');
     if (state.days.length) {
-      replace.textContent = 'You already have a plan on this device (' + plural(Plan.totals(state, data).days, 'day') + '). ' +
-        'Opening this one replaces it. You can undo that straight afterwards.';
+      replace.textContent = tr('You already have a plan on this device ({0}). Opening this one replaces it. You can undo that straight afterwards.',
+        plural(Plan.totals(state, data).days, 'day'));
       replace.hidden = false;
     }
   }
@@ -240,15 +266,15 @@
     if (document.activeElement !== name) name.value = state.name;
     if (document.activeElement !== start) start.value = state.startDate;
     if (document.activeElement !== pace) pace.value = state.pace;
-    $('plan-pace-out').textContent = state.pace.toFixed(1) + ' km/h';
-    var hint = 'Your pace on the flat. The guide shows about ' + data.pace.default.toFixed(1) + ' km/h; slow down for hot weather, a heavy pack or sore feet.';
+    $('plan-pace-out').textContent = num(state.pace.toFixed(1)) + ' km/h';
+    var hint = tr('Your pace on the flat. The guide shows about {0} km/h; slow down for hot weather, a heavy pack or sore feet.', num(data.pace.default.toFixed(1)));
     $('plan-pace-hint').textContent = hint;
   }
 
   // "1,534 m up, 1,680 m down", or '' when the guide has no heights for the day
   function climbText(up, down) {
     if (up === null || up === undefined || down === null || down === undefined) return '';
-    return Plan.formatMetres(up) + ' up, ' + Plan.formatMetres(down) + ' down';
+    return tr('{0} up, {1} down', Plan.formatMetres(up), Plan.formatMetres(down));
   }
 
   function stat(value, label) {
@@ -266,25 +292,25 @@
       return;
     }
     box.hidden = false;
-    box.appendChild(stat(String(t.days), t.days === 1 ? 'day' : 'days'));
-    box.appendChild(stat(String(t.walking), t.walking === 1 ? 'walking day' : 'walking days'));
-    box.appendChild(stat(Plan.formatKm(t.metres), 'on foot'));
-    box.appendChild(stat(Plan.formatDuration(t.seconds), 'walking time'));
-    if (t.walking && t.climb) box.appendChild(stat(Plan.formatMetres(t.up), 'climbing'));
-    if (t.walking && t.climb) box.appendChild(stat(Plan.formatMetres(t.down), 'descending'));
-    if (t.long) box.appendChild(stat(String(t.long), t.long === 1 ? 'long day' : 'long days'));
-    box.appendChild(stat(String(t.rest + t.travel), 'rest or travel'));
-    box.appendChild(stat(t.stays + ' of ' + t.days, 'nights chosen'));
+    box.appendChild(stat(String(t.days), t.days === 1 ? tr('day') : tr('days')));
+    box.appendChild(stat(String(t.walking), t.walking === 1 ? tr('walking day') : tr('walking days')));
+    box.appendChild(stat(Plan.formatKm(t.metres), tr('on foot')));
+    box.appendChild(stat(Plan.formatDuration(t.seconds), tr('walking time')));
+    if (t.walking && t.climb) box.appendChild(stat(Plan.formatMetres(t.up), tr('climbing')));
+    if (t.walking && t.climb) box.appendChild(stat(Plan.formatMetres(t.down), tr('descending')));
+    if (t.long) box.appendChild(stat(String(t.long), t.long === 1 ? tr('long day') : tr('long days')));
+    box.appendChild(stat(String(t.rest + t.travel), tr('rest or travel')));
+    box.appendChild(stat(tr('{0} of {1}', t.stays, t.days), tr('nights chosen')));
     var note = $('plan-climb-note');
     if (note) note.hidden = !(t.walking && t.climb);
   }
 
   function dayTitle(info) {
     if (info.type === 's') return info.stage.name;
-    if (info.type === 'r') return info.end ? 'Rest day in ' + info.end.name : 'Rest day';
-    if (info.type === 'c') return info.start && info.end ? info.start.name + ' to ' + info.end.name : 'Walking day';
+    if (info.type === 'r') return info.end ? tr('Rest day in {0}', info.end.name) : tr('Rest day');
+    if (info.type === 'c') return info.start && info.end ? tr('{0} to {1}', info.start.name, info.end.name) : tr('Walking day');
     var travel = state.days[info.index];
-    return (travel && MODE_LABELS[travel.mode]) || 'Travel';
+    return tr((travel && MODE_LABELS[travel.mode]) || 'Travel');
   }
 
   function fillNotes(container, info) {
@@ -294,15 +320,15 @@
       var note = el('p', { 'class': 'plan-warning' }, [el('span', { text: info.warning })]);
       var fix = info.type === 's' || info.type === 'c' ? Plan.refitStart(state, info.index, data) : null;
       if (fix) {
-        note.appendChild(button('Start this day from ' + fix.from.name, 'refit', {
+        note.appendChild(button(tr('Start this day from {0}', fix.from.name), 'refit', {
           'class': 'plan-btn plan-btn-small', 'data-focus': 'day-' + info.index + '-refit',
-          'aria-label': 'Start ' + Plan.dayRef(info) + ' from ' + fix.from.name }));
+          'aria-label': tr('Start {0} from {1}', Plan.dayRef(info), fix.from.name) }));
       }
       container.appendChild(note);
     }
   }
 
-  function staySummary(stay) { return 'Booking reference and notes' + (stay.ref ? ': ' + stay.ref : ''); }
+  function staySummary(stay) { return stay.ref ? tr('Booking reference and notes: {0}', stay.ref) : tr('Booking reference and notes'); }
 
   // The booking reference (it goes in the file, the plan code and the link), and a contact and notes (the file only).
   function stayDetails(stay, i, name) {
@@ -310,44 +336,44 @@
     return el('details', { 'class': 'plan-more plan-stay-more', 'data-more': key, open: ui.openMore[key] ? true : null }, [
       el('summary', { text: staySummary(stay) }),
       el('div', { 'class': 'plan-more-grid' }, [
-        el('label', {}, [el('span', { text: 'Booking reference' }), el('input', { type: 'text', 'class': 'plan-input', 'data-act': 'sref',
+        el('label', {}, [el('span', { text: tr('Booking reference') }), el('input', { type: 'text', 'class': 'plan-input', 'data-act': 'sref',
           'data-focus': 'day-' + i + '-sref', maxlength: String(Plan.MAX_REF), autocomplete: 'off', value: stay.ref || '',
-          'aria-label': 'Booking reference for ' + name })]),
-        el('label', {}, [el('span', { text: 'Contact (phone or email)' }), el('input', { type: 'text', 'class': 'plan-input', 'data-act': 'scontact',
-          maxlength: String(Plan.MAX_CONTACT), autocomplete: 'off', value: stay.contact || '', 'aria-label': 'Contact for the stay on ' + name })]),
-        el('label', { 'class': 'plan-more-wide' }, [el('span', { text: 'Notes' }), el('textarea', { 'class': 'plan-input plan-textarea', 'data-act': 'snotes',
-          rows: '2', maxlength: String(Plan.MAX_STAY_NOTES), 'aria-label': 'Notes for the stay on ' + name }, [stay.notes || ''])])
+          'aria-label': tr('Booking reference for {0}', name) })]),
+        el('label', {}, [el('span', { text: tr('Contact (phone or email)') }), el('input', { type: 'text', 'class': 'plan-input', 'data-act': 'scontact',
+          maxlength: String(Plan.MAX_CONTACT), autocomplete: 'off', value: stay.contact || '', 'aria-label': tr('Contact for the stay on {0}', name) })]),
+        el('label', { 'class': 'plan-more-wide' }, [el('span', { text: tr('Notes') }), el('textarea', { 'class': 'plan-input plan-textarea', 'data-act': 'snotes',
+          rows: '2', maxlength: String(Plan.MAX_STAY_NOTES), 'aria-label': tr('Notes for the stay on {0}', name) }, [stay.notes || ''])])
       ]),
-      el('p', { 'class': 'plan-hint', text: 'The reference goes in the file and in the plan code and link, so anyone who has those can read it. The contact and notes go in the file only.' })
+      el('p', { 'class': 'plan-hint', text: tr('The reference goes in the file and in the plan code and link, so anyone who has those can read it. The contact and notes go in the file only.') })
     ]);
   }
 
   // How a journey is made, when it leaves and arrives, and its reference and notes. All of it goes in the plan code.
   function travelMore(day, i, name) {
-    var mode = el('select', { 'class': 'plan-input', 'data-act': 'tmode', 'data-focus': 'day-' + i + '-tmode', 'aria-label': 'How you travel on ' + name });
-    mode.appendChild(el('option', { value: '', text: 'Not said' }));
-    Plan.MODES.forEach(function (m) { mode.appendChild(el('option', { value: m, selected: day.mode === m, text: MODE_LABELS[m] })); });
+    var mode = el('select', { 'class': 'plan-input', 'data-act': 'tmode', 'data-focus': 'day-' + i + '-tmode', 'aria-label': tr('How you travel on {0}', name) });
+    mode.appendChild(el('option', { value: '', text: tr('Not said') }));
+    Plan.MODES.forEach(function (m) { mode.appendChild(el('option', { value: m, selected: day.mode === m, text: tr(MODE_LABELS[m]) })); });
     function time(act, value, label) {
-      return el('input', { type: 'time', 'class': 'plan-input', 'data-act': act, value: Plan.formatClock(value), 'aria-label': label + ' on ' + name });
+      return el('input', { type: 'time', 'class': 'plan-input', 'data-act': act, value: Plan.formatClock(value), 'aria-label': tr('{0} on {1}', label, name) });
     }
     return el('div', { 'class': 'plan-travel-more' }, [
       el('div', { 'class': 'plan-more-grid' }, [
-        el('label', {}, [el('span', { text: 'How' }), mode]),
-        el('label', {}, [el('span', { text: 'Leaves' }), time('tdep', day.dep, 'Departure time')]),
-        el('label', {}, [el('span', { 'class': 'plan-arrive-caption', text: arrivesCaption(day) }), time('tarr', day.arr, 'Arrival time')]),
-        el('label', {}, [el('span', { text: 'Ticket or booking reference' }), el('input', { type: 'text', 'class': 'plan-input', 'data-act': 'tref',
-          maxlength: String(Plan.MAX_REF), autocomplete: 'off', value: day.ref || '', 'aria-label': 'Ticket reference for ' + name })]),
-        el('label', { 'class': 'plan-more-wide' }, [el('span', { text: 'Notes' }), el('textarea', { 'class': 'plan-input plan-textarea', 'data-act': 'tnotes',
-          rows: '2', maxlength: String(Plan.MAX_TRAVEL_NOTES), 'aria-label': 'Notes for ' + name }, [day.notes || ''])])
+        el('label', {}, [el('span', { text: tr('How') }), mode]),
+        el('label', {}, [el('span', { text: tr('Leaves') }), time('tdep', day.dep, tr('Departure time'))]),
+        el('label', {}, [el('span', { 'class': 'plan-arrive-caption', text: arrivesCaption(day) }), time('tarr', day.arr, tr('Arrival time'))]),
+        el('label', {}, [el('span', { text: tr('Ticket or booking reference') }), el('input', { type: 'text', 'class': 'plan-input', 'data-act': 'tref',
+          maxlength: String(Plan.MAX_REF), autocomplete: 'off', value: day.ref || '', 'aria-label': tr('Ticket reference for {0}', name) })]),
+        el('label', { 'class': 'plan-more-wide' }, [el('span', { text: tr('Notes') }), el('textarea', { 'class': 'plan-input plan-textarea', 'data-act': 'tnotes',
+          rows: '2', maxlength: String(Plan.MAX_TRAVEL_NOTES), 'aria-label': tr('Notes for {0}', name) }, [day.notes || ''])])
       ]),
       el('p', { 'class': 'plan-hint plan-nextday-note', hidden: !Plan.arrivesNextDay(day),
-        text: 'This journey ends the next day. For a journey after it, leave "Same day as the day before" unticked so it gets the next date.' }),
-      el('p', { 'class': 'plan-hint', text: 'These go in the plan code and the file. The phone app does not show them yet.' })
+        text: tr('This journey ends the next day. For a journey after it, leave "Same day as the day before" unticked so it gets the next date.') }),
+      el('p', { 'class': 'plan-hint', text: tr('These go in the plan code and the file. The phone app does not show them yet.') })
     ]);
   }
 
   // The caption over a journey's arrival time: "Arrives", or "Arrives (next day)" for a night journey.
-  function arrivesCaption(day) { return 'Arrives' + (Plan.arrivesNextDay(day) ? ' (next day)' : ''); }
+  function arrivesCaption(day) { return Plan.arrivesNextDay(day) ? tr('Arrives (next day)') : tr('Arrives'); }
 
   // ------------------------------------------------------------------ what the guide says about a place to stay
 
@@ -380,9 +406,9 @@
     var key = link.key, logo = root.getAttribute('data-wa-logo'), kids, label;
     if (key === 'booking') {
       kids = [el('span', { text: link.text })];
-      label = 'Booking.com for ' + name;
+      label = tr('Booking.com for {0}', name);
     } else if (key === 'whatsapp') {
-      label = 'Message ' + name + ' on WhatsApp';
+      label = tr('Message {0} on WhatsApp', name);
       if (logo) {
         var img = el('img', { src: logo, alt: '', width: '86', height: '20' });
         img.addEventListener('error', function () { img.replaceWith(el('span', { text: 'WhatsApp' })); });   // never a blank button
@@ -392,13 +418,13 @@
       }
     } else if (key === 'call') {
       kids = [icon('i-phone'), el('span', { text: link.text })];
-      label = 'Call ' + name + ', ' + link.text;
+      label = tr('Call {0}, {1}', name, link.text);
     } else if (key === 'email') {
-      kids = [icon('i-email'), el('span', { text: 'Email' })];
-      label = 'Email ' + name;
+      kids = [icon('i-email'), el('span', { text: tr('Email') })];
+      label = tr('Email {0}', name);
     } else {
-      kids = [icon('i-language'), el('span', { text: 'Website' })];
-      label = 'Website of ' + name;
+      kids = [icon('i-language'), el('span', { text: tr('Website') })];
+      label = tr('Website of {0}', name);
     }
     var look = { booking: 'booking', whatsapp: 'wa', call: 'phone', email: 'email', website: 'web' }[key];
     return el('a', { 'class': 'btn btn-' + look + ' plan-link plan-link-' + key, href: link.href, target: key === 'call' || key === 'email' ? null : '_blank', rel: 'noopener',
@@ -410,7 +436,7 @@
     var links = Plan.stayLinks(d, ui.details && ui.details.aff).map(function (link) { return linkItem(link, name); });
     if (dayIndex !== undefined && Msg && Msg.canAsk(d)) {
       links.unshift(el('button', { type: 'button', 'class': 'btn btn-ask plan-link plan-link-ask', 'data-act': 'askbed', 'data-focus': 'day-' + dayIndex + '-askbed',
-        'aria-label': 'Ask ' + name + ' for a bed' }, [el('span', { text: 'Ask for a bed' })]));
+        'aria-label': tr('Ask {0} for a bed', name) }, [el('span', { text: tr('Ask for a bed') })]));
     }
     return links.length ? el('div', { 'class': 'plan-links' }, links) : null;
   }
@@ -452,21 +478,21 @@
     if (!info.end || info.invalid) return;
     if (day.stay) {
       var status = el('select', { 'class': 'plan-input plan-status', 'data-act': 'status', 'data-focus': 'day-' + i + '-status',
-        'aria-label': 'Booking status for ' + name });
+        'aria-label': tr('Booking status for {0}', name) });
       Plan.STATUSES.forEach(function (s) {
-        status.appendChild(el('option', { value: s, selected: s === day.stay.status, text: s }));
+        status.appendChild(el('option', { value: s, selected: s === day.stay.status, text: tr(s) }));
       });
-      container.appendChild(el('span', { 'class': 'plan-stay-label', text: 'Night ' + info.no + ':' }));
+      container.appendChild(el('span', { 'class': 'plan-stay-label', text: tr('Night {0}:', info.no) }));
       container.appendChild(el('strong', { 'class': 'plan-stay-name', text: day.stay.name }));
       container.appendChild(status);
-      container.appendChild(button('Change', 'stay', { 'data-focus': 'day-' + i + '-stay', 'aria-label': 'Change where to stay on ' + name }));
-      container.appendChild(button('Remove', 'stay-clear', { 'aria-label': 'Remove the stay on ' + name }));
+      container.appendChild(button(tr('Change'), 'stay', { 'data-focus': 'day-' + i + '-stay', 'aria-label': tr('Change where to stay on {0}', name) }));
+      container.appendChild(button(tr('Remove'), 'stay-clear', { 'aria-label': tr('Remove the stay on {0}', name) }));
       var guide = el('div', { 'class': 'plan-stay-guide', hidden: true });
       fillGuide(guide, day.stay, i);
       container.appendChild(guide);
       container.appendChild(stayDetails(day.stay, i, name));
     } else {
-      container.appendChild(button('Choose where to stay in ' + info.end.name, 'stay', { 'data-focus': 'day-' + i + '-stay', 'class': 'plan-btn plan-btn-quiet' }));
+      container.appendChild(button(tr('Choose where to stay in {0}', info.end.name), 'stay', { 'data-focus': 'day-' + i + '-stay', 'class': 'plan-btn plan-btn-quiet' }));
     }
   }
 
@@ -484,42 +510,42 @@
     var head = el('div', { 'class': 'plan-day-head' }, [
       el('span', { 'class': 'plan-day-no', text: Plan.dayLabel(info) }),
       info.date ? el('span', { 'class': 'plan-day-date', text: formatDate(info.date) }) : null,
-      info.type === 's' && KIND_LABELS[info.stage.kind] ? chip(KIND_LABELS[info.stage.kind], info.stage.kind) : null,
-      walking && info.long ? chip('Long day', 'long') : null
+      info.type === 's' && KIND_LABELS[info.stage.kind] ? chip(tr(KIND_LABELS[info.stage.kind]), info.stage.kind) : null,
+      walking && info.long ? chip(tr('Long day'), 'long') : null
     ]);
     var body = [head, el('h4', { 'class': 'plan-day-title', tabindex: '-1', 'data-focus': 'day-' + i + '-title', text: dayTitle(info) })];
 
     if (walking && info.metres !== null) {
       var climb = climbText(info.up, info.down);
-      body.push(el('p', { 'class': 'plan-day-meta', text: Plan.formatKm(info.metres) + ' on foot, about ' + Plan.formatDuration(info.seconds) + (climb ? ', ' + climb : '') }));
+      body.push(el('p', { 'class': 'plan-day-meta', text: tr('{0} on foot, about {1}', Plan.formatKm(info.metres), Plan.formatDuration(info.seconds)) + (climb ? ', ' + climb : '') }));
     } else if (info.type === 't') {
       var from = el('input', { type: 'text', 'class': 'plan-input', list: 'plan-places', value: day.from, autocomplete: 'off',
-        placeholder: 'Where from?', 'data-act': 'from', 'data-focus': 'day-' + i + '-from', maxlength: '100' });
+        placeholder: tr('Where from?'), 'data-act': 'from', 'data-focus': 'day-' + i + '-from', maxlength: '100' });
       var to = el('input', { type: 'text', 'class': 'plan-input', list: 'plan-places', value: day.to, autocomplete: 'off',
-        placeholder: 'Where to? e.g. Saint Jean Pied de Port', 'data-act': 'to', 'data-focus': 'day-' + i + '-to', maxlength: '100' });
-      body.push(el('p', { 'class': 'plan-day-hint', text: 'Flight, train, bus or taxi. Start typing a town on the Camino to pick it from the list, or type any place.' }));
+        placeholder: tr('Where to? e.g. Saint Jean Pied de Port'), 'data-act': 'to', 'data-focus': 'day-' + i + '-to', maxlength: '100' });
+      body.push(el('p', { 'class': 'plan-day-hint', text: tr('Flight, train, bus or taxi. Start typing a town on the Camino to pick it from the list, or type any place.') }));
       // Said only while the day is a single journey: once a second leg is added the person has found the way, and a day of three legs does not say it three times.
       if (info.parts === 1) {
         body.push(el('p', { 'class': 'plan-day-hint plan-leg-hint',
-          text: 'Going in more than one leg, such as a bus then two flights? Use "Travel on the same day" below to add each leg as its own journey, each with its own times and reference.' }));
+          text: tr('Going in more than one leg, such as a bus then two flights? Use "Travel on the same day" below to add each leg as its own journey, each with its own times and reference.') }));
       }
       body.push(el('div', { 'class': 'plan-travel' }, [
-        el('label', {}, [el('span', { text: 'From' }), from]),
-        el('label', {}, [el('span', { text: 'To' }), to])
+        el('label', {}, [el('span', { text: tr('From') }), from]),
+        el('label', {}, [el('span', { text: tr('To') }), to])
       ]));
       if (i > 0) {
         body.push(el('label', { 'class': 'plan-check' }, [
           el('input', { type: 'checkbox', 'data-act': 'same', 'data-focus': 'day-' + i + '-same', checked: day.same ? true : null }),
-          el('span', { text: 'Same day as the day before (for example a bus after the walk)' })
+          el('span', { text: tr('Same day as the day before (for example a bus after the walk)') })
         ]));
       }
       body.push(travelMore(day, i, name));
     } else if (info.type === 'r' && i === 0) {
       body.push(el('div', { 'class': 'plan-rest-at' }, [
-        el('label', {}, [el('span', { text: 'Where will you rest?' }), el('input', { type: 'text', 'class': 'plan-input', list: 'plan-places',
-          value: day.at || '', autocomplete: 'off', placeholder: 'For example Saint Jean Pied de Port', 'data-act': 'restat',
+        el('label', {}, [el('span', { text: tr('Where will you rest?') }), el('input', { type: 'text', 'class': 'plan-input', list: 'plan-places',
+          value: day.at || '', autocomplete: 'off', placeholder: tr('For example Saint Jean Pied de Port'), 'data-act': 'restat',
           'data-focus': 'day-0-restat', maxlength: '100' })]),
-        el('p', { 'class': 'plan-day-hint', text: 'Nothing comes before the first day, so say where it is. Start typing a town on the Camino to pick it from the list, or type any place.' })
+        el('p', { 'class': 'plan-day-hint', text: tr('Nothing comes before the first day, so say where it is. Start typing a town on the Camino to pick it from the list, or type any place.') })
       ]));
     }
 
@@ -532,14 +558,14 @@
 
     if (info.type === 'r' && ui.restAt === i && info.end && !info.invalid) {
       body.push(el('form', { 'class': 'plan-rest-move', novalidate: true }, [
-        el('label', {}, [el('span', { text: 'Where will you rest?' }), el('input', {
+        el('label', {}, [el('span', { text: tr('Where will you rest?') }), el('input', {
           type: 'text', 'class': 'plan-input', name: 'place', list: 'plan-places', autocomplete: 'off', maxlength: '100',
-          placeholder: 'For example Santiago', 'data-focus': 'day-' + i + '-restplace' })]),
-        el('p', { 'class': 'plan-hint', text: 'If this is not ' + info.end.name + ', a journey from there is added before this rest day.' +
-          (day.stay ? ' The place to stay you chose here is cleared.' : '') }),
+          placeholder: tr('For example Santiago'), 'data-focus': 'day-' + i + '-restplace' })]),
+        el('p', { 'class': 'plan-hint', text: tr('If this is not {0}, a journey from there is added before this rest day.', info.end.name) +
+          (day.stay ? ' ' + tr('The place to stay you chose here is cleared.') : '') }),
         el('div', { 'class': 'plan-rest-move-actions' }, [
-          el('button', { type: 'submit', 'class': 'plan-btn plan-btn-primary', text: 'Move the rest day' }),
-          button('Cancel', 'restcancel', { 'data-focus': 'day-' + i + '-restcancel' })
+          el('button', { type: 'submit', 'class': 'plan-btn plan-btn-primary', text: tr('Move the rest day') }),
+          button(tr('Cancel'), 'restcancel', { 'data-focus': 'day-' + i + '-restcancel' })
         ])
       ]));
     }
@@ -549,7 +575,7 @@
       var same = Plan.siblings(day.stage, data);
       if (same.length > 1) {
         var choose = el('select', { 'class': 'plan-input plan-route', 'data-act': 'route', 'data-focus': 'day-' + i + '-route',
-          'aria-label': 'Choose the route for ' + name });
+          'aria-label': tr('Choose the route for {0}', name) });
         same.forEach(function (id) {
           var s = data.stages[id];
           choose.appendChild(el('option', { value: String(id), selected: id === day.stage,
@@ -563,26 +589,26 @@
       if (found.length > 1) {
         var mine = Plan.chainKey(day.paths, data);
         var pick = el('select', { 'class': 'plan-input plan-route', 'data-act': 'croute', 'data-focus': 'day-' + i + '-route',
-          'aria-label': 'Choose the route for ' + name });
+          'aria-label': tr('Choose the route for {0}', name) });
         var foundLabels = Plan.routeLabels(found, data);
         found.forEach(function (chain, n) {
           var t = Plan.chainTotals(chain, data);
           pick.appendChild(el('option', { value: chain.join(','), selected: Plan.chainKey(chain, data) === mine,
-            text: (foundLabels[n] || info.end.name) + ' (' + Plan.formatKm(t.metres) + (t.up !== null ? ', ' + Plan.formatMetres(t.up) + ' up' : '') + ')' }));
+            text: (foundLabels[n] || info.end.name) + ' (' + Plan.formatKm(t.metres) + (t.up !== null ? ', ' + tr('{0} up', Plan.formatMetres(t.up)) : '') + ')' }));
         });
         actions.appendChild(pick);
       }
     }
     if (walking && info.start && info.end && !info.invalid) {
-      actions.appendChild(button('Change where it ends', 'reend', { 'data-focus': 'day-' + i + '-reend', 'aria-label': 'Change where ' + name + ' ends' }));
+      actions.appendChild(button(tr('Change where it ends'), 'reend', { 'data-focus': 'day-' + i + '-reend', 'aria-label': tr('Change where {0} ends', name) }));
     }
     if (info.type === 'r' && info.end && !info.invalid && i > 0) {
-      actions.appendChild(button('Rest somewhere else', 'restmove', { 'data-focus': 'day-' + i + '-restmove', 'aria-label': 'Rest somewhere else on ' + name }));
+      actions.appendChild(button(tr('Rest somewhere else'), 'restmove', { 'data-focus': 'day-' + i + '-restmove', 'aria-label': tr('Rest somewhere else on {0}', name) }));
     }
-    actions.appendChild(button('Move up', 'up', { 'data-focus': 'day-' + i + '-up', disabled: i === 0, 'aria-label': 'Move ' + name + ' earlier' }));
-    actions.appendChild(button('Move down', 'down', { 'data-focus': 'day-' + i + '-down', disabled: i === count - 1, 'aria-label': 'Move ' + name + ' later' }));
-    actions.appendChild(button('Add a day after', 'insert', { 'data-focus': 'day-' + i + '-insert', 'aria-label': 'Add a day after day ' + info.no }));
-    actions.appendChild(button('Remove day', 'remove', { 'data-focus': 'day-' + i + '-remove', 'class': 'plan-btn plan-btn-danger', 'aria-label': 'Remove ' + name }));
+    actions.appendChild(button(tr('Move up'), 'up', { 'data-focus': 'day-' + i + '-up', disabled: i === 0, 'aria-label': tr('Move {0} earlier', name) }));
+    actions.appendChild(button(tr('Move down'), 'down', { 'data-focus': 'day-' + i + '-down', disabled: i === count - 1, 'aria-label': tr('Move {0} later', name) }));
+    actions.appendChild(button(tr('Add a day after'), 'insert', { 'data-focus': 'day-' + i + '-insert', 'aria-label': tr('Add a day after day {0}', info.no) }));
+    actions.appendChild(button(tr('Remove day'), 'remove', { 'data-focus': 'day-' + i + '-remove', 'class': 'plan-btn plan-btn-danger', 'aria-label': tr('Remove {0}', name) }));
     body.push(actions);
 
     return el('li', { 'class': 'plan-day plan-day-' + kindClass + (ui.editAt === i ? ' plan-day-editing' : ''), 'data-index': String(i) }, body);
@@ -601,11 +627,13 @@
     var stays = Plan.stayCount(stop.place, data);
     var open = ui.openStop === stop.place && routes.length > 1;
     var tags = [];
-    if (current === stop.place) tags.push(chip('Where it ends now', 'alt'));
-    if (ends[stop.place]) tags.push(chip('Guidebook stage end', 'stage'));
-    if (routes.length > 1) tags.push(chip(routes.length + ' routes', 'alt'));
-    var meta = Plan.formatKm(stop.metres) + ', about ' + Plan.formatDuration(seconds) + (stop.up !== null && stop.up !== undefined ? ', ' + Plan.formatMetres(stop.up) + ' up' : '') +
-      (stays ? ', ' + plural(stays, 'place') + ' to stay' : '');
+    if (current === stop.place) tags.push(chip(tr('Where it ends now'), 'alt'));
+    if (ends[stop.place]) tags.push(chip(tr('Guidebook stage end'), 'stage'));
+    if (routes.length > 1) tags.push(chip(tr('{0} routes', routes.length), 'alt'));
+    var meta = [Plan.formatKm(stop.metres), tr('about {0}', Plan.formatDuration(seconds))];
+    if (stop.up !== null && stop.up !== undefined) meta.push(tr('{0} up', Plan.formatMetres(stop.up)));
+    if (stays) meta.push(tr('{0} to stay', plural(stays, 'place')));
+    meta = meta.join(', ');
     var item = el('li', { 'class': 'plan-stop-item' }, [el('button', {
       type: 'button', 'class': 'plan-stop', 'data-act': 'stop', 'data-place': String(stop.place),
       'aria-expanded': routes.length > 1 ? String(open) : null
@@ -615,14 +643,14 @@
       tags.length ? el('span', { 'class': 'plan-stop-tags' }, tags) : null
     ])]);
     if (open) {
-      var sub = el('ul', { 'class': 'plan-stop-routes', 'aria-label': 'Routes to ' + stop.name });
+      var sub = el('ul', { 'class': 'plan-stop-routes', 'aria-label': tr('Routes to {0}', stop.name) });
       var labels = Plan.routeLabels(routes, data);
       routes.forEach(function (chain, n) {
         var t = Plan.chainTotals(chain, data);
         var time = Plan.formatDuration(Plan.walkingSeconds(t.weighted, state.pace, data.flat));
         sub.appendChild(el('li', {}, [el('button', { type: 'button', 'class': 'plan-option', 'data-act': 'stop-route', 'data-chain': chain.join(',') }, [
           el('span', { 'class': 'plan-option-name', text: labels[n] || stop.name }),
-          el('span', { 'class': 'plan-option-meta', text: Plan.formatKm(t.metres) + ', about ' + time + (t.up !== null ? ', ' + Plan.formatMetres(t.up) + ' up' : '') })
+          el('span', { 'class': 'plan-option-meta', text: tr('{0}, about {1}', Plan.formatKm(t.metres), time) + (t.up !== null ? ', ' + tr('{0} up', Plan.formatMetres(t.up)) : '') })
         ])]));
       });
       item.appendChild(sub);
@@ -669,8 +697,8 @@
     if (closed) {
       var totals = Plan.totals(state, data), days = Plan.layout(state, data).days;
       var last = days[days.length - 1], place = last && last.end && last.end.name;
-      $('plan-done-text').textContent = plural(totals.days, 'day') + (place ? ', ending at ' + place : '') +
-        '. When you are ready, send it to the app, print it or save a copy, below. You can still change any day.';
+      $('plan-done-text').textContent = (place ? tr('{0}, ending at {1}.', plural(totals.days, 'day'), place) : tr('{0}.', plural(totals.days, 'day'))) + ' ' +
+        tr('When you are ready, send it to the app, print it or save a copy, below. You can still change any day.');
     }
     $('plan-finish-row').hidden = editing !== null || !state.days.length;
   }
@@ -688,21 +716,21 @@
       current = editInfo.end.id;
     }
     var allDays = Plan.layout(state, data).days;
-    $('plan-add-title').textContent = editing !== null ? 'Change ' + Plan.dayRef(editInfo)
-      : 'Day ' + (position > 0 ? allDays[position - 1].no + 1 : 1) + (at === null ? '' : ' (new)');
+    $('plan-add-title').textContent = editing !== null ? tr('Change {0}', Plan.dayRef(editInfo))
+      : (at === null ? tr('Day {0}', position > 0 ? allDays[position - 1].no + 1 : 1) : tr('Day {0} (new)', position > 0 ? allDays[position - 1].no + 1 : 1));
 
     var lead = '';
     if (editing !== null) {
-      lead = cap(Plan.dayRef(editInfo)) + ' is ' + dayTitle(editInfo) + '. Choose where it should end instead.' +
-        (state.days[editing].stay ? ' If you pick a different place, the place to stay you chose is cleared.' : '');
+      lead = tr('{0} is {1}. Choose where it should end instead.', cap(Plan.dayRef(editInfo)), dayTitle(editInfo)) +
+        (state.days[editing].stay ? ' ' + tr('If you pick a different place, the place to stay you chose is cleared.') : '');
     } else if (finished) {
-      lead = 'Your plan reaches ' + start.previous.name + ', the end of the guide. Add a rest day or a journey home, or send the plan below.';
+      lead = tr('Your plan reaches {0}, the end of the guide. Add a rest day or a journey home, or send the plan below.', start.previous.name);
     } else if (!start.fixed && !start.previous) {
       lead = position === 0 && count
-        ? 'This day will go at the start of your plan.'
-        : 'Choose where your walk begins, then where you stop on this first day. If you arrive by plane or train first, add a travel day instead; to begin with a rest day, add one below.';
+        ? tr('This day will go at the start of your plan.')
+        : tr('Choose where your walk begins, then where you stop on this first day. If you arrive by plane or train first, add a travel day instead; to begin with a rest day, add one below.');
     } else if (!start.fixed) {
-      lead = 'The day before ends at ' + start.previous.name + ', which is not on the route. Choose where this day starts, or add a travel day to get there.';
+      lead = tr('The day before ends at {0}, which is not on the route. Choose where this day starts, or add a travel day to get there.', start.previous.name);
     }
     $('plan-add-lead').textContent = lead;
     $('plan-add-lead').hidden = !lead;
@@ -713,11 +741,11 @@
     // Where the new day goes
     var where = $('plan-add-where');
     where.innerHTML = '';
-    where.appendChild(el('option', { value: 'end', text: 'At the end' }));
-    if (count) where.appendChild(el('option', { value: '0', text: 'At the start' }));
+    where.appendChild(el('option', { value: 'end', text: tr('At the end') }));
+    if (count) where.appendChild(el('option', { value: '0', text: tr('At the start') }));
     allDays.forEach(function (info, i) {
       // a day can only be added after the last part of a day, not between its parts
-      if (i < count - 1 && !allDays[i + 1].same) where.appendChild(el('option', { value: String(i + 1), text: 'After ' + Plan.dayRef(info) + ': ' + shortTitle(info) }));
+      if (i < count - 1 && !allDays[i + 1].same) where.appendChild(el('option', { value: String(i + 1), text: tr('After {0}: {1}', Plan.dayRef(info), shortTitle(info)) }));
     });
     where.value = at === null ? 'end' : String(at);
     $('plan-add-where-row').hidden = count === 0 || editing !== null;
@@ -742,9 +770,9 @@
       var all = Plan.stopsFrom(start.id, data, 60000);
       var stops = ui.far ? all : all.filter(function (s) { return s.metres <= 40000 || s.place === current; });
       stops.forEach(function (stop) { list.appendChild(stopRow(stop, start, ends, current)); });
-      $('plan-stops-title').textContent = 'From ' + start.name + (editing !== null ? ': where should it end?' : ': where will you stop?');
-      if (!all.length) empty.textContent = 'There is nowhere further along the route from ' + start.name + '. You can still add a rest day or a journey.';
-      else if (!stops.length) empty.textContent = 'There is no town within 40 km of ' + start.name + '.';
+      $('plan-stops-title').textContent = (editing !== null ? tr('From {0}: where should it end?', start.name) : tr('From {0}: where will you stop?', start.name));
+      if (!all.length) empty.textContent = tr('There is nowhere further along the route from {0}. You can still add a rest day or a journey.', start.name);
+      else if (!stops.length) empty.textContent = tr('There is no town within 40 km of {0}.', start.name);
       empty.hidden = !!stops.length;
       $('plan-stops-more').hidden = ui.far || all.length === stops.length;
     }
@@ -763,10 +791,10 @@
   function renderSend() {
     var l = Plan.layout(state, data), t = Plan.totals(state, data);
     var problem = '';
-    if (!state.days.length) problem = 'Add at least one day to create the file.';
+    if (!state.days.length) problem = tr('Add at least one day to create the file.');
     else {
       var bad = l.days.filter(function (d) { return d.invalid; })[0];
-      if (bad) problem = cap(Plan.dayRef(bad)) + ' needs attention: ' + bad.invalid;
+      if (bad) problem = tr('{0} needs attention: {1}', cap(Plan.dayRef(bad)), bad.invalid);
     }
     $('plan-download').disabled = !!problem;
     var qrButton = $('plan-qr-open');
@@ -783,7 +811,7 @@
     $('plan-send-private').hidden = !hasPrivate;
     var stays = t.stays;
     $('plan-send-count').textContent = state.days.length
-      ? plural(t.days, 'day') + ', ' + plural(stays, 'stay') + ' chosen.'
+      ? tr('{0}, {1} chosen.', plural(t.days, 'day'), plural(stays, 'stay'))
       : '';
 
     // Where the plan goes, and anything to check before it is sent
@@ -793,10 +821,10 @@
       warn.hidden = true;
       return;
     }
-    var goal = data.places[Plan.guideEnd(data)] || 'the end of the guide';
-    var line = 'From ' + p.start.name + ' to ' + p.end.name + ', ' + Plan.formatKm(p.metres) + ' on foot.';
-    if (p.reachesEnd) line += ' It reaches ' + goal + '.';
-    else if (p.remaining !== null) line += ' It stops about ' + Plan.formatKm(p.remaining) + ' short of ' + goal + '. Keep adding days above, or send it as it is.';
+    var goal = data.places[Plan.guideEnd(data)] || tr('the end of the guide');
+    var line = tr('From {0} to {1}, {2} on foot.', p.start.name, p.end.name, Plan.formatKm(p.metres));
+    if (p.reachesEnd) line += ' ' + tr('It reaches {0}.', goal);
+    else if (p.remaining !== null) line += ' ' + tr('It stops about {0} short of {1}. Keep adding days above, or send it as it is.', Plan.formatKm(p.remaining), goal);
     route.textContent = line;
     route.className = 'plan-send-route' + (p.reachesEnd ? ' plan-send-done' : '');
     route.hidden = false;
@@ -804,9 +832,11 @@
     if (n) {
       var plain = p.warnings.every(function (i) { return l.days[i].parts === 1; });
       var names = p.warnings.map(function (i) { return plain ? String(l.days[i].no) : Plan.dayRef(l.days[i]); });
-      var list = n === 1 ? names[0] : names.slice(0, -1).join(', ') + ' and ' + names[n - 1];
-      warn.textContent = (plain ? (n === 1 ? 'Day ' : 'Days ') + list : cap(list)) + (n === 1 ? ' does not start' : ' do not start') +
-        ' where the day before ended. You can still send the plan, but check ' + (n === 1 ? 'it' : 'them') + ' first.';
+      var list = n === 1 ? names[0] : names.slice(0, -1).join(', ') + tr(' and ') + names[n - 1];
+      var subject = plain ? (n === 1 ? tr('Day {0}', list) : tr('Days {0}', list)) : cap(list);
+      warn.textContent = n === 1
+        ? tr('{0} does not start where the day before ended. You can still send the plan, but check it first.', subject)
+        : tr('{0} do not start where the day before ended. You can still send the plan, but check them first.', subject);
     }
     warn.hidden = !n;
   }
@@ -851,18 +881,18 @@
     var file;
     try { file = makeFile(); } catch (error) { say(error.message, true); return; }
     downloadFile(file);
-    say('Saved ' + file.name + '. Now open it in the app (steps below).', false);
+    say(tr('Saved {0}. Now open it in the app (steps below).', file.name), false);
   }
 
   function share() {
     var file;
     try { file = makeFile(); } catch (error) { say(error.message, true); return; }
     var shared = new File([file.text], file.name, { type: 'application/json' });
-    navigator.share({ files: [shared], title: state.name, text: 'Itinerary for the Saint Jean to Santiago app' })
-      .then(function () { say('Shared. Open it in the app (steps below).', false); })
+    navigator.share({ files: [shared], title: state.name, text: tr('Itinerary for the Saint Jean to Santiago app') })
+      .then(function () { say(tr('Shared. Open it in the app (steps below).'), false); })
       .catch(function (error) {
         if (error && error.name === 'AbortError') return;
-        say('Sharing did not work here. Use Download instead.', true);
+        say(tr('Sharing did not work here. Use Download instead.'), true);
       });
   }
 
@@ -891,7 +921,7 @@
   function stamp(when) {
     var d = when instanceof Date ? when : new Date(when);
     if (isNaN(d.getTime())) return '';
-    try { return d.toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }); } catch (error) { return d.toISOString(); }
+    try { return d.toLocaleString(dateLocale(), { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }); } catch (error) { return d.toISOString(); }
   }
 
   function keepSay(message, isError) {
@@ -902,12 +932,14 @@
   }
 
   function renderKeepStatus() {
-    var line = state.days.length ? 'Your plan is saved in this browser, on this device, after every change' +
-      (ui.savedAt ? ' (last at ' + stamp(ui.savedAt) + ')' : '') + '.' : 'Add a day and your plan is saved in this browser, on this device, after every change.';
-    $('plan-keep-status').textContent = storageWorks ? line : 'This browser cannot save your plan, so keep a copy as a file.';
+    var line = state.days.length
+      ? (ui.savedAt ? tr('Your plan is saved in this browser, on this device, after every change (last at {0}).', stamp(ui.savedAt))
+        : tr('Your plan is saved in this browser, on this device, after every change.'))
+      : tr('Add a day and your plan is saved in this browser, on this device, after every change.');
+    $('plan-keep-status').textContent = storageWorks ? line : tr('This browser cannot save your plan, so keep a copy as a file.');
     var note = $('plan-keep-storage');
-    if (ui.persisted === true) note.textContent = 'Your browser has agreed to keep what is saved here until you clear its site data.';
-    else note.textContent = 'A browser can clear what it keeps when it is short of space, and Safari clears it after a week without a visit. Save a copy as a file to be safe.';
+    if (ui.persisted === true) note.textContent = tr('Your browser has agreed to keep what is saved here until you clear its site data.');
+    else note.textContent = tr('A browser can clear what it keeps when it is short of space, and Safari clears it after a week without a visit. Save a copy as a file to be safe.');
     note.hidden = !state.days.length && !readLibrary().length;
     var empty = !state.days.length;
     $('plan-save-copy').disabled = empty;
@@ -917,10 +949,10 @@
 
   function savedMeta(p) {
     var bits = [plural(p.days || 0, 'day')];
-    if (p.startDate) bits.push('from ' + formatDate(p.startDate));
-    bits.push('saved ' + stamp(p.savedAt));
+    if (p.startDate) bits.push(tr('from {0}', formatDate(p.startDate)));
+    bits.push(tr('saved {0}', stamp(p.savedAt)));
     var meta = bits.join(', ') + '.';
-    if (p.guide && p.guide !== data.guide) meta += ' Made for an older edition of the guide, so check each day.';
+    if (p.guide && p.guide !== data.guide) meta += ' ' + tr('Made for an older edition of the guide, so check each day.');
     return meta;
   }
 
@@ -943,9 +975,9 @@
           el('span', { 'class': 'plan-saved-meta', text: savedMeta(p) })
         ]),
         el('span', { 'class': 'plan-saved-buttons' }, [
-          el('button', { type: 'button', 'class': 'plan-btn plan-btn-small', 'data-saved': 'open', 'data-id': p.id, 'aria-label': 'Open ' + p.name, text: 'Open' }),
+          el('button', { type: 'button', 'class': 'plan-btn plan-btn-small', 'data-saved': 'open', 'data-id': p.id, 'aria-label': tr('Open {0}', p.name), text: tr('Open') }),
           el('button', { type: 'button', 'class': 'plan-btn plan-btn-small' + (asking ? ' plan-btn-danger' : ''), 'data-saved': 'delete', 'data-id': p.id,
-            'aria-label': (asking ? 'Really delete ' : 'Delete ') + p.name, text: asking ? 'Delete it for good?' : 'Delete' })
+            'aria-label': asking ? tr('Really delete {0}', p.name) : tr('Delete {0}', p.name), text: asking ? tr('Delete it for good?') : tr('Delete') })
         ])
       ]));
     });
@@ -956,8 +988,8 @@
     var ask = ui.keepAsk, box = $('plan-keep-ask');
     box.hidden = !ask;
     if (ask) {
-      $('plan-keep-ask-text').textContent = 'You already have a saved plan called "' + ask.existing.name + '" (' + plural(ask.existing.days || 0, 'day') +
-        ', saved ' + stamp(ask.existing.savedAt) + '). Replace it with this one, or keep both?';
+      $('plan-keep-ask-text').textContent = tr('You already have a saved plan called "{0}" ({1}, saved {2}). Replace it with this one, or keep both?',
+        ask.existing.name, plural(ask.existing.days || 0, 'day'), stamp(ask.existing.savedAt));
     }
   }
 
@@ -981,9 +1013,9 @@
     var entry = { id: id || newSavedId(), name: name, savedAt: new Date().toISOString(), guide: data.guide, days: t.days,
       startDate: state.startDate, state: JSON.parse(JSON.stringify(state)) };
     var next = list.filter(function (p) { return p.id !== entry.id; });
-    if (!id && next.length >= MAX_SAVED) { keepSay('You have ' + MAX_SAVED + ' saved plans here, which is the most this page keeps. Delete one first.', true); return false; }
+    if (!id && next.length >= MAX_SAVED) { keepSay(tr('You have {0} saved plans here, which is the most this page keeps. Delete one first.', MAX_SAVED), true); return false; }
     next.push(entry);
-    if (!writeLibrary(next)) { keepSay('This browser would not save it. Use "Save a copy" to keep a file instead.', true); return false; }
+    if (!writeLibrary(next)) { keepSay(tr('This browser would not save it. Use "Save a copy" to keep a file instead.'), true); return false; }
     ui.savedId = entry.id;
     ui.keepAsk = null;
     ui.confirmDelete = null;
@@ -994,7 +1026,7 @@
 
   function saveInBrowser() {
     if (!state.days.length) return;
-    var name = (String(state.name || '').trim() || 'My Camino');
+    var name = (String(state.name || '').trim() || tr('My Camino'));
     var same = readLibrary().filter(function (p) { return p.name.trim().toLowerCase() === name.toLowerCase(); })[0];
     if (same && same.id !== ui.savedId) {
       ui.keepAsk = { name: name, existing: same };
@@ -1005,7 +1037,7 @@
       return;
     }
     var entry = storeCopy(name, same ? same.id : null);
-    if (entry) { keepSay('Saved "' + name + '" in this browser.', false); announce('Saved in this browser.'); }
+    if (entry) { keepSay(tr('Saved "{0}" in this browser.', name), false); announce(tr('Saved in this browser.')); }
   }
 
   function uniqueName(name) {
@@ -1018,17 +1050,17 @@
   // folder, perhaps one their cloud drive keeps in step), otherwise as a download.
   function saveCopy() {
     var file;
-    try { file = makeFile(); } catch (error) { keepSay(error.message + ' Put that right to save a file, or use "Save in this browser".', true); return; }
+    try { file = makeFile(); } catch (error) { keepSay(error.message + ' ' + tr('Put that right to save a file, or use "Save in this browser".'), true); return; }
     function viaDownload() {
       downloadFile(file);
-      keepSay('Saved ' + file.name + ' to your downloads. Keep it somewhere safe.', false);
+      keepSay(tr('Saved {0} to your downloads. Keep it somewhere safe.', file.name), false);
     }
     if (typeof window.showSaveFilePicker !== 'function') { viaDownload(); return; }
-    window.showSaveFilePicker({ suggestedName: file.name, types: [{ description: 'Camino itinerary', accept: { 'application/json': ['.json'] } }] })
+    window.showSaveFilePicker({ suggestedName: file.name, types: [{ description: tr('Camino itinerary'), accept: { 'application/json': ['.json'] } }] })
       .then(function (handle) {
         return handle.createWritable().then(function (out) {
           return out.write(file.text).then(function () { return out.close(); });
-        }).then(function () { keepSay('Saved ' + handle.name + '. Keep it somewhere safe.', false); });
+        }).then(function () { keepSay(tr('Saved {0}. Keep it somewhere safe.', handle.name), false); });
       })
       .catch(function (error) {
         if (error && error.name === 'AbortError') return;
@@ -1053,7 +1085,7 @@
     ui.far = false;
     keepSay('', false);
     say('', false);
-    update(next, 'plan-name', 'Opened ' + label + '.', replacing ? 'Opened ' + label + ', in place of your plan.' : '');
+    update(next, 'plan-name', tr('Opened {0}.', label), replacing ? tr('Opened {0}, in place of your plan.', label) : '');
     ui.savedId = savedId || null;
     ui.notice = (notes || []).join(' ');
     renderNotice();
@@ -1062,34 +1094,34 @@
 
   function openSaved(id) {
     var entry = readLibrary().filter(function (p) { return p.id === id; })[0];
-    if (!entry) { keepSay('That saved plan is no longer here.', true); renderKeep(); return; }
+    if (!entry) { keepSay(tr('That saved plan is no longer here.'), true); renderKeep(); return; }
     var cleaned = Plan.clean(entry.state, data), notes = [];
     var before = Array.isArray(entry.state.days) ? entry.state.days.length : 0;
-    if (cleaned.days.length < before) notes.push((before - cleaned.days.length) + ' saved day' + (before - cleaned.days.length === 1 ? ' was' : 's were') + ' dropped because that part of the guide no longer exists.');
-    else if (entry.guide && entry.guide !== data.guide) notes.push('The guide has been updated since you saved this plan. Please check each day.');
+    if (cleaned.days.length < before) notes.push(droppedDaysText(before - cleaned.days.length));
+    else if (entry.guide && entry.guide !== data.guide) notes.push(tr('The guide has been updated since you saved this plan. Please check each day.'));
     openPlan(cleaned, '"' + entry.name + '"', notes, entry.id);
   }
 
   function deleteSaved(id) {
     var list = readLibrary(), gone = list.filter(function (p) { return p.id === id; })[0];
     if (!gone) return;
-    if (!writeLibrary(list.filter(function (p) { return p.id !== id; }))) { keepSay('This browser would not let that go. Try again.', true); return; }
+    if (!writeLibrary(list.filter(function (p) { return p.id !== id; }))) { keepSay(tr('This browser would not let that go. Try again.'), true); return; }
     if (ui.savedId === id) ui.savedId = null;
     ui.confirmDelete = null;
-    keepSay('Deleted "' + gone.name + '" from this browser.', false);
+    keepSay(tr('Deleted "{0}" from this browser.', gone.name), false);
     renderKeep();
-    announce('Deleted.');
+    announce(tr('Deleted.'));
   }
 
   function openFile(file) {
     if (!file) return;
     keepSay('', false);
-    if (file.size > 3000000) { keepSay('That file is too big to be a plan.', true); return; }
+    if (file.size > 3000000) { keepSay(tr('That file is too big to be a plan.'), true); return; }
     var reader = new FileReader();
-    reader.onerror = function () { keepSay('That file could not be read.', true); };
+    reader.onerror = function () { keepSay(tr('That file could not be read.'), true); };
     reader.onload = function () {
       var doc;
-      try { doc = JSON.parse(String(reader.result)); } catch (error) { keepSay('That is not a plan file: it is not readable text.', true); return; }
+      try { doc = JSON.parse(String(reader.result)); } catch (error) { keepSay(tr('That is not a plan file: it is not readable text.'), true); return; }
       var result = Plan.readFile(doc, data);
       if (!result.ok) { ui.shared = { error: result.message, file: file.name }; render('shared-title'); return; }
       if (result.plans.length === 1) {
@@ -1139,7 +1171,7 @@
 
   function printDate(iso) {
     try {
-      return new Date(iso + 'T00:00:00Z').toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+      return new Date(iso + 'T00:00:00Z').toLocaleDateString(dateLocale(), { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
     } catch (error) {
       return iso;
     }
@@ -1148,25 +1180,25 @@
   // What a day's route cell says: where, and for a journey how and when.
   function printRoute(info, day, full) {
     var kids = [];
-    if (info.invalid) return [el('span', { 'class': 'plan-print-none', text: dayTitle(info) + ': not finished yet' })];
+    if (info.invalid) return [el('span', { 'class': 'plan-print-none', text: tr('{0}: not finished yet', dayTitle(info)) })];
     if (info.type === 'r') {
       kids.push(el('span', { 'class': 'plan-print-place', text: dayTitle(info) }));
     } else if (info.type === 't') {
       var from = info.start ? info.start.name : '', to = info.end ? info.end.name : '';
-      kids.push(el('span', { 'class': 'plan-print-place', text: dayTitle(info) + (from || to ? ': ' + from + ' to ' + to : '') }));
+      kids.push(el('span', { 'class': 'plan-print-place', text: from || to ? tr('{0}: {1} to {2}', dayTitle(info), from, to) : dayTitle(info) }));
       if (full) {
         var times = [];
-        if (day.dep !== undefined) times.push('leaves ' + Plan.formatClock(day.dep));
-        if (day.arr !== undefined) times.push('arrives ' + Plan.formatClock(day.arr) + (Plan.arrivesNextDay(day) ? ' (next day)' : ''));
+        if (day.dep !== undefined) times.push(tr('leaves {0}', Plan.formatClock(day.dep)));
+        if (day.arr !== undefined) times.push(Plan.arrivesNextDay(day) ? tr('arrives {0} (next day)', Plan.formatClock(day.arr)) : tr('arrives {0}', Plan.formatClock(day.arr)));
         if (times.length) kids.push(el('span', { 'class': 'plan-print-small', text: times.join(', ') }));
-        if (printOptions.private && day.ref) kids.push(el('span', { 'class': 'plan-print-small', text: 'Reference: ' + day.ref }));
+        if (printOptions.private && day.ref) kids.push(el('span', { 'class': 'plan-print-small', text: tr('Reference: {0}', day.ref) }));
         if (printOptions.private && day.notes) kids.push(el('span', { 'class': 'plan-print-small', text: day.notes }));
       }
     } else {
       kids.push(el('span', { 'class': 'plan-print-place', text: dayTitle(info) }));
       var notes = [];
-      if (info.type === 's' && KIND_LABELS[info.stage.kind]) notes.push(KIND_LABELS[info.stage.kind]);
-      if (info.long) notes.push('long day');
+      if (info.type === 's' && KIND_LABELS[info.stage.kind]) notes.push(tr(KIND_LABELS[info.stage.kind]));
+      if (info.long) notes.push(tr('long day'));
       if (full && notes.length) kids.push(el('span', { 'class': 'plan-print-small', text: cap(notes.join(', ')) }));
     }
     return kids;
@@ -1174,13 +1206,13 @@
 
   function printStay(day, full) {
     var stay = day.stay;
-    if (!stay) return [el('span', { 'class': 'plan-print-none', text: 'Not chosen yet' })];
+    if (!stay) return [el('span', { 'class': 'plan-print-none', text: tr('Not chosen yet') })];
     var kids = [el('span', { 'class': 'plan-print-place', text: stay.name })];
     if (full) {
-      kids.push(el('span', { 'class': 'plan-print-small', text: STAY_NAMES[stay.k] + ', ' + stay.status.toLowerCase() }));
+      kids.push(el('span', { 'class': 'plan-print-small', text: tr('{0}, {1}', tr(STAY_NAMES[stay.k]), tr(stay.status).toLowerCase()) }));
       if (printOptions.private) {
-        if (stay.ref) kids.push(el('span', { 'class': 'plan-print-small', text: 'Reference: ' + stay.ref }));
-        if (stay.contact) kids.push(el('span', { 'class': 'plan-print-small', text: 'Contact: ' + stay.contact }));
+        if (stay.ref) kids.push(el('span', { 'class': 'plan-print-small', text: tr('Reference: {0}', stay.ref) }));
+        if (stay.contact) kids.push(el('span', { 'class': 'plan-print-small', text: tr('Contact: {0}', stay.contact) }));
         if (stay.notes) kids.push(el('span', { 'class': 'plan-print-small', text: stay.notes }));
       }
     }
@@ -1192,35 +1224,35 @@
     sheet.innerHTML = '';
     var layout = Plan.layout(state, data), t = Plan.totals(state, data), p = Plan.progress(state, data);
     var full = printOptions.detail === 'full', dates = printOptions.dates && !!state.startDate, stays = printOptions.stays;
-    sheet.appendChild(el('h2', { 'class': 'plan-print-title', text: state.name || 'My Camino' }));
+    sheet.appendChild(el('h2', { 'class': 'plan-print-title', text: state.name || tr('My Camino') }));
     if (!state.days.length) {
-      sheet.appendChild(el('p', { text: 'No days planned yet.' }));
+      sheet.appendChild(el('p', { text: tr('No days planned yet.') }));
       return;
     }
     var sub = [];
-    if (p.start && p.end) sub.push(p.start.name + ' to ' + p.end.name);
+    if (p.start && p.end) sub.push(tr('{0} to {1}', p.start.name, p.end.name));
     sub.push(plural(t.days, 'day'));
     if (dates) {
       var first = layout.days[0].date, last = layout.days[layout.days.length - 1].date;
-      if (first) sub.push(first === last ? formatDate(first) : formatDate(first) + ' to ' + formatDate(last));
+      if (first) sub.push(first === last ? formatDate(first) : tr('{0} to {1}', formatDate(first), formatDate(last)));
     }
     sheet.appendChild(el('p', { 'class': 'plan-print-sub', text: sub.join(', ') }));
     var totals = [];
     if (t.walking) {
-      totals.push(Plan.formatKm(t.metres) + ' on foot over ' + plural(t.walking, 'walking day'));
+      totals.push(tr('{0} on foot over {1}', Plan.formatKm(t.metres), plural(t.walking, 'walking day')));
       if (full) {
-        totals.push('about ' + Plan.formatDuration(t.seconds) + ' of walking at ' + state.pace.toFixed(1) + ' km/h');
-        if (t.climb) totals.push(Plan.formatMetres(t.up) + ' up, ' + Plan.formatMetres(t.down) + ' down');
+        totals.push(tr('about {0} of walking at {1} km/h', Plan.formatDuration(t.seconds), num(state.pace.toFixed(1))));
+        if (t.climb) totals.push(tr('{0} up, {1} down', Plan.formatMetres(t.up), Plan.formatMetres(t.down)));
         if (t.long) totals.push(plural(t.long, 'long day'));
       }
     }
     if (t.rest) totals.push(plural(t.rest, 'rest day'));
     if (t.travel) totals.push(plural(t.travel, 'travel day'));
-    if (stays) totals.push(t.stays + ' of ' + plural(t.days, 'night') + ' chosen');
+    if (stays) totals.push(tr('{0} of {1} chosen', t.stays, plural(t.days, 'night')));
     sheet.appendChild(el('p', { 'class': 'plan-print-totals', text: totals.join('. ') + '.' }));
 
-    var heads = [['Day', ''], dates ? ['Date', ''] : null, ['Route', 'plan-print-route'], ['Distance', 'plan-print-num'],
-      full ? ['Time', 'plan-print-num'] : null, full ? ['Climb', 'plan-print-num'] : null, stays ? ['Where to stay', 'plan-print-stay'] : null].filter(Boolean);
+    var heads = [[tr('Day'), ''], dates ? [tr('Date'), ''] : null, [tr('Route'), 'plan-print-route'], [tr('Distance'), 'plan-print-num'],
+      full ? [tr('Time'), 'plan-print-num'] : null, full ? [tr('Climb'), 'plan-print-num'] : null, stays ? [tr('Where to stay'), 'plan-print-stay'] : null].filter(Boolean);
     var table = el('table', { 'class': 'plan-print-table' }, [
       el('thead', {}, [el('tr', {}, heads.map(function (h) { return el('th', { scope: 'col', 'class': h[1] || null, text: h[0] }); }))])
     ]);
@@ -1234,15 +1266,15 @@
       if (full) {
         cells.push(el('td', { 'class': 'plan-print-num', text: walking && info.seconds !== null ? Plan.formatDuration(info.seconds) : '' }));
         cells.push(el('td', { 'class': 'plan-print-num' }, walking && info.up !== null
-          ? [el('span', { 'class': 'plan-print-line', text: Plan.formatMetres(info.up) + ' up' }), el('span', { 'class': 'plan-print-line', text: Plan.formatMetres(info.down) + ' down' })] : []));
+          ? [el('span', { 'class': 'plan-print-line', text: tr('{0} up', Plan.formatMetres(info.up)) }), el('span', { 'class': 'plan-print-line', text: tr('{0} down', Plan.formatMetres(info.down)) })] : []));
       }
       if (stays) cells.push(el('td', { 'class': 'plan-print-stay' }, printStay(day, full)));
       body.appendChild(el('tr', { 'class': 'plan-print-' + (walking ? 'walk' : (info.type === 'r' ? 'rest' : 'travel')) }, cells));
     });
     table.appendChild(body);
     sheet.appendChild(table);
-    var foot = 'Planned at ' + location.host + location.pathname + ' on ' + new Date().toLocaleDateString() +
-      '. Distances and times are estimates for a walking pace of ' + state.pace.toFixed(1) + ' km/h on the flat. Check opening times, prices and availability before you go.';
+    var foot = tr('Planned at {0} on {1}. Distances and times are estimates for a walking pace of {2} km/h on the flat. Check opening times, prices and availability before you go.',
+      location.host + location.pathname, new Date().toLocaleDateString(dateLocale()), num(state.pace.toFixed(1)));
     sheet.appendChild(el('p', { 'class': 'plan-print-foot', text: foot }));
   }
 
@@ -1270,18 +1302,18 @@
     if (!Share || !QR || !state.days.length) return;
     var error = '', hint = '', code = null;
     shown = { url: '', image: null };
-    try { code = Share.encode(state, data); } catch (problem) { error = 'This plan cannot be turned into a code.'; }
+    try { code = Share.encode(state, data); } catch (problem) { error = tr('This plan cannot be turned into a code.'); }
     if (code) {
       shown.url = Share.toUrl(pageUrl(), code.text);
       shown.image = QR.encode(shown.url, { levels: ['M', 'L'] });
-      if (!shown.image) error = 'This plan is too big for a QR code. You can still copy the link, or send the file.';
-      else if (shown.image.version > 25) hint = 'This code is dense, because the plan carries a lot of text (places typed in by hand, booking references or notes). If a phone has trouble reading it, send the link or the file instead.';
+      if (!shown.image) error = tr('This plan is too big for a QR code. You can still copy the link, or send the file.');
+      else if (shown.image.version > 25) hint = tr('This code is dense, because the plan carries a lot of text (places typed in by hand, booking references or notes). If a phone has trouble reading it, send the link or the file instead.');
       if (code.notes.length) hint = (hint ? hint + ' ' : '') + code.notes.join(' ');
     }
     var image = $('plan-qr-img');
     if (shown.image) {
       image.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(QR.toSvg(shown.image));
-      image.alt = 'QR code for the plan ' + state.name;
+      image.alt = tr('QR code for the plan {0}', state.name);
     } else {
       image.removeAttribute('src');
       image.alt = '';
@@ -1301,10 +1333,10 @@
 
   function copyLink() {
     var field = $('plan-qr-link');
-    function selectIt() { field.focus(); field.select(); qrSay('Select the link and copy it.', false); }
+    function selectIt() { field.focus(); field.select(); qrSay(tr('Select the link and copy it.'), false); }
     try {
       if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(shown.url).then(function () { qrSay('Link copied.', false); }, selectIt);
+        navigator.clipboard.writeText(shown.url).then(function () { qrSay(tr('Link copied.'), false); }, selectIt);
         return;
       }
     } catch (error) { /* fall through */ }
@@ -1316,7 +1348,7 @@
     var canvas = document.createElement('canvas');
     QR.toCanvas(shown.image, canvas, 8, 4);
     canvas.toBlob(function (blob) {
-      if (!blob) { qrSay('The picture could not be made here.', true); return; }
+      if (!blob) { qrSay(tr('The picture could not be made here.'), true); return; }
       var name = Plan.fileName(state).replace(/\.json$/, '-qr.png');
       var url = URL.createObjectURL(blob);
       var link = el('a', { href: url, download: name });
@@ -1324,7 +1356,7 @@
       link.click();
       document.body.removeChild(link);
       setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
-      qrSay('Saved ' + name + '.', false);
+      qrSay(tr('Saved {0}.', name), false);
     }, 'image/png');
   }
 
@@ -1345,18 +1377,20 @@
   function pickPanel(kind, id, d, name, placeId, townName) {
     var facts = [];
     function fact(label, value) { if (value) facts.push(el('dt', { text: label }), el('dd', { text: value })); }
-    fact('Address', d.ad);
-    fact('Open', d.op);
-    fact('Check-in', d.ci);
-    fact('Facilities', Plan.facilityNames(d.f).join(', '));
-    fact('Price note', d.rn);
+    // The opening period, check-in time and price note are free text from the guide; Spanish has most of them.
+    function written(text) { return text && spanishPage() ? tr(String(text).trim()) : text; }
+    fact(tr('Address'), d.ad);
+    fact(trc('stay fact', 'Open'), written(d.op));
+    fact(tr('Check-in'), written(d.ci));
+    fact(tr('Facilities'), Plan.facilityNames(d.f).join(', '));
+    fact(tr('Price note'), written(d.rn));
     var kids = [];
     if (facts.length) kids.push(el('dl', { 'class': 'plan-facts' }, facts));
     var links = linkRow(d, name);
     if (links) kids.push(links);
     if (placeId > 0) {
-      kids.push(el('p', { 'class': 'plan-pick-town' }, [el('a', { href: '/location/' + placeId + '/', target: '_blank', rel: 'noopener',
-        text: 'More about ' + townName + ' in the guide' })]));
+      kids.push(el('p', { 'class': 'plan-pick-town' }, [el('a', { href: (I18n ? I18n.path('/location/') : '/location/') + placeId + '/', target: '_blank', rel: 'noopener',
+        text: tr('More about {0} in the guide', townName) })]));
     }
     return el('div', { 'class': 'plan-pick-panel' }, kids);
   }
@@ -1369,7 +1403,7 @@
       line ? el('span', { 'class': 'plan-pick-line', text: line }) : null
     ]);
     var info = d ? el('button', { type: 'button', 'class': 'plan-pick-info', 'data-info': key, 'aria-expanded': open ? 'true' : 'false',
-      'aria-label': 'Details of ' + name, text: 'Details' }) : null;
+      'aria-label': tr('Details of {0}', name), text: tr('Details') }) : null;
     var kids = [el('div', { 'class': 'plan-pick-row' }, [pick, info])];
     if (open) kids.push(pickPanel(kind, id, d, name, placeId, townName));
     return el('li', {}, kids);
@@ -1389,11 +1423,11 @@
       list.appendChild(el('li', { 'class': 'plan-pick-group', text: title }));
       items.forEach(function (s) { list.appendChild(stayItem(kind, s.id, s.name, info.end.id, info.end.name)); });
     }
-    group('Albergues', albergues, 'a');
-    group('Hotels and guesthouses', privates, 'p');
+    group(tr('Albergues'), albergues, 'a');
+    group(tr('Hotels and guesthouses'), privates, 'p');
     var total = found.albergues.length + found.privates.length;
     $('plan-stay-empty').hidden = !!(albergues.length + privates.length);
-    $('plan-stay-empty').textContent = total ? 'Nothing matches that. Try fewer letters.' : 'The guide has no places to stay listed for ' + info.end.name + '. Add your own below.';
+    $('plan-stay-empty').textContent = total ? tr('Nothing matches that. Try fewer letters.') : tr('The guide has no places to stay listed for {0}. Add your own below.', info.end.name);
     $('plan-stay-search-row').hidden = total < 8;
     $('plan-stay-note').hidden = !(ui.details && total);
     list.scrollTop = scrolled;
@@ -1404,9 +1438,9 @@
     if (!info || !info.end) return;
     ui.stayIndex = index;
     var current = state.days[index].stay;
-    $('plan-stay-title').textContent = 'Where will you stay in ' + info.end.name + '?';
+    $('plan-stay-title').textContent = tr('Where will you stay in {0}?', info.end.name);
     $('plan-stay-search').value = '';
-    $('plan-stay-status').value = current ? current.status : 'Considering';
+    $('plan-stay-status').value = current ? current.status : 'Considering';   // the stored value stays English
     $('plan-stay-own').value = current && current.k === 'c' ? current.name : '';
     ui.openPick = null;
     renderStayList();
@@ -1427,7 +1461,7 @@
     if (old && old.k === stay.k && old.id === stay.id && old.name === stay.name) {   // the same place again: its details stay
       ['ref', 'notes', 'contact'].forEach(function (key) { if (old[key]) stay[key] = old[key]; });
     }
-    update(Plan.setStay(state, i, stay, data), 'day-' + i + '-stay', 'Stay chosen for ' + ref(i) + '.');
+    update(Plan.setStay(state, i, stay, data), 'day-' + i + '-stay', tr('Stay chosen for {0}.', ref(i)));
   }
 
   // ------------------------------------------------------------------ ask for a bed
@@ -1457,15 +1491,16 @@
       nights: wholeNumber($('plan-bed-nights').value), people: wholeNumber($('plan-bed-people').value),
       room: stay.k === 'p' || (!$('plan-bed-room-row').hidden && $('plan-bed-room').value === 'room') ? 'room' : 'dormitory',
       placeName: stay.name };
-    if (!Msg.parseDate(form.arrival)) form.problem = 'Choose your arrival date to write the message.';
-    else if (!(form.nights >= 1 && form.nights <= Msg.MAX_NIGHTS)) form.problem = 'Nights must be a whole number from 1 to ' + Msg.MAX_NIGHTS + '.';
-    else if (!(form.people >= 1 && form.people <= Msg.MAX_PEOPLE)) form.problem = 'People must be a whole number from 1 to ' + Msg.MAX_PEOPLE + '.';
+    if (!Msg.parseDate(form.arrival)) form.problem = tr('Choose your arrival date to write the message.');
+    else if (!(form.nights >= 1 && form.nights <= Msg.MAX_NIGHTS)) form.problem = tr('Nights must be a whole number from 1 to {0}.', Msg.MAX_NIGHTS);
+    else if (!(form.people >= 1 && form.people <= Msg.MAX_PEOPLE)) form.problem = tr('People must be a whole number from 1 to {0}.', Msg.MAX_PEOPLE);
     return form;
   }
 
   function draftOf(form, channel) {
     return form.problem ? null : Msg.build({ language: form.language, channel: channel, placeName: form.placeName, arrival: form.arrival,
-      nights: form.nights, people: form.people, room: form.room, yourName: form.yourName });
+      nights: form.nights, people: form.people, room: form.room, yourName: form.yourName,
+      replyEnglish: !spanishPage() });
   }
 
   function setLink(anchor, href) {
@@ -1482,7 +1517,9 @@
     $('plan-bed-problem').hidden = !form.problem;
     $('plan-bed-problem').textContent = form.problem || '';
     $('plan-bed-meaning').textContent = whatsapp ? whatsapp.meaning : '';
-    $('plan-bed-language').textContent = 'This message is in ' + (form.language === 'fr' ? 'French' : 'Spanish') + ', the language of the place.';
+    // The English meaning is for visitors who do not read the owner's language; a Spanish visitor reads a Spanish message.
+    $('plan-bed-meaning').parentNode.hidden = spanishPage() && form.language !== 'fr';
+    $('plan-bed-language').textContent = form.language === 'fr' ? tr('This message is in French, the language of the place.') : tr('This message is in Spanish, the language of the place.');
     $('plan-bed-reset').hidden = !ui.bed.edited;
     var message = text.value, ready = message.trim() !== '';
     var wa = $('plan-bed-whatsapp'), mail = $('plan-bed-email');
@@ -1502,7 +1539,7 @@
     if (!Msg || !d || !Msg.canAsk(d)) return;
     var info = Plan.layout(state, data).days[index], saved = loadHelper();
     ui.bed = { i: index, stay: stay, d: d, edited: false };
-    $('plan-bed-title').textContent = 'Ask ' + stay.name + ' for a bed';
+    $('plan-bed-title').textContent = tr('Ask {0} for a bed', stay.name);
     $('plan-bed-date').value = info && info.date ? info.date : '';
     $('plan-bed-nights').value = '1';
     $('plan-bed-people').value = String(saved.people);
@@ -1529,7 +1566,7 @@
     var text = $('plan-bed-text'), note = $('plan-bed-msg');
     function done(ok) {
       note.hidden = false;
-      note.textContent = ok ? 'Message copied.' : 'Could not copy. Select the message and copy it yourself.';
+      note.textContent = ok ? tr('Message copied.') : tr('Could not copy. Select the message and copy it yourself.');
       note.className = 'plan-send-msg' + (ok ? '' : ' plan-error');
       saveHelper();
     }
@@ -1569,12 +1606,12 @@
     ui.insertAt = null;
     ui.openStop = null;
     ui.far = false;
-    update(next, at === null ? 'first-stop' : 'day-' + position + '-title', message + ' as ' + ref(position, next) + '.');
+    update(next, at === null ? 'first-stop' : 'day-' + position + '-title', message(ref(position, next)));
   }
 
   function addChain(chain) {
     var at = insertPoint(), t = Plan.chainTotals(chain, data);
-    added(Plan.addRoute(state, chain, data, at), at, 'Added ' + data.places[t.from] + ' to ' + data.places[t.to]);
+    added(Plan.addRoute(state, chain, data, at), at, function (where) { return tr('Added {0} to {1} as {2}.', data.places[t.from], data.places[t.to], where); });
   }
 
   // Changes where the day being edited ends. Its place to stay goes unless the place is the same.
@@ -1583,14 +1620,14 @@
     if (i === null || !t) return;
     var next = Plan.setDayRoute(state, i, chain, data);
     var lost = !!state.days[i].stay && !next.days[i].stay;
-    var message = cap(ref(i, next)) + ' now ends at ' + data.places[t.to] + '.';
+    var message = tr('{0} now ends at {1}.', cap(ref(i, next)), data.places[t.to]);
     var after = Plan.layout(next, data).days[i + 1];
     ui.openStop = null;
     ui.far = false;
     update(next, 'day-' + i + '-title',
-      message + (lost ? ' Its place to stay was cleared.' : '') +
-      (after && after.warning ? ' ' + cap(ref(i + 1, next)) + ' no longer starts where this one ends.' : ''),
-      message + (lost ? ' Its place to stay was cleared.' : ''));
+      message + (lost ? ' ' + tr('Its place to stay was cleared.') : '') +
+      (after && after.warning ? ' ' + tr('{0} no longer starts where this one ends.', cap(ref(i + 1, next))) : ''),
+      message + (lost ? ' ' + tr('Its place to stay was cleared.') : ''));
   }
 
   function pickChain(chain) {
@@ -1609,7 +1646,7 @@
 
   $('plan-edit-cancel').addEventListener('click', function () {
     var i = ui.editAt;
-    announce('Change cancelled.');
+    announce(tr('Change cancelled.'));
     closeEdit(i === null ? null : 'day-' + i + '-reend');
   });
 
@@ -1663,23 +1700,23 @@
       ui.insertAt = null;
       ui.openStop = null;
       ui.far = false;
-      update(next, 'day-0-restat', 'Rest day added as day 1. Say where you will rest.');
+      update(next, 'day-0-restat', tr('Rest day added as day 1. Say where you will rest.'));
       return;
     }
-    added(next, at, 'Rest day added');
+    added(next, at, function (where) { return tr('Rest day added as {0}.', where); });
   });
   function addJourney(same) {
     var at = insertPoint(), next = Plan.addTravel(state, data, at, same), i = at === null ? next.days.length - 1 : at;
     ui.insertAt = null;
     update(next, 'day-' + i + (next.days[i].from ? '-to' : '-from'),
-      (same ? 'Journey added as ' : 'Travel day added as ') + ref(i, next) + '.');
+      (same ? tr('Journey added as {0}.', ref(i, next)) : tr('Travel day added as {0}.', ref(i, next))));
   }
   $('plan-add-travel').addEventListener('click', function () { addJourney(false); });
   $('plan-add-travel-same').addEventListener('click', function () { addJourney(true); });
   $('plan-any-add').addEventListener('click', function () {
     var id = Number($('plan-any-stage').value), at = insertPoint();
     if (!data.stages[id]) return;
-    added(Plan.addStage(state, id, at), at, 'Added ' + data.stages[id].name);
+    added(Plan.addStage(state, id, at), at, function (where) { return tr('Added {0} as {1}.', data.stages[id].name, where); });
   });
   // "My plan is complete" folds the add-a-day card away; "Add another day" brings it back.
   $('plan-finish').addEventListener('click', function () {
@@ -1688,19 +1725,19 @@
     ui.insertAt = null;
     ui.openStop = null;
     ui.far = false;
-    update(Plan.setDone(state, true), 'done-title', 'Your plan is marked complete. Use Add another day to carry on.');
+    update(Plan.setDone(state, true), 'done-title', tr('Your plan is marked complete. Use Add another day to carry on.'));
   });
   $('plan-reopen').addEventListener('click', function () {
     ui.fromPlace = null;
     ui.insertAt = null;
     ui.openStop = null;
     ui.far = false;
-    update(Plan.setDone(state, false), 'add-title', 'Add the next day.');
+    update(Plan.setDone(state, false), 'add-title', tr('Add the next day.'));
   });
   $('plan-undo-btn').addEventListener('click', function () {
     if (!ui.undo) return;
     var back = ui.undo.state;
-    update(back, 'add-rest', 'Undone.');
+    update(back, 'add-rest', tr('Undone.'));
   });
 
   function dayIndex(node) {
@@ -1714,8 +1751,8 @@
     var i = dayIndex(target), act = target.getAttribute('data-act');
     if (i < 0) return;
     if (act === 'up' || act === 'down') ui.openMore = {};
-    if (act === 'up') update(Plan.moveDay(state, i, -1), i > 1 ? 'day-' + (i - 1) + '-up' : 'day-' + (i - 1) + '-down', 'Day moved earlier.');
-    else if (act === 'down') update(Plan.moveDay(state, i, 1), i + 1 < state.days.length - 1 ? 'day-' + (i + 1) + '-down' : 'day-' + (i + 1) + '-up', 'Day moved later.');
+    if (act === 'up') update(Plan.moveDay(state, i, -1), i > 1 ? 'day-' + (i - 1) + '-up' : 'day-' + (i - 1) + '-down', tr('Day moved earlier.'));
+    else if (act === 'down') update(Plan.moveDay(state, i, 1), i + 1 < state.days.length - 1 ? 'day-' + (i + 1) + '-down' : 'day-' + (i + 1) + '-up', tr('Day moved later.'));
     else if (act === 'reend') {
       ui.editAt = i;
       ui.insertAt = null;
@@ -1724,7 +1761,7 @@
       ui.far = false;
       renderDays();
       renderAdd();
-      announce('Choose where ' + ref(i) + ' should end instead.');
+      announce(tr('Choose where {0} should end instead.', ref(i)));
       $('plan-add-title').focus();
     } else if (act === 'restmove') {
       ui.restAt = i;
@@ -1739,7 +1776,7 @@
     } else if (act === 'refit') {
       var fix = Plan.refitStart(state, i, data);
       if (!fix) return;
-      var said = cap(ref(i)) + ' now starts from ' + fix.from.name + '.';
+      var said = tr('{0} now starts from {1}.', cap(ref(i)), fix.from.name);
       update(fix.state, 'day-' + i + '-title', said, said);
     } else if (act === 'insert') {
       ui.editAt = null;
@@ -1747,16 +1784,16 @@
       ui.fromPlace = null;
       ui.openStop = null;
       renderAdd();
-      announce('Choose the day to add after ' + ref((insertPoint() === null ? state.days.length : insertPoint()) - 1) + '.');
+      announce(tr('Choose the day to add after {0}.', ref((insertPoint() === null ? state.days.length : insertPoint()) - 1)));
       $('plan-add-title').focus();
     } else if (act === 'remove') {
       var gone = dayTitle(Plan.layout(state, data).days[i]);
       update(Plan.removeDay(state, i), state.days.length > 1 ? 'day-' + Math.min(i, state.days.length - 2) + '-remove' : 'add-rest',
-        cap(ref(i)) + ' removed.', 'Removed ' + ref(i) + ' (' + gone + ').');
+        tr('{0} removed.', cap(ref(i))), tr('Removed {0} ({1}).', ref(i), gone));
     }
     else if (act === 'stay') openStay(i);
     else if (act === 'askbed') openBed(i);
-    else if (act === 'stay-clear') update(Plan.setStay(state, i, null, data), 'day-' + i + '-stay', 'Stay removed.');
+    else if (act === 'stay-clear') update(Plan.setStay(state, i, null, data), 'day-' + i + '-stay', tr('Stay removed.'));
   });
 
   $('plan-days').addEventListener('submit', function (e) {
@@ -1765,20 +1802,20 @@
     e.preventDefault();
     var i = dayIndex(form), input = form.querySelector('input[name="place"]'), place = input.value.trim();
     if (i < 0) return;
-    if (!place) { announce('Type where you will rest.'); input.focus(); return; }
-    if (state.days.length >= Plan.MAX_DAYS) { announce('The plan is full.'); return; }
+    if (!place) { announce(tr('Type where you will rest.')); input.focus(); return; }
+    if (state.days.length >= Plan.MAX_DAYS) { announce(tr('The plan is full.')); return; }
     var next = Plan.moveRest(state, i, place, data);
     if (next === state) {
       ui.restAt = null;
       renderDays();
-      announce(cap(ref(i)) + ' is already ' + place + '.');
+      announce(tr('{0} is already {1}.', cap(ref(i)), place));
       var again = root.querySelector('[data-focus="day-' + i + '-restmove"]');
       if (again) again.focus();
       return;
     }
     var where = next.days[i].to;
-    update(next, 'day-' + (i + 1) + '-title', 'Rest day moved to ' + where + '. A journey was added as ' + ref(i, next) + '.',
-      'Rest day moved to ' + where + ' (journey added as ' + ref(i, next) + ').');
+    update(next, 'day-' + (i + 1) + '-title', tr('Rest day moved to {0}. A journey was added as {1}.', where, ref(i, next)),
+      tr('Rest day moved to {0} (journey added as {1}).', where, ref(i, next)));
   });
 
   $('plan-days').addEventListener('change', function (e) {
@@ -1786,13 +1823,13 @@
     if (!act) return;
     var i = dayIndex(target);
     if (i < 0) return;
-    if (act === 'route') update(Plan.setStage(state, i, Number(target.value)), 'day-' + i + '-route', 'Route changed for ' + ref(i) + '.');
-    else if (act === 'croute') update(Plan.setCustomRoute(state, i, target.value.split(',').map(Number)), 'day-' + i + '-route', 'Route changed for ' + ref(i) + '.');
+    if (act === 'route') update(Plan.setStage(state, i, Number(target.value)), 'day-' + i + '-route', tr('Route changed for {0}.', ref(i)));
+    else if (act === 'croute') update(Plan.setCustomRoute(state, i, target.value.split(',').map(Number)), 'day-' + i + '-route', tr('Route changed for {0}.', ref(i)));
     else if (act === 'status') update(Plan.setStayStatus(state, i, target.value), 'day-' + i + '-status');
     else if (act === 'same') {
       var split = Plan.setTravel(state, i, { same: target.checked });
       update(split, 'day-' + i + '-same',
-        cap(ref(i, split)) + (target.checked ? ' is now on the same date as the part before it.' : ' now has a day of its own.'));
+        target.checked ? tr('{0} is now on the same date as the part before it.', cap(ref(i, split))) : tr('{0} now has a day of its own.', cap(ref(i, split))));
     }
     else if (act === 'from') edit(Plan.setTravel(state, i, { from: target.value }), i);
     else if (act === 'to') edit(Plan.setTravel(state, i, { to: target.value }), i);
@@ -1827,10 +1864,10 @@
       if (act === 'tdep' || act === 'tarr') {
         // an arrival earlier than the departure means a night journey: say so beside the time, and what it means for the next one
         var more = target.closest('.plan-travel-more'), caption = more.querySelector('.plan-arrive-caption');
-        var wasNext = caption.textContent !== 'Arrives', isNext = Plan.arrivesNextDay(now);
+        var wasNext = caption.textContent !== tr('Arrives'), isNext = Plan.arrivesNextDay(now);
         caption.textContent = arrivesCaption(now);
         more.querySelector('.plan-nextday-note').hidden = !isNext;
-        if (wasNext !== isNext) announce(cap(ref(i)) + (isNext ? ' now arrives the next day.' : ' now arrives the same day.'));
+        if (wasNext !== isNext) announce(isNext ? tr('{0} now arrives the next day.', cap(ref(i))) : tr('{0} now arrives the same day.', cap(ref(i))));
       }
       renderSend();
     }
@@ -1917,7 +1954,7 @@
     ui.far = false;
     ui.notice = '';
     say('', false);
-    update(Plan.setDone(shared.state, true), 'plan-name', 'Opened the shared plan.', replacing ? 'Opened the shared plan, in place of yours.' : '');
+    update(Plan.setDone(shared.state, true), 'plan-name', tr('Opened the shared plan.'), replacing ? tr('Opened the shared plan, in place of yours.') : '');
   });
   $('plan-shared-pick').addEventListener('change', function (e) {
     var shared = ui.shared;
@@ -1947,14 +1984,14 @@
     var ask = ui.keepAsk;
     if (!ask) return;
     var entry = storeCopy(ask.name, ask.existing.id);
-    if (entry) keepSay('Replaced "' + ask.name + '" in this browser.', false);
+    if (entry) keepSay(tr('Replaced "{0}" in this browser.', ask.name), false);
   });
   $('plan-keep-both').addEventListener('click', function () {
     var ask = ui.keepAsk;
     if (!ask) return;
     var name = uniqueName(ask.name);
     var entry = storeCopy(name, null);
-    if (entry) keepSay('Saved this plan as "' + name + '" next to the other.', false);
+    if (entry) keepSay(tr('Saved this plan as "{0}" next to the other.', name), false);
   });
   $('plan-keep-cancel').addEventListener('click', function () {
     ui.keepAsk = null;
@@ -1975,7 +2012,7 @@
   $('plan-shared-keep').addEventListener('click', function () {
     ui.shared = null;
     render('plan-name');
-    announce('Closed.');
+    announce(tr('Closed.'));
   });
   window.addEventListener('hashchange', function () { if (readLink()) render('shared-title'); });
 
@@ -1989,7 +2026,7 @@
     ui.notice = '';
     say('', false);
     ui.savedId = null;
-    update(Plan.newState(data), 'plan-name', 'Plan cleared.');
+    update(Plan.newState(data), 'plan-name', tr('Plan cleared.'));
   });
 
   // ------------------------------------------------------------------ start

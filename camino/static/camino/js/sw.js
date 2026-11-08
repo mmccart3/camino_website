@@ -17,6 +17,7 @@ const CACHE_TILES = 'camino-tiles';    // map tiles seen while browsing (never b
 const KEEP_CACHES = [CACHE_STATIC, CACHE_PAGES, CACHE_PACK, CACHE_IMAGES, CACHE_TILES];
 
 const OFFLINE_URL = '/offline/';
+const OFFLINE_URL_ES = '/es/offline/';   // the Spanish pages' own "you're offline" page
 const NETWORK_TIMEOUT_MS = 4000;  // on a weak signal, fall back to the saved page after this long
 const MAX_IMAGES = 80;
 const MAX_TILES = 400;
@@ -102,7 +103,7 @@ function networkFirstPage(event, request) {
     try {
       return await network;  // nothing saved: keep waiting for the slow network
     } catch (error) {
-      return (await caches.match(OFFLINE_URL)) || Response.error();
+      return (await caches.match(isSpanishPath(new URL(request.url).pathname) ? OFFLINE_URL_ES : OFFLINE_URL)) || Response.error();
     }
   });
 }
@@ -123,6 +124,9 @@ async function networkFirstData(event, request) {
   return response || network;
 }
 
+// Spanish pages live under /es/ (English keeps the plain addresses).
+function isSpanishPath(path) { return path === '/es' || path.startsWith('/es/'); }
+
 async function storePage(url, response) {
   const pages = await caches.open(CACHE_PAGES);
   await pages.put(url, response.clone());
@@ -137,7 +141,7 @@ async function findSavedPage(url) {
     const cache = await caches.open(name);
     const exact = await cache.match(url);
     if (exact) return exact;
-    if (path !== '/search/') {
+    if (path !== '/search/' && path !== '/es/search/') {
       const loose = await cache.match(url, { ignoreSearch: true });
       if (loose) return loose;
     }

@@ -10,8 +10,10 @@ from django.http import HttpResponse, HttpResponseServerError, JsonResponse
 from django.shortcuts import render, get_object_or_404, redirect
 from django.templatetags.static import static
 from django.urls import reverse
+from django.utils import translation
 
-from . import planner, seo
+from . import i18n, planner, seo, stage_maps
+from .i18n import tr
 from .models import (
     Stage, Path, ElevationPoint, MapLocationCoord, Location,
     Albergue, PrivateAccomm, TrackPoint, BOOKING_AFFILIATE_PARAMS
@@ -69,12 +71,12 @@ def get_stage_groups():
     def classify_variant(stage):
         name_lower = stage.stage_name.lower()
         if 'valcarlos' in name_lower or 'low' in name_lower or 'winter' in name_lower:
-            return {'label': 'Low-Valley / Winter Variant', 'badge_class': 'badge-valley', 'icon': '🌦️'}
+            return {'label': tr('Low-Valley / Winter Variant'), 'badge_class': 'badge-valley', 'icon': '🌦️'}
         elif 'napoleon' in name_lower or 'high' in name_lower or 'mountain' in name_lower:
-            return {'label': 'Mountain Route / High Pass', 'badge_class': 'badge-mountain', 'icon': '⛰️'}
+            return {'label': tr('Mountain Route / High Pass'), 'badge_class': 'badge-mountain', 'icon': '⛰️'}
         elif 'via' in name_lower or 'option' in name_lower or 'alt' in name_lower:
-            return {'label': 'Alternative Variant', 'badge_class': 'badge-alt', 'icon': '🔀'}
-        return {'label': 'Main Camino Route', 'badge_class': 'badge-main', 'icon': '🚶'}
+            return {'label': tr('Alternative Variant'), 'badge_class': 'badge-alt', 'icon': '🔀'}
+        return {'label': tr('Main Camino Route'), 'badge_class': 'badge-main', 'icon': '🚶'}
 
     while current_stage and current_stage.id not in visited:
         cluster = get_cluster(current_stage.id, visited)
@@ -144,7 +146,17 @@ def towns_with_counts():
     )
     for town in towns:
         town.stays = (town.n_albergues or 0) + (town.n_private or 0)
+    if i18n.is_spanish():
+        # A few markers are named in Spanish (Exit to Huarte is Desvío a Huarte), so the A to Z order follows what is shown.
+        towns.sort(key=lambda town: seo.normalise(town.display_name))
     return towns
+
+
+def search_text(town):
+    """What a search is matched against: the name shown, and the English name too when they differ."""
+    shown = seo.normalise(town.display_name)
+    english = seo.normalise(town.location_name)
+    return shown if shown == english else shown + ' ' + english
 
 
 def town_index_payload(towns):
@@ -152,8 +164,8 @@ def town_index_payload(towns):
     return [
         {
             'id': t.id,
-            'name': t.location_name,
-            'norm': seo.normalise(t.location_name),
+            'name': t.display_name,
+            'norm': search_text(t),
             'url': reverse('location_detail', args=[t.id]),
             'stays': t.stays,
         }
@@ -175,18 +187,18 @@ def towns(request):
     items = towns_with_counts()
     groups = {}
     for town in items:
-        town.norm = seo.normalise(town.location_name)
+        town.norm = search_text(town)
         letter = (town.norm[:1] or '#').upper()
         groups.setdefault(letter, []).append(town)
     context = {
         'groups': sorted(groups.items()),
         'town_count': len(items),
         'seo': {
-            'title': seo.compose_title('All Camino Francés towns and villages'),
-            'description': seo.clip(
-                f'Find any of the {len(items)} towns and villages on the Camino Francés and see '
-                'where pilgrims can sleep, eat and shop.'
-            ),
+            'title': seo.compose_title(tr('All Camino Francés towns and villages')),
+            'description': seo.clip(tr(
+                'Find any of the {n} towns and villages on the Camino Francés and see '
+                'where pilgrims can sleep, eat and shop.', n=len(items)
+            )),
         },
     }
     return render(request, 'camino/towns.html', context)
@@ -234,7 +246,7 @@ def search(request):
     if query:
         needle = seo.normalise(query)
         for town in towns_with_counts():
-            name = seo.normalise(town.location_name)
+            name = search_text(town)
             if needle in name:
                 town_results.append((0 if name.startswith(needle) else 1, name, town))
         town_results = [t for _, _, t in sorted(town_results, key=lambda row: (row[0], row[1]))]
@@ -248,8 +260,8 @@ def search(request):
         'town_results': town_results,
         'stage_results': stage_results,
         'seo': {
-            'title': seo.compose_title(f'Search: {query}' if query else 'Search the guide'),
-            'description': 'Search towns and stages on the Camino Francés.',
+            'title': seo.compose_title(tr('Search: {query}', query=query) if query else tr('Search the guide')),
+            'description': tr('Search towns and stages on the Camino Francés.'),
             'noindex': True,
         },
     }
@@ -258,28 +270,32 @@ def search(request):
 
 def offline(request):
     return render(request, 'camino/offline.html', {
-        'seo': {'title': seo.compose_title("You're offline"), 'noindex': True},
+        'seo': {'title': seo.compose_title(tr("You're offline")), 'noindex': True},
     })
 
 
 def offline_pack(request):
     return render(request, 'camino/offline_pack.html', {
         'seo': {
-            'title': seo.compose_title('Save the guide for offline use'),
-            'description': 'Download every stage and town page to your phone so the guide works without a signal.',
+            'title': seo.compose_title(tr('Save the guide for offline use')),
+            'description': tr('Download every stage and town page to your phone so the guide works without a signal.'),
         },
     })
 
 
 def offline_pack_json(request):
-    """Lists everything the offline pack should save. Fetched by the pack page."""
-    page_urls = ['/', reverse('towns'), reverse('offline_pack'), reverse('offline')]
+    """Lists everything the offline pack should save. Fetched by the pack page.
+
+    ?lang=es lists the Spanish pages (under /es/) instead of the English ones.
+    """
     stages = list(Stage.objects.order_by('id'))
-    page_urls += [reverse('stage_detail', args=[s.id]) for s in stages]
-    page_urls += [
-        reverse('location_detail', args=[pk])
-        for pk in Location.objects.order_by('id').values_list('id', flat=True)
-    ]
+    with translation.override('es' if request.GET.get('lang') == 'es' else 'en'):
+        page_urls = [reverse('stage_list'), reverse('towns'), reverse('offline_pack'), reverse('offline')]
+        page_urls += [reverse('stage_detail', args=[s.id]) for s in stages]
+        page_urls += [
+            reverse('location_detail', args=[pk])
+            for pk in Location.objects.order_by('id').values_list('id', flat=True)
+        ]
     images = []
     for stage in stages:
         url = stage.stage_map_url or stage.map_url_1920 or stage.map_url_1024
@@ -296,17 +312,18 @@ def offline_pack_json(request):
 
 
 def manifest(request):
+    home = reverse('stage_list')   # '/' in English, '/es/' in Spanish
     data = {
-        'id': '/',
-        'name': 'Saint Jean to Santiago: Camino Francés guide',
-        'short_name': 'Camino Guide',
-        'description': 'Stages, maps, elevation profiles and places to stay on the Camino Francés.',
-        'start_url': '/',
+        'id': home,
+        'name': tr('Saint Jean to Santiago: Camino Francés guide'),
+        'short_name': tr('Camino Guide'),
+        'description': tr('Stages, maps, elevation profiles and places to stay on the Camino Francés.'),
+        'start_url': home,
         'scope': '/',
         'display': 'standalone',
         'background_color': '#00336d',
         'theme_color': '#1e3a8a',
-        'lang': 'en',
+        'lang': i18n.current_language(),
         'categories': ['travel', 'navigation'],
         'icons': [
             {'src': static('camino/img/icon-192.png'), 'sizes': '192x192', 'type': 'image/png', 'purpose': 'any'},
@@ -314,8 +331,8 @@ def manifest(request):
             {'src': static('camino/img/icon-maskable-512.png'), 'sizes': '512x512', 'type': 'image/png', 'purpose': 'maskable'},
         ],
         'shortcuts': [
-            {'name': 'Find a town', 'url': reverse('towns')},
-            {'name': 'Save for offline', 'url': reverse('offline_pack')},
+            {'name': tr('Find a town'), 'url': reverse('towns')},
+            {'name': tr('Save for offline'), 'url': reverse('offline_pack')},
         ],
     }
     response = JsonResponse(data, content_type='application/manifest+json')
@@ -331,6 +348,8 @@ def service_worker(request):
     """
     path = settings.BASE_DIR / 'camino' / 'static' / 'camino' / 'js' / 'sw.js'
     source = path.read_text(encoding='utf-8')
+    with translation.override('es'):
+        spanish_pages = [reverse('stage_list'), reverse('towns'), reverse('plan'), reverse('offline'), reverse('offline_pack')]
     precache = [
         '/',
         reverse('towns'),
@@ -338,6 +357,10 @@ def service_worker(request):
         reverse('plan_stays'),
         reverse('offline'),
         reverse('offline_pack'),
+    ] + spanish_pages + [
+        static('camino/js/i18n.js'),
+        static('camino/js/i18n-es.js'),
+        static('camino/js/i18n-es-plan.js'),
         static('camino/js/pwa.js'),
         static('camino/js/search.js'),
         static('camino/js/offline-pack.js'),
@@ -370,6 +393,7 @@ def robots_txt(request):
         'User-agent: *\n'
         'Allow: /\n'
         'Disallow: /search/\n'
+        'Disallow: /es/search/\n'
         'Disallow: /offline-pack.json\n'
         'Disallow: /plan/stays.json\n'
         f'Sitemap: {origin}/sitemap.xml\n'
@@ -379,22 +403,36 @@ def robots_txt(request):
 
 def sitemap_xml(request):
     origin = seo.site_origin(request)
-    paths = ['/', reverse('towns'), reverse('plan'), reverse('offline_pack')]
-    paths += [reverse('stage_detail', args=[s.id]) for s in Stage.objects.order_by('id')]
+    routes = [('stage_list', []), ('towns', []), ('plan', []), ('offline_pack', [])]
+    routes += [('stage_detail', [s.id]) for s in Stage.objects.order_by('id')]
     towns_qs = Location.objects.annotate(
         n_albergues=Count('albergues', distinct=True),
         n_private=Count('private_accomm', distinct=True),
         n_paragraphs=Count('paragraphs', distinct=True),
     ).order_by('id')
-    paths += [
-        reverse('location_detail', args=[t.id])
+    routes += [
+        ('location_detail', [t.id])
         for t in towns_qs
         if (t.n_albergues or 0) + (t.n_private or 0) + (t.n_paragraphs or 0) > 0
     ]
-    rows = ''.join(f'<url><loc>{escape(origin + path)}</loc></url>' for path in paths)
+    # Every page is listed in both languages, each entry pointing at the other language (hreflang).
+    rows = []
+    for name, args in routes:
+        with translation.override('en'):
+            english = origin + reverse(name, args=args)
+        with translation.override('es'):
+            spanish = origin + reverse(name, args=args)
+        links = (
+            f'<xhtml:link rel="alternate" hreflang="en" href="{escape(english)}"/>'
+            f'<xhtml:link rel="alternate" hreflang="es" href="{escape(spanish)}"/>'
+            f'<xhtml:link rel="alternate" hreflang="x-default" href="{escape(english)}"/>'
+        )
+        rows.append(f'<url><loc>{escape(english)}</loc>{links}</url>')
+        rows.append(f'<url><loc>{escape(spanish)}</loc>{links}</url>')
     xml = (
         '<?xml version="1.0" encoding="UTF-8"?>'
-        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + rows + '</urlset>'
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" '
+        'xmlns:xhtml="http://www.w3.org/1999/xhtml">' + ''.join(rows) + '</urlset>'
     )
     return HttpResponse(xml, content_type='application/xml; charset=utf-8')
 
@@ -460,13 +498,16 @@ def stage_detail(request, stage_id):
                 hours = int(secs // 3600)
                 minutes = int((secs % 3600) // 60)
                 if hours > 0:
-                    time_str = f"{hours} hr {minutes} min" if minutes > 0 else f"{hours} hr"
+                    time_str = (
+                        tr('{hours} hr {minutes} min', hours=hours, minutes=minutes) if minutes > 0
+                        else tr('{hours} hr', hours=hours)
+                    )
                 else:
-                    time_str = f"{minutes} min" if minutes > 0 else "0 min"
+                    time_str = tr('{minutes} min', minutes=minutes) if minutes > 0 else tr('0 min')
 
                 return {
                     'id': loc.pk,
-                    'name': loc.location_name or f"Location {loc.pk}",
+                    'name': loc.display_name or tr('Location {id}', id=loc.pk),
                     'distance_km': round(dist_m / 1000.0, 1),
                     'time_formatted': time_str,
                     'has_stay': (loc.pk in albergue_loc_ids) or (loc.pk in private_loc_ids),
@@ -549,19 +590,19 @@ def stage_detail(request, stage_id):
 
                 gain_per_km = total_ascent_m / total_km if total_km > 0 else 0
                 if total_ascent_m > 750 or gain_per_km > 35:
-                    difficulty_label = "Strenuous Mountain Pass"
+                    difficulty_label = tr("Strenuous Mountain Pass")
                     difficulty_badge = "badge-strenuous"
                     difficulty_icon = "⛰️"
                 elif total_ascent_m > 400 or total_descent_m > 500:
-                    difficulty_label = "Moderate / Rolling Hills"
+                    difficulty_label = tr("Moderate / Rolling Hills")
                     difficulty_badge = "badge-moderate"
                     difficulty_icon = "🥾"
                 elif total_descent_m > 400 and total_ascent_m < 200:
-                    difficulty_label = "Continuous Descent"
+                    difficulty_label = tr("Continuous Descent")
                     difficulty_badge = "badge-descent"
                     difficulty_icon = "📉"
                 else:
-                    difficulty_label = "Mild / Relatively Flat"
+                    difficulty_label = tr("Mild / Relatively Flat")
                     difficulty_badge = "badge-easy"
                     difficulty_icon = "🌱"
 
@@ -639,6 +680,8 @@ def stage_detail(request, stage_id):
         'next_stage': next_stage,
         'alt_next_stage': alt_next_stage,
         'hotspots': hotspots,
+        'stage_map': stage_maps.describe(stage),
+        'hotspot_grid_width': stage_maps.HOTSPOT_GRID_WIDTH,
         'stage_locations': stage_locations,
         'elevation_stats': elevation_stats,
         'chart_points_json': json.dumps(chart_points),
@@ -692,7 +735,7 @@ def location_detail(request, location_id):
 
 def not_found(request, exception=None):
     """Friendly 404 page that search engines are told not to index."""
-    context = {'seo': {'title': seo.compose_title('Page not found'), 'noindex': True}}
+    context = {'seo': {'title': seo.compose_title(tr('Page not found')), 'noindex': True}}
     return render(request, 'camino/404.html', context, status=404)
 
 

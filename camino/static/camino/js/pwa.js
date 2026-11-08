@@ -2,6 +2,9 @@
 (function () {
   'use strict';
 
+  // The words go through tr(), so the Spanish page can translate them (see i18n.js).
+  function tr(message) { return window.camT ? window.camT(message) : message; }
+
   function makeBar(className, role) {
     var bar = document.createElement('div');
     bar.className = className;
@@ -14,7 +17,7 @@
   // Offline notice
   function setupOfflineNotice() {
     var bar = makeBar('offline-bar', 'status');
-    bar.textContent = "You're offline. Showing pages saved on this device.";
+    bar.textContent = tr("You're offline. Showing pages saved on this device.");
     function refresh() { bar.hidden = navigator.onLine; }
     window.addEventListener('online', refresh);
     window.addEventListener('offline', refresh);
@@ -26,19 +29,19 @@
     if (document.querySelector('.update-banner')) return;
     var bar = makeBar('update-banner', 'status');
     var text = document.createElement('span');
-    text.textContent = 'A new version of the guide is available.';
+    text.textContent = tr('A new version of the guide is available.');
     var update = document.createElement('button');
     update.type = 'button';
-    update.textContent = 'Update now';
+    update.textContent = tr('Update now');
     update.addEventListener('click', function () {
       update.disabled = true;
-      text.textContent = 'Updating…';
+      text.textContent = tr('Updating…');
       worker.postMessage({ type: 'SKIP_WAITING' });
     });
     var later = document.createElement('button');
     later.type = 'button';
     later.className = 'update-later';
-    later.textContent = 'Later';
+    later.textContent = tr('Later');
     later.addEventListener('click', function () { bar.remove(); });
     bar.appendChild(text);
     bar.appendChild(update);

@@ -1,26 +1,27 @@
 {% extends 'camino/base.html' %}
+{% load camino_i18n %}
 {% load static %}
 {% load camino_tags %}
 
 
 {% block content %}
 <div style="margin-bottom: 1.75rem; text-align: center;">
-  <h2 style="margin-bottom: 0.25rem;">Camino Francés Stages</h2>
+  <h2 style="margin-bottom: 0.25rem;">{% t "Camino Francés Stages" %}</h2>
   <p style="color: #64748b; font-size: 0.95rem; margin-top: 0;">
-    Select a stage to view waypoint timelines, elevation charts, and accommodations.
+    {% t "Select a stage to view waypoint timelines, elevation charts, and accommodations." %}
   </p>
 </div>
 
 <div class="town-search">
   <form id="town-search-form" action="{% url 'search' %}" method="get" role="search" autocomplete="off">
-    <label for="town-search-input" class="visually-hidden">Find a town or stage</label>
-    <input type="search" id="town-search-input" name="q" placeholder="Find a town, e.g. Pamplona" maxlength="80"
+    <label for="town-search-input" class="visually-hidden">{% t "Find a town or stage" %}</label>
+    <input type="search" id="town-search-input" name="q" placeholder="{% t_attr "Find a town, e.g. Pamplona" %}" maxlength="80"
            role="combobox" aria-expanded="false" aria-controls="town-suggestions" aria-autocomplete="list">
-    <button type="submit">Search</button>
+    <button type="submit">{% t "Search" %}</button>
   </form>
-  <ul id="town-suggestions" role="listbox" aria-label="Matching towns" hidden></ul>
+  <ul id="town-suggestions" role="listbox" aria-label="{% t_attr "Matching towns" %}" hidden></ul>
   <p class="pack-note" style="text-align:center; margin: 0.6rem 0 0;">
-    Walking without signal? <a href="{% url 'offline_pack' %}">Save the guide for offline use</a>.
+    {% t "Walking without signal?" %} <a href="{% url 'offline_pack' %}">{% t "Save the guide for offline use" %}</a>.
   </p>
 </div>
 {{ town_index|json_script:"town-index-data" }}
@@ -34,10 +35,10 @@
         <!-- Route Fork Banner -->
         <div class="fork-banner">
           <div class="fork-banner-text">
-            <span>🔀 Route Choice &bull; Milestone {{ group.section_index }}</span>
-            <span class="fork-count-pill">{{ group.variant_count }} Route Options</span>
+            <span>{% t "🔀 Route Choice &bull; Milestone {section_index}" section_index=group.section_index %}</span>
+            <span class="fork-count-pill">{% t "{variant_count} Route Options" variant_count=group.variant_count %}</span>
           </div>
-          <span style="font-size: 0.78rem; color: #92400e;">Compare distance, elevation, and terrain before choosing</span>
+          <span style="font-size: 0.78rem; color: #92400e;">{% t "Compare distance, elevation, and terrain before choosing" %}</span>
         </div>
       {% endif %}
 
@@ -52,7 +53,7 @@
               </span>
 
               <h3 class="variant-card-title">
-                Stage {{ stage.display_ref }}: {{ stage.stage_name }}
+                {% t "Stage {display_ref}: {stage_name}" display_ref=stage.display_ref stage_name=stage.stage_name|tr %}
               </h3>
 
               <div class="variant-metrics">
@@ -64,7 +65,7 @@
             </div>
 
             <a href="{% url 'stage_detail' stage.id %}" class="btn-open-stage">
-              View Stage {{ stage.display_ref }} &rarr;
+              {% t "View Stage {display_ref} &rarr;" display_ref=stage.display_ref %}
             </a>
           </div>
         {% endfor %}

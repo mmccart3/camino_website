@@ -3,6 +3,13 @@
 (function () {
   'use strict';
 
+  // The words go through tr(), so the Spanish page can translate them (see i18n.js).
+  function tr(message) {
+    var args = Array.prototype.slice.call(arguments, 1);
+    if (window.camT) return window.camT.apply(null, [message].concat(args));
+    return message.replace(/\{(\w+)\}/g, function (all, key) { return args[Number(key)] === undefined ? all : String(args[Number(key)]); });
+  }
+
   function normalise(text) {
     return (text || '')
       .normalize('NFD')
@@ -36,7 +43,7 @@
         link.textContent = town.name;
         var note = document.createElement('span');
         note.className = 'suggest-note';
-        note.textContent = town.stays ? town.stays + (town.stays === 1 ? ' place to stay' : ' places to stay') : 'no listed stays';
+        note.textContent = town.stays ? (town.stays === 1 ? tr('1 place to stay') : tr('{0} places to stay', town.stays)) : tr('no listed stays');
         link.appendChild(note);
         item.appendChild(link);
         if (index === active) item.className = 'is-active';

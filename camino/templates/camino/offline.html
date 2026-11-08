@@ -1,14 +1,15 @@
 {% extends 'camino/base.html' %}
+{% load camino_i18n %}
 
 {% block content %}
 <div class="card" style="max-width: 560px; margin: 2rem auto; text-align: center;">
-  <h2 style="margin-top: 0;">You're offline</h2>
-  <p>This page isn't saved on your phone yet, and there's no signal right now.</p>
+  <h2 style="margin-top: 0;">{% t "You're offline" %}</h2>
+  <p>{% t "This page isn't saved on your phone yet, and there's no signal right now." %}</p>
   <p>
-    <a class="btn-nav" href="{% url 'stage_list' %}">Go to the stages</a>
-    <a class="btn-nav" href="{% url 'towns' %}">Browse towns</a>
+    <a class="btn-nav" href="{% url 'stage_list' %}">{% t "Go to the stages" %}</a>
+    <a class="btn-nav" href="{% url 'towns' %}">{% t "Browse towns" %}</a>
   </p>
-  <p class="pack-note">Pages you have already opened, or saved with
-    <a href="{% url 'offline_pack' %}">Save for offline</a>, still work without a signal.</p>
+  <p class="pack-note">{% t "Pages you have already opened, or saved with" %}
+    <a href="{% url 'offline_pack' %}">{% t "Save for offline" %}</a>{% t ", still work without a signal." %}</p>
 </div>
 {% endblock %}

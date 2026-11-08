@@ -1,4 +1,5 @@
 {% extends 'camino/base.html' %}
+{% load camino_i18n %}
 {% load static %}
 
 {% block head_extra %}
@@ -9,203 +10,201 @@
 {% block content %}
 <div class="plan" id="plan-root" data-version="{{ APP_VERSION }}" data-wa-logo="{% static 'camino/img/whatsapp-logo-green.svg' %}">
   <div class="plan-intro">
-    <h2>Plan your Camino</h2>
+    <h2>{% t "Plan your Camino" %}</h2>
     <p>
-      Choose your stages, rest days and places to stay, then send the plan to the
-      Saint Jean to Santiago app on your phone. Your plan is kept on this device only;
-      nothing you enter here is sent to us.
+      {% t "Choose your stages, rest days and places to stay, then send the plan to the Saint Jean to Santiago app on your phone. Your plan is kept on this device only; nothing you enter here is sent to us." %}
     </p>
   </div>
 
-  <p class="plan-loading" id="plan-loading" role="status">Loading the planner…</p>
-  <noscript><p class="plan-warning">The planner needs JavaScript. Please turn it on for this site.</p></noscript>
-  <p class="plan-error plan-fatal" role="alert" hidden>The planner could not load the guide data. Please reload the page.</p>
+  <p class="plan-loading" id="plan-loading" role="status">{% t "Loading the planner…" %}</p>
+  <noscript><p class="plan-warning">{% t "The planner needs JavaScript. Please turn it on for this site." %}</p></noscript>
+  <p class="plan-error plan-fatal" role="alert" hidden>{% t "The planner could not load the guide data. Please reload the page." %}</p>
   <p class="plan-warning" id="plan-notice" role="status" hidden></p>
-  <p class="plan-undo" id="plan-undo" hidden><span id="plan-undo-text"></span><button type="button" class="plan-btn" id="plan-undo-btn">Undo</button></p>
+  <p class="plan-undo" id="plan-undo" hidden><span id="plan-undo-text"></span><button type="button" class="plan-btn" id="plan-undo-btn">{% t "Undo" %}</button></p>
   <p class="visually-hidden" id="plan-live" aria-live="polite"></p>
 
   <section class="plan-card plan-shared" id="plan-shared" aria-labelledby="plan-shared-title" hidden>
-    <h3 id="plan-shared-title" tabindex="-1" data-focus="shared-title">A plan has been shared with you</h3>
+    <h3 id="plan-shared-title" tabindex="-1" data-focus="shared-title">{% t "A plan has been shared with you" %}</h3>
     <p class="plan-shared-name" id="plan-shared-name"></p>
     <p class="plan-shared-pick" id="plan-shared-pick-row" hidden>
-      <label for="plan-shared-pick">Plans in this file</label>
+      <label for="plan-shared-pick">{% t "Plans in this file" %}</label>
       <select id="plan-shared-pick" class="plan-input"></select>
     </p>
     <p class="plan-hint" id="plan-shared-detail"></p>
     <p class="plan-warning" id="plan-shared-replace" hidden></p>
     <p class="plan-error" id="plan-shared-error" role="alert" hidden></p>
     <div class="plan-send-actions">
-      <button type="button" class="plan-btn plan-btn-primary" id="plan-shared-open">Open this plan</button>
-      <button type="button" class="plan-btn" id="plan-shared-keep">Keep my plan</button>
+      <button type="button" class="plan-btn plan-btn-primary" id="plan-shared-open">{% t "Open this plan" %}</button>
+      <button type="button" class="plan-btn" id="plan-shared-keep">{% t "Keep my plan" %}</button>
     </div>
   </section>
 
   <section class="plan-card" aria-labelledby="plan-details-title">
-    <h3 id="plan-details-title">About this plan</h3>
+    <h3 id="plan-details-title">{% t "About this plan" %}</h3>
     <div class="plan-fields">
       <div class="plan-field">
-        <label for="plan-name">Name</label>
+        <label for="plan-name">{% t "Name" %}</label>
         <input type="text" id="plan-name" class="plan-input" maxlength="80" autocomplete="off" data-focus="plan-name">
       </div>
       <div class="plan-field">
-        <label for="plan-start">First day (optional)</label>
+        <label for="plan-start">{% t "First day (optional)" %}</label>
         <input type="date" id="plan-start" class="plan-input">
       </div>
       <div class="plan-field">
-        <label for="plan-pace">Walking pace: <output id="plan-pace-out" for="plan-pace"></output></label>
+        <label for="plan-pace">{% t "Walking pace:" %} <output id="plan-pace-out" for="plan-pace"></output></label>
         <input type="range" id="plan-pace" step="0.1" min="2" max="6" value="4.2" class="plan-range" aria-describedby="plan-pace-hint">
       </div>
     </div>
     <p class="plan-hint" id="plan-pace-hint"></p>
   </section>
 
-  <section id="plan-summary" class="plan-summary" aria-label="Plan totals" hidden></section>
-  <p id="plan-climb-note" class="plan-hint plan-climb-note" hidden>Climb and descent come from the guide's height profiles, worked out the same way as on each stage page. A walking day over 30 km is marked as a long day.</p>
+  <section id="plan-summary" class="plan-summary" aria-label="{% t_attr "Plan totals" %}" hidden></section>
+  <p id="plan-climb-note" class="plan-hint plan-climb-note" hidden>{% t "Climb and descent come from the guide's height profiles, worked out the same way as on each stage page. A walking day over 30 km is marked as a long day." %}</p>
 
-  <ol id="plan-days" class="plan-days" aria-label="Your days" hidden></ol>
+  <ol id="plan-days" class="plan-days" aria-label="{% t_attr "Your days" %}" hidden></ol>
 
   <section class="plan-card plan-done" id="plan-done" aria-labelledby="plan-done-title" hidden>
-    <h3 id="plan-done-title" tabindex="-1" data-focus="done-title">Your plan is complete</h3>
+    <h3 id="plan-done-title" tabindex="-1" data-focus="done-title">{% t "Your plan is complete" %}</h3>
     <p class="plan-hint" id="plan-done-text"></p>
     <div class="plan-send-actions">
-      <button type="button" class="plan-btn" id="plan-reopen" data-focus="reopen">Add another day</button>
+      <button type="button" class="plan-btn" id="plan-reopen" data-focus="reopen">{% t "Add another day" %}</button>
     </div>
   </section>
 
   <section class="plan-card plan-add" id="plan-add-card" aria-labelledby="plan-add-title">
-    <h3 id="plan-add-title" tabindex="-1" data-focus="add-title">Day 1</h3>
+    <h3 id="plan-add-title" tabindex="-1" data-focus="add-title">{% t "Day 1" %}</h3>
     <p class="plan-hint" id="plan-add-lead" hidden></p>
     <p class="plan-finish-row" id="plan-finish-row" hidden>
-      <button type="button" class="plan-btn" id="plan-finish" data-focus="finish">My plan is complete</button>
-      <span class="plan-hint" id="plan-finish-hint">Finished? This puts this section away until you add another day.</span>
+      <button type="button" class="plan-btn" id="plan-finish" data-focus="finish">{% t "My plan is complete" %}</button>
+      <span class="plan-hint" id="plan-finish-hint">{% t "Finished? This puts this section away until you add another day." %}</span>
     </p>
-    <p class="plan-edit-row" id="plan-edit-row" hidden><button type="button" class="plan-btn" id="plan-edit-cancel">Cancel the change</button></p>
+    <p class="plan-edit-row" id="plan-edit-row" hidden><button type="button" class="plan-btn" id="plan-edit-cancel">{% t "Cancel the change" %}</button></p>
     <div class="plan-field plan-where" id="plan-add-where-row" hidden>
-      <label for="plan-add-where">Where should the new day go?</label>
+      <label for="plan-add-where">{% t "Where should the new day go?" %}</label>
       <select id="plan-add-where" class="plan-input" data-focus="add-where"></select>
     </div>
     <div class="plan-field plan-from" id="plan-from-row" hidden>
-      <label for="plan-from">Starting from</label>
+      <label for="plan-from">{% t "Starting from" %}</label>
       <select id="plan-from" class="plan-input" data-focus="from"></select>
     </div>
-    <h4 class="plan-stops-title" id="plan-stops-title" tabindex="-1">Where will you stop?</h4>
+    <h4 class="plan-stops-title" id="plan-stops-title" tabindex="-1">{% t "Where will you stop?" %}</h4>
     <p class="plan-hint" id="plan-stops-empty" hidden></p>
     <ul id="plan-stops" class="plan-stops"></ul>
-    <button type="button" class="plan-btn plan-btn-quiet" id="plan-stops-more" hidden>Show places further ahead</button>
+    <button type="button" class="plan-btn plan-btn-quiet" id="plan-stops-more" hidden>{% t "Show places further ahead" %}</button>
     <div class="plan-add-other" id="plan-add-other">
-      <button type="button" class="plan-btn" id="plan-add-rest" data-focus="add-rest">Add a rest day</button>
-      <button type="button" class="plan-btn" id="plan-add-travel" data-focus="add-travel">Add a travel day</button>
-      <button type="button" class="plan-btn" id="plan-add-travel-same" data-focus="add-travel-same">Travel on the same day</button>
+      <button type="button" class="plan-btn" id="plan-add-rest" data-focus="add-rest">{% t "Add a rest day" %}</button>
+      <button type="button" class="plan-btn" id="plan-add-travel" data-focus="add-travel">{% t "Add a travel day" %}</button>
+      <button type="button" class="plan-btn" id="plan-add-travel-same" data-focus="add-travel-same">{% t "Travel on the same day" %}</button>
     </div>
     <details class="plan-any" id="plan-any">
-      <summary>Choose a whole guidebook stage</summary>
-      <p class="plan-hint">Pick any stage from the guide, wherever it starts. If it does not start where the day before ended, that day is flagged so you can fix the order.</p>
+      <summary>{% t "Choose a whole guidebook stage" %}</summary>
+      <p class="plan-hint">{% t "Pick any stage from the guide, wherever it starts. If it does not start where the day before ended, that day is flagged so you can fix the order." %}</p>
       <div class="plan-any-row">
-        <select id="plan-any-stage" class="plan-input" aria-label="Any stage in the guide"></select>
-        <button type="button" class="plan-btn plan-btn-primary" id="plan-any-add">Add this stage</button>
+        <select id="plan-any-stage" class="plan-input" aria-label="{% t_attr "Any stage in the guide" %}"></select>
+        <button type="button" class="plan-btn plan-btn-primary" id="plan-any-add">{% t "Add this stage" %}</button>
       </div>
     </details>
   </section>
 
   <section class="plan-card plan-send" aria-labelledby="plan-send-title">
-    <h3 id="plan-send-title">Send it to the app</h3>
+    <h3 id="plan-send-title">{% t "Send it to the app" %}</h3>
     <p class="plan-hint" id="plan-send-count"></p>
     <p class="plan-send-route" id="plan-send-route" hidden></p>
     <p class="plan-warning" id="plan-send-warn" hidden></p>
     <p class="plan-error" id="plan-send-problem" hidden></p>
-    <p class="plan-warning" id="plan-send-private" hidden>This plan has booking references or notes in it. They are in the file, the QR code and the link, so keep those to yourself and the people you choose to send them to.</p>
+    <p class="plan-warning" id="plan-send-private" hidden>{% t "This plan has booking references or notes in it. They are in the file, the QR code and the link, so keep those to yourself and the people you choose to send them to." %}</p>
     <div class="plan-send-actions">
-      <button type="button" class="plan-btn plan-btn-primary" id="plan-download">Download itinerary file</button>
-      <button type="button" class="plan-btn" id="plan-share" hidden>Share…</button>
-      <button type="button" class="plan-btn" id="plan-qr-open" data-focus="qr-open" hidden>Share as QR code</button>
+      <button type="button" class="plan-btn plan-btn-primary" id="plan-download">{% t "Download itinerary file" %}</button>
+      <button type="button" class="plan-btn" id="plan-share" hidden>{% t "Share…" %}</button>
+      <button type="button" class="plan-btn" id="plan-qr-open" data-focus="qr-open" hidden>{% t "Share as QR code" %}</button>
     </div>
     <p class="plan-send-msg" id="plan-send-msg" role="status" hidden></p>
-    <h4 class="plan-steps-title">Opening it in the app</h4>
+    <h4 class="plan-steps-title">{% t "Opening it in the app" %}</h4>
     <ol class="plan-steps">
-      <li>Get the file onto your phone: share it from here, or email or message it to yourself.</li>
-      <li>In the app, open <strong>Settings</strong>, then <strong>Backup and restore</strong>, then <strong>Restore backup</strong>.</li>
-      <li>Choose the file. The app shows what it contains before anything is added.</li>
-      <li>Your plan appears in the app next to any plans you already have. Nothing is replaced.</li>
+      <li>{% t "Get the file onto your phone: share it from here, or email or message it to yourself." %}</li>
+      <li>{% t "In the app, open" %} <strong>{% t "Settings" %}</strong>{% t ", then" %} <strong>{% t "Backup and restore" %}</strong>{% t ", then" %} <strong>{% t "Restore backup" %}</strong>.</li>
+      <li>{% t "Choose the file. The app shows what it contains before anything is added." %}</li>
+      <li>{% t "Your plan appears in the app next to any plans you already have. Nothing is replaced." %}</li>
     </ol>
-    <p class="plan-hint">Opening the same file twice does not make a second copy.</p>
+    <p class="plan-hint">{% t "Opening the same file twice does not make a second copy." %}</p>
   </section>
 
   <section class="plan-card plan-keep" aria-labelledby="plan-keep-title">
-    <h3 id="plan-keep-title">Keep your plan</h3>
+    <h3 id="plan-keep-title">{% t "Keep your plan" %}</h3>
     <p class="plan-hint" id="plan-keep-status"></p>
     <p class="plan-hint" id="plan-keep-storage" hidden></p>
     <div class="plan-send-actions">
-      <button type="button" class="plan-btn plan-btn-primary" id="plan-save-copy">Save a copy…</button>
-      <button type="button" class="plan-btn" id="plan-save-browser">Save in this browser</button>
-      <button type="button" class="plan-btn" id="plan-open-file">Open a plan file…</button>
+      <button type="button" class="plan-btn plan-btn-primary" id="plan-save-copy">{% t "Save a copy…" %}</button>
+      <button type="button" class="plan-btn" id="plan-save-browser">{% t "Save in this browser" %}</button>
+      <button type="button" class="plan-btn" id="plan-open-file">{% t "Open a plan file…" %}</button>
       <input type="file" id="plan-file" class="plan-file-input" accept=".json,application/json" tabindex="-1" aria-hidden="true">
     </div>
     <div class="plan-warning plan-keep-ask" id="plan-keep-ask" role="group" aria-labelledby="plan-keep-ask-text" hidden>
       <p id="plan-keep-ask-text"></p>
       <div class="plan-send-actions">
-        <button type="button" class="plan-btn plan-btn-small" id="plan-keep-replace">Replace it</button>
-        <button type="button" class="plan-btn plan-btn-small" id="plan-keep-both">Keep both</button>
-        <button type="button" class="plan-btn plan-btn-small" id="plan-keep-cancel">Cancel</button>
+        <button type="button" class="plan-btn plan-btn-small" id="plan-keep-replace">{% t "Replace it" %}</button>
+        <button type="button" class="plan-btn plan-btn-small" id="plan-keep-both">{% t "Keep both" %}</button>
+        <button type="button" class="plan-btn plan-btn-small" id="plan-keep-cancel">{% t "Cancel" %}</button>
       </div>
     </div>
     <p class="plan-send-msg" id="plan-keep-msg" role="status" hidden></p>
-    <h4 class="plan-steps-title" id="plan-saved-title">Saved in this browser</h4>
+    <h4 class="plan-steps-title" id="plan-saved-title">{% t "Saved in this browser" %}</h4>
     <ul class="plan-saved-list" id="plan-saved-list" aria-labelledby="plan-saved-title"></ul>
-    <p class="plan-hint" id="plan-saved-empty">Nothing saved here yet.</p>
-    <p class="plan-hint">A saved file has your booking references and notes in it. Keep it private, and keep it somewhere you trust, such as a folder on your computer or in your own cloud drive.</p>
+    <p class="plan-hint" id="plan-saved-empty">{% t "Nothing saved here yet." %}</p>
+    <p class="plan-hint">{% t "A saved file has your booking references and notes in it. Keep it private, and keep it somewhere you trust, such as a folder on your computer or in your own cloud drive." %}</p>
   </section>
 
   <section class="plan-card plan-printing" aria-labelledby="plan-printing-title">
-    <h3 id="plan-printing-title">Print or save as PDF</h3>
-    <p class="plan-hint">Makes a clean sheet of your plan to carry or to give to someone. In the print window, choose "Save as PDF" in place of a printer to keep it as a PDF.</p>
+    <h3 id="plan-printing-title">{% t "Print or save as PDF" %}</h3>
+    <p class="plan-hint">{% t 'Makes a clean sheet of your plan to carry or to give to someone. In the print window, choose "Save as PDF" in place of a printer to keep it as a PDF.' %}</p>
     <fieldset class="plan-print-options">
-      <legend>What to put on the sheet</legend>
-      <label class="plan-check"><input type="checkbox" id="plan-print-dates" checked> Dates</label>
-      <label class="plan-check"><input type="checkbox" id="plan-print-stays" checked> Places to stay</label>
-      <label class="plan-check"><input type="checkbox" id="plan-print-private"> Booking references, contacts and notes</label>
-      <p class="plan-hint plan-print-private-hint">Anyone who sees the paper or the PDF will see these.</p>
-      <label class="plan-check"><input type="radio" name="plan-print-detail" id="plan-print-full" value="full" checked> Every day in full: time, climb and where you stay</label>
-      <label class="plan-check"><input type="radio" name="plan-print-detail" id="plan-print-summary" value="summary"> Summary: one short line for each day</label>
+      <legend>{% t "What to put on the sheet" %}</legend>
+      <label class="plan-check"><input type="checkbox" id="plan-print-dates" checked> {% t "Dates" %}</label>
+      <label class="plan-check"><input type="checkbox" id="plan-print-stays" checked> {% t "Places to stay" %}</label>
+      <label class="plan-check"><input type="checkbox" id="plan-print-private"> {% t "Booking references, contacts and notes" %}</label>
+      <p class="plan-hint plan-print-private-hint">{% t "Anyone who sees the paper or the PDF will see these." %}</p>
+      <label class="plan-check"><input type="radio" name="plan-print-detail" id="plan-print-full" value="full" checked> {% t "Every day in full: time, climb and where you stay" %}</label>
+      <label class="plan-check"><input type="radio" name="plan-print-detail" id="plan-print-summary" value="summary"> {% t "Summary: one short line for each day" %}</label>
     </fieldset>
     <div class="plan-send-actions">
-      <button type="button" class="plan-btn plan-btn-primary" id="plan-print-go">Print or save as PDF…</button>
+      <button type="button" class="plan-btn plan-btn-primary" id="plan-print-go">{% t "Print or save as PDF…" %}</button>
     </div>
   </section>
 
   <section class="plan-print" id="plan-print" aria-hidden="true"></section>
 
-  <p class="plan-reset-row"><button type="button" class="plan-btn plan-btn-quiet" id="plan-reset">Start again</button></p>
+  <p class="plan-reset-row"><button type="button" class="plan-btn plan-btn-quiet" id="plan-reset">{% t "Start again" %}</button></p>
 
   <datalist id="plan-places"></datalist>
 </div>
 
 <dialog id="plan-stay-dialog" class="plan-dialog" aria-labelledby="plan-stay-title" data-details-url="{% url 'plan_stays' %}">
   <div class="plan-dialog-head">
-    <h3 id="plan-stay-title">Where will you stay?</h3>
-    <button type="button" class="plan-btn plan-btn-quiet" id="plan-stay-close">Close</button>
+    <h3 id="plan-stay-title">{% t "Where will you stay?" %}</h3>
+    <button type="button" class="plan-btn plan-btn-quiet" id="plan-stay-close">{% t "Close" %}</button>
   </div>
   <div class="plan-dialog-body">
     <div class="plan-field">
-      <label for="plan-stay-status">Status</label>
+      <label for="plan-stay-status">{% t "Status" %}</label>
       <select id="plan-stay-status" class="plan-input">
-        <option>Considering</option>
-        <option>Requested</option>
-        <option>Booked</option>
-        <option>Confirmed</option>
+        <option>{% t "Considering" %}</option>
+        <option>{% t "Requested" %}</option>
+        <option>{% t "Booked" %}</option>
+        <option>{% t "Confirmed" %}</option>
       </select>
     </div>
     <div class="plan-field" id="plan-stay-search-row">
-      <label for="plan-stay-search">Search by name</label>
+      <label for="plan-stay-search">{% t "Search by name" %}</label>
       <input type="search" id="plan-stay-search" class="plan-input" autocomplete="off">
     </div>
     <p class="plan-hint" id="plan-stay-empty" hidden></p>
     <ul class="plan-pick-list" id="plan-stay-list"></ul>
-    <p class="plan-hint" id="plan-stay-note" hidden>Prices, opening dates and phone numbers come from the guide and can change. Check with the place before you rely on them.</p>
+    <p class="plan-hint" id="plan-stay-note" hidden>{% t "Prices, opening dates and phone numbers come from the guide and can change. Check with the place before you rely on them." %}</p>
     <form id="plan-stay-own-form" class="plan-own">
-      <label for="plan-stay-own">Somewhere not listed</label>
+      <label for="plan-stay-own">{% t "Somewhere not listed" %}</label>
       <div class="plan-own-row">
-        <input type="text" id="plan-stay-own" class="plan-input" maxlength="200" autocomplete="off" placeholder="Name of the place">
-        <button type="submit" class="plan-btn plan-btn-primary">Use this</button>
+        <input type="text" id="plan-stay-own" class="plan-input" maxlength="200" autocomplete="off" placeholder="{% t_attr "Name of the place" %}">
+        <button type="submit" class="plan-btn plan-btn-primary">{% t "Use this" %}</button>
       </div>
     </form>
   </div>
@@ -213,70 +212,70 @@
 
 <dialog id="plan-qr-dialog" class="plan-dialog" aria-labelledby="plan-qr-title">
   <div class="plan-dialog-head">
-    <h3 id="plan-qr-title">Share this plan as a QR code</h3>
-    <button type="button" class="plan-btn plan-btn-quiet" id="plan-qr-close">Close</button>
+    <h3 id="plan-qr-title">{% t "Share this plan as a QR code" %}</h3>
+    <button type="button" class="plan-btn plan-btn-quiet" id="plan-qr-close">{% t "Close" %}</button>
   </div>
   <div class="plan-dialog-body plan-qr">
     <p class="plan-error" id="plan-qr-error" role="alert" hidden></p>
     <div class="plan-qr-frame" id="plan-qr-frame"><img id="plan-qr-img" class="plan-qr-img" alt=""></div>
     <p class="plan-hint" id="plan-qr-hint" hidden></p>
-    <p>Point a phone camera at the code. It opens this planner with the plan ready to open there, and from there you can send the file to the app.</p>
+    <p>{% t "Point a phone camera at the code. It opens this planner with the plan ready to open there, and from there you can send the file to the app." %}</p>
     <div class="plan-send-actions plan-qr-actions">
-      <button type="button" class="plan-btn plan-btn-primary" id="plan-qr-copy">Copy link</button>
-      <button type="button" class="plan-btn" id="plan-qr-png">Save the QR code as a picture</button>
+      <button type="button" class="plan-btn plan-btn-primary" id="plan-qr-copy">{% t "Copy link" %}</button>
+      <button type="button" class="plan-btn" id="plan-qr-png">{% t "Save the QR code as a picture" %}</button>
     </div>
     <p class="plan-send-msg" id="plan-qr-msg" role="status" hidden></p>
     <div class="plan-field">
-      <label for="plan-qr-link">The link</label>
+      <label for="plan-qr-link">{% t "The link" %}</label>
       <input type="text" id="plan-qr-link" class="plan-input plan-qr-link" readonly>
     </div>
-    <p class="plan-hint">The plan is inside the code and the link, so anyone who has them can see it: your stages, dates, places to stay and any booking references or travel notes you added. Nothing is stored on our server.</p>
+    <p class="plan-hint">{% t "The plan is inside the code and the link, so anyone who has them can see it: your stages, dates, places to stay and any booking references or travel notes you added. Nothing is stored on our server." %}</p>
   </div>
 </dialog>
 
 <dialog id="plan-bed-dialog" class="plan-dialog" aria-labelledby="plan-bed-title">
   <div class="plan-dialog-head">
-    <h3 id="plan-bed-title">Ask for a bed</h3>
-    <button type="button" class="plan-btn plan-btn-quiet" id="plan-bed-close">Close</button>
+    <h3 id="plan-bed-title">{% t "Ask for a bed" %}</h3>
+    <button type="button" class="plan-btn plan-btn-quiet" id="plan-bed-close">{% t "Close" %}</button>
   </div>
   <div class="plan-dialog-body">
     <div class="plan-more-grid">
-      <label><span>Arrival date</span><input type="date" id="plan-bed-date" class="plan-input"></label>
-      <label><span>Nights</span><input type="number" id="plan-bed-nights" class="plan-input" min="1" max="14" step="1" inputmode="numeric"></label>
-      <label><span>People</span><input type="number" id="plan-bed-people" class="plan-input" min="1" max="10" step="1" inputmode="numeric"></label>
-      <label id="plan-bed-room-row" hidden><span>Bed type</span>
-        <select id="plan-bed-room" class="plan-input"><option value="dormitory">Bed in a dormitory</option><option value="room">Private room</option></select>
+      <label><span>{% t "Arrival date" %}</span><input type="date" id="plan-bed-date" class="plan-input"></label>
+      <label><span>{% t "Nights" %}</span><input type="number" id="plan-bed-nights" class="plan-input" min="1" max="14" step="1" inputmode="numeric"></label>
+      <label><span>{% t "People" %}</span><input type="number" id="plan-bed-people" class="plan-input" min="1" max="10" step="1" inputmode="numeric"></label>
+      <label id="plan-bed-room-row" hidden><span>{% t "Bed type" %}</span>
+        <select id="plan-bed-room" class="plan-input"><option value="dormitory">{% t "Bed in a dormitory" %}</option><option value="room">{% t "Private room" %}</option></select>
       </label>
-      <label class="plan-more-wide"><span>Your name (optional)</span><input type="text" id="plan-bed-name" class="plan-input" maxlength="80" autocomplete="name"></label>
+      <label class="plan-more-wide"><span>{% t "Your name (optional)" %}</span><input type="text" id="plan-bed-name" class="plan-input" maxlength="80" autocomplete="name"></label>
     </div>
     <p class="plan-error" id="plan-bed-problem" role="alert" hidden></p>
     <div class="plan-field">
-      <label for="plan-bed-text">Message to the owner</label>
+      <label for="plan-bed-text">{% t "Message to the owner" %}</label>
       <textarea id="plan-bed-text" class="plan-input plan-textarea plan-bed-text" rows="10"></textarea>
       <p class="plan-hint" id="plan-bed-language"></p>
     </div>
-    <button type="button" class="plan-btn plan-btn-small plan-bed-reset" id="plan-bed-reset" hidden>Reset message</button>
+    <button type="button" class="plan-btn plan-btn-small plan-bed-reset" id="plan-bed-reset" hidden>{% t "Reset message" %}</button>
     <details class="plan-more">
-      <summary>What this says</summary>
+      <summary>{% t "What this says" %}</summary>
       <p class="plan-bed-meaning" id="plan-bed-meaning"></p>
     </details>
     <div class="plan-send-actions plan-bed-send">
-      <a class="btn btn-wa plan-send-btn" id="plan-bed-whatsapp" target="_blank" rel="noopener" aria-label="Send on WhatsApp"><span>Send on</span><img src="{% static 'camino/img/whatsapp-logo-green.svg' %}" alt="" width="86" height="20"></a>
-      <a class="btn btn-email plan-send-btn" id="plan-bed-email"><svg class="btn-icon" aria-hidden="true" focusable="false"><use href="#i-email"></use></svg><span>Send by email</span></a>
-      <button type="button" class="plan-btn" id="plan-bed-copy">Copy message</button>
+      <a class="btn btn-wa plan-send-btn" id="plan-bed-whatsapp" target="_blank" rel="noopener" aria-label="{% t_attr "Send on WhatsApp" %}"><span>{% t "Send on" %}</span><img src="{% static 'camino/img/whatsapp-logo-green.svg' %}" alt="" width="86" height="20"></a>
+      <a class="btn btn-email plan-send-btn" id="plan-bed-email"><svg class="btn-icon" aria-hidden="true" focusable="false"><use href="#i-email"></use></svg><span>{% t "Send by email" %}</span></a>
+      <button type="button" class="plan-btn" id="plan-bed-copy">{% t "Copy message" %}</button>
     </div>
     <p class="plan-send-msg" id="plan-bed-msg" role="status" hidden></p>
-    <p class="plan-hint">Nothing is sent until you press Send in WhatsApp or your email program, and you can change the message first. Your name and the number of people are remembered in this browser only.</p>
+    <p class="plan-hint">{% t "Nothing is sent until you press Send in WhatsApp or your email program, and you can change the message first. Your name and the number of people are remembered in this browser only." %}</p>
   </div>
 </dialog>
 
 <dialog id="plan-reset-dialog" class="plan-dialog plan-dialog-small" aria-labelledby="plan-reset-title">
   <div class="plan-dialog-body">
-    <h3 id="plan-reset-title">Start again?</h3>
-    <p>This clears the plan stored on this device. A file you already downloaded is not affected.</p>
+    <h3 id="plan-reset-title">{% t "Start again?" %}</h3>
+    <p>{% t "This clears the plan stored on this device. A file you already downloaded is not affected." %}</p>
     <div class="plan-send-actions">
-      <button type="button" class="plan-btn" id="plan-reset-cancel">Keep my plan</button>
-      <button type="button" class="plan-btn plan-btn-danger" id="plan-reset-confirm">Clear plan</button>
+      <button type="button" class="plan-btn" id="plan-reset-cancel">{% t "Keep my plan" %}</button>
+      <button type="button" class="plan-btn plan-btn-danger" id="plan-reset-confirm">{% t "Clear plan" %}</button>
     </div>
   </div>
 </dialog>
@@ -284,6 +283,7 @@
 {% include 'camino/_icons.html' %}
 
 <script id="plan-data" type="application/json">{{ plan_json|safe }}</script>
+{% if LANGUAGE == 'es' %}<script src="{% static 'camino/js/i18n-es-plan.js' %}" defer></script>{% endif %}
 <script src="{% static 'camino/js/plan-core.js' %}" defer></script>
 <script src="{% static 'camino/js/qr.js' %}" defer></script>
 <script src="{% static 'camino/js/plan-share.js' %}" defer></script>

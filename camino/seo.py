@@ -5,6 +5,10 @@ import re
 import unicodedata
 from decimal import Decimal
 
+from django.urls import reverse
+
+from .i18n import decimal, lookup, tr
+
 SITE_NAME = 'Saint Jean to Santiago'
 TITLE_SUFFIX = ' | ' + SITE_NAME
 MAX_TITLE = 65
@@ -51,6 +55,14 @@ def normalise(text):
     decomposed = unicodedata.normalize('NFD', text or '')
     stripped = ''.join(ch for ch in decomposed if unicodedata.category(ch) != 'Mn')
     return re.sub(r'\s+', ' ', stripped.lower()).strip()
+
+
+def default_title():
+    return tr(DEFAULT_TITLE)
+
+
+def default_description():
+    return tr(DEFAULT_DESCRIPTION)
 
 
 def minutes_text(minutes):
@@ -158,19 +170,26 @@ def stage_seo(stage, origin, canonical):
     km = stage.distance_km
     ref = stage.display_ref
     duration = minutes_text(stage.time_minutes)
-    title = compose_title(f'Stage {ref}: {stage.stage_name} ({km} km)' if km else f'Stage {ref}: {stage.stage_name}')
-    parts = [f'Camino Francés stage {ref}: {stage.stage_name}.']
+    name = lookup(stage.stage_name)   # the stage's name in the language of the page
+    title = compose_title(
+        tr('Stage {ref}: {name} ({km} km)', ref=ref, name=name, km=decimal(km)) if km
+        else tr('Stage {ref}: {name}', ref=ref, name=name)
+    )
+    parts = [tr('Camino Francés stage {ref}: {name}.', ref=ref, name=name)]
     if km:
-        parts.append(f'{km} km' + (f', about {duration} walking.' if duration else '.'))
-    parts.append('Elevation profile, route map, villages on the way and where to sleep.')
+        parts.append(
+            tr('{km} km, about {duration} walking.', km=decimal(km), duration=duration) if duration
+            else tr('{km} km.', km=decimal(km))
+        )
+    parts.append(tr('Elevation profile, route map, villages on the way and where to sleep.'))
     return {
         'title': title,
         'description': clip(' '.join(parts)),
         'jsonld': json_ld({
             '@context': 'https://schema.org',
             '@graph': [breadcrumb([
-                ('Stages', origin + '/'),
-                (f'Stage {ref}', canonical),
+                (tr('Stages'), origin + reverse('stage_list')),
+                (tr('Stage {ref}', ref=ref), canonical),
             ])],
         }),
     }
@@ -178,16 +197,16 @@ def stage_seo(stage, origin, canonical):
 
 def plan_seo(origin):
     return {
-        'title': compose_title('Plan your Camino Francés itinerary'),
-        'description': clip(
+        'title': compose_title(tr('Plan your Camino Francés itinerary')),
+        'description': clip(tr(
             'Plan your Camino Francés day by day: choose stages, rest days and places to stay, '
             'see distances and walking times, then send the itinerary to the free app.'
-        ),
+        )),
         'jsonld': json_ld({
             '@context': 'https://schema.org',
             '@graph': [breadcrumb([
-                ('Stages', origin + '/'),
-                ('Plan your Camino', origin + '/plan/'),
+                (tr('Stages'), origin + reverse('stage_list')),
+                (tr('Plan your Camino'), origin + reverse('plan')),
             ])],
         }),
     }
@@ -196,26 +215,28 @@ def plan_seo(origin):
 def location_seo(location, albergues, private_accomm, parent_stage, origin, canonical, stage_url=None):
     albergues = list(albergues)
     private_accomm = list(private_accomm)
-    name = location.location_name
+    name = location.display_name
     n_alb, n_priv = len(albergues), len(private_accomm)
     if n_alb or n_priv:
         pieces = []
         if n_alb:
-            pieces.append(plural(n_alb, 'pilgrim albergue'))
+            pieces.append(tr('{n} pilgrim albergue', n=n_alb) if n_alb == 1 else tr('{n} pilgrim albergues', n=n_alb))
         if n_priv:
-            pieces.append(plural(n_priv, 'hotel or guesthouse', 'hotels and guesthouses'))
+            pieces.append(
+                tr('{n} hotel or guesthouse', n=n_priv) if n_priv == 1 else tr('{n} hotels and guesthouses', n=n_priv)
+            )
         description = (
-            f'Where to stay in {name} on the Camino Francés: {" and ".join(pieces)}. '
-            'Prices, opening dates, facilities and contact details.'
+            tr('Where to stay in {name} on the Camino Francés: {pieces}.', name=name, pieces=tr(' and ').join(pieces))
+            + ' ' + tr('Prices, opening dates, facilities and contact details.')
         )
-        title = compose_title(f'{name}: albergues and hotels on the Camino Francés')
+        title = compose_title(tr('{name}: albergues and hotels on the Camino Francés', name=name))
     else:
-        description = f'{name} on the Camino Francés: village services, history and practical tips for pilgrims.'
-        title = compose_title(f'{name} on the Camino Francés')
+        description = tr('{name} on the Camino Francés: village services, history and practical tips for pilgrims.', name=name)
+        title = compose_title(tr('{name} on the Camino Francés', name=name))
 
-    crumbs = [('Stages', origin + '/')]
+    crumbs = [(tr('Stages'), origin + reverse('stage_list'))]
     if parent_stage is not None and stage_url:
-        crumbs.append((f'Stage {parent_stage.display_ref}', origin + stage_url))
+        crumbs.append((tr('Stage {ref}', ref=parent_stage.display_ref), origin + stage_url))
     crumbs.append((name, canonical))
 
     graph = [breadcrumb(crumbs)]
@@ -243,16 +264,17 @@ def location_seo(location, albergues, private_accomm, parent_stage, origin, cano
 
 def home_seo(origin):
     return {
-        'title': compose_title('Camino Francés stages and places to stay'),
-        'description': clip(DEFAULT_DESCRIPTION),
+        'title': compose_title(tr('Camino Francés stages and places to stay')),
+        'description': clip(default_description()),
         'jsonld': json_ld({
             '@context': 'https://schema.org',
             '@type': 'WebSite',
             'name': SITE_NAME,
-            'url': origin + '/',
+            'url': origin + reverse('stage_list'),
+            'inLanguage': 'es' if tr('Stages') != 'Stages' else 'en',
             'potentialAction': {
                 '@type': 'SearchAction',
-                'target': origin + '/search/?q={search_term_string}',
+                'target': origin + reverse('search') + '?q={search_term_string}',
                 'query-input': 'required name=search_term_string',
             },
         }),

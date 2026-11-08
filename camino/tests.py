@@ -20,7 +20,7 @@ from urllib.parse import parse_qs, urlparse
 from django.conf import settings
 from django.test import Client, RequestFactory, SimpleTestCase
 
-from . import seo, views
+from . import seo, stage_maps, views
 from .models import BOOKING_AFFILIATE_PARAMS, Albergue, MapLocationCoord, PrivateAccomm, Stage, clean_email, google_maps_url
 
 
@@ -224,8 +224,8 @@ class PlannerPageContractTests(SimpleTestCase):
         self.assertIn('plan-leg-hint', script)
         self.assertIn('such as a bus then two flights?', script)
         self.assertIn('function arrivesNextDay', core)
-        self.assertIn("'Arrives' + (Plan.arrivesNextDay(day) ? ' (next day)' : '')", script)
-        self.assertIn("' (next day)' : '')", script)                    # the printed sheet says it too
+        self.assertIn("Plan.arrivesNextDay(day) ? tr('Arrives (next day)') : tr('Arrives')", script)
+        self.assertIn("tr('arrives {0} (next day)'", script)             # the printed sheet says it too
 
     def test_the_menu_links_to_the_planner(self):
         base = self.read('templates', 'camino', 'base.html')
@@ -337,6 +337,91 @@ class PagePerformanceTests(SimpleTestCase):
         self.assertIn('.plan:not(.plan-ready) > .plan-card', css)
         self.assertIn("classList.add('plan-ready')", self.read('static', 'camino', 'js', 'plan.js'))
         self.assertIn('id="plan-loading"', self.read('templates', 'camino', 'plan.html'))
+
+
+class StageMapTests(SimpleTestCase):
+    """Phones are sent smaller pictures of the illustrated stage maps (v1.2.54)."""
+
+    BASE = 'https://res.cloudinary.com/demo/image/upload/'
+
+    def stage(self, **changes):
+        full = self.BASE + 'v1/caminoAppImages/maps/1024maps/a_x.jpg'
+        values = dict(
+            stage_map_url=full, map_url_1024=full, map_url_1920=self.BASE + 'v1/caminoAppImages/maps/1920maps/a_x.jpg',
+            map_url_640=self.BASE + 'v1/caminoAppImages/maps/640maps/a_x.jpg',
+            map_url_360=self.BASE + 'v1/caminoAppImages/maps/360maps/a_x.jpg')
+        values.update(changes)
+        return SimpleNamespace(**values)
+
+    def browser_picks(self, info, viewport, density):
+        """The width of file a browser chooses from srcset and sizes (the rule in the HTML standard, simplified)."""
+        slot = None
+        for part in info['sizes'].split(','):
+            part = part.strip()
+            match = re.match(r'\(max-width: (\d+)px\) (\d+)px$', part)
+            if match and viewport <= int(match.group(1)):
+                slot = int(match.group(2))
+                break
+            if not match:
+                slot = int(part.replace('px', ''))
+                break
+        widths = sorted(int(w) for w in re.findall(r' (\d+)w', info['srcset']))
+        wanted = slot * density
+        return next((w for w in widths if w >= wanted), widths[-1])
+
+    def test_three_widths_of_the_same_map_are_offered_smallest_first(self):
+        info = stage_maps.describe(self.stage())
+        parts = [p.strip() for p in info['srcset'].split(', ')]
+        self.assertEqual([p.rsplit(' ', 1)[1] for p in parts], ['360w', '640w', '1024w'])
+        self.assertIn('360maps/a_x.jpg', parts[0])
+        self.assertIn('640maps/a_x.jpg', parts[1])
+        self.assertIn('1024maps/a_x.jpg', parts[2])
+        self.assertEqual(info['src'], self.BASE + 'v1/caminoAppImages/maps/1024maps/a_x.jpg')   # the plain address is unchanged
+
+    def test_a_phone_is_sent_a_smaller_picture_than_a_desktop(self):
+        info = stage_maps.describe(self.stage())
+        self.assertEqual(self.browser_picks(info, 390, 1), 360)
+        self.assertEqual(self.browser_picks(info, 390, 2), 640)    # an ordinary phone screen
+        self.assertEqual(self.browser_picks(info, 390, 3), 1024)   # a very sharp one
+        self.assertEqual(self.browser_picks(info, 768, 1), 640)
+        self.assertEqual(self.browser_picks(info, 768, 2), 1024)
+        self.assertEqual(self.browser_picks(info, 1280, 1), 1024)
+        self.assertEqual(self.browser_picks(info, 1280, 2), 1024)
+
+    def test_only_widths_that_share_one_drawing_are_mixed(self):
+        # The main picture is not the 1024 file (the data says so): send it alone, as before.
+        other = self.stage(stage_map_url=self.BASE + 'v9/caminoAppImages/maps/1920maps/b_y.jpg')
+        info = stage_maps.describe(other)
+        self.assertEqual((info['srcset'], info['sizes']), ('', ''))
+        self.assertEqual(info['src'], other.stage_map_url)
+        # A missing small picture: the same.
+        self.assertEqual(stage_maps.describe(self.stage(map_url_360=None))['srcset'], '')
+        self.assertEqual(stage_maps.describe(self.stage(map_url_640='not an address'))['srcset'], '')
+        # No 1024 file at all: the old fallback chain still gives a picture.
+        info = stage_maps.describe(self.stage(stage_map_url=None, map_url_1024=None))
+        self.assertEqual(info['src'], self.stage().map_url_1920)
+        self.assertEqual(info['srcset'], '')
+
+    def test_the_shape_is_known_only_for_a_measured_picture(self):
+        measured = next(iter(stage_maps.HEIGHT_AT_1024))
+        full = self.BASE + measured
+        info = stage_maps.describe(self.stage(stage_map_url=full, map_url_1024=full))
+        self.assertEqual((info['width'], info['height']), (1024, stage_maps.HEIGHT_AT_1024[measured]))
+        unknown = stage_maps.describe(self.stage())
+        self.assertEqual((unknown['width'], unknown['height'], unknown['grid_height']), (None, None, None))
+
+    def test_the_measured_heights_are_sensible(self):
+        self.assertEqual(len(stage_maps.HEIGHT_AT_1024), 34)
+        for key, height in stage_maps.HEIGHT_AT_1024.items():
+            self.assertRegex(key, r'^v\d+/caminoAppImages/maps/1024maps/[\w-]+\.jpg$')
+            self.assertTrue(150 < height < 2500, key)
+
+    def test_the_hotspots_are_drawn_on_a_fixed_grid_not_the_size_of_the_file(self):
+        template = (settings.BASE_DIR / 'camino' / 'templates' / 'camino' / 'stage_detail.html').read_text(encoding='utf-8')
+        self.assertIn('data-grid-width', template)
+        self.assertNotIn("`0 0 ${img.naturalWidth} ${img.naturalHeight}`", template)   # the old, file-sized grid
+        self.assertIn("mapImg.addEventListener('load', syncOverlay);", template)
+        self.assertIn('this.src=this.getAttribute(\'data-full-src\')', template)       # offline: back to the saved picture
 
 
 class LiveDatabaseSmokeTests(unittest.TestCase):
@@ -548,3 +633,29 @@ class LiveDatabaseSmokeTests(unittest.TestCase):
         self.assertGreater(with_rooms, 50)
         template = (settings.BASE_DIR / 'camino' / 'templates' / 'camino' / 'location_detail.html').read_text(encoding='utf-8')
         self.assertIn("card.dataset.privateRooms === '1'", template)
+
+
+    def test_every_stage_map_is_offered_in_three_widths_with_a_known_shape(self):
+        for stage in Stage.objects.order_by('id'):
+            info = stage_maps.describe(stage)
+            self.assertTrue(info['srcset'], f'stage {stage.id}')
+            self.assertIsNotNone(info['height'], f'stage {stage.id}: add its map to HEIGHT_AT_1024 in camino/stage_maps.py')
+
+    def test_a_stage_page_has_the_responsive_map_and_its_grid(self):
+        stage = Stage.objects.order_by('id').first()
+        html = self.get(f'/stage/{stage.id}/')
+        info = stage_maps.describe(stage)
+        self.assertIn(f'srcset="{info["srcset"]}"', html)
+        self.assertIn(f'sizes="{info["sizes"]}"', html)
+        self.assertIn(f'width="1024" height="{info["height"]}"', html)
+        self.assertIn(f'viewBox="0 0 1024 {info["height"]}"', html)
+        self.assertIn(f'src="{info["src"]}"', html)
+
+    def test_every_hotspot_lies_inside_the_grid_of_its_map(self):
+        stages = {s.id: s for s in Stage.objects.all()}
+        for spot in MapLocationCoord.objects.all():
+            if spot.top_left_x is None:
+                continue
+            height = stage_maps.describe(stages[spot.stage_id])['height']
+            self.assertTrue(0 <= spot.top_left_x < spot.bottom_right_x <= 1026, spot.id)
+            self.assertTrue(0 <= spot.top_left_y < spot.bottom_right_y <= height + 2, spot.id)

@@ -48,7 +48,9 @@
     unknown: 'This plan code refers to stages or places that are not in this guide, so it cannot be opened.'
   };
 
-  function failure(reason) { return { ok: false, reason: reason, message: MESSAGES[reason] }; }
+  // The words go through camT (i18n.js) when the page has it, so the Spanish page can translate them.
+  function say(message) { return typeof globalThis !== 'undefined' && typeof globalThis.camT === 'function' ? globalThis.camT(message) : message; }
+  function failure(reason) { return { ok: false, reason: reason, message: say(MESSAGES[reason]) }; }
 
   // ---------------------------------------------------------------- bytes
 

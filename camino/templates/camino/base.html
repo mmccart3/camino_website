@@ -1,17 +1,20 @@
-{% load static %}
+{% load static camino_i18n %}
 <!doctype html>
-<html lang="en">
+<html lang="{{ LANGUAGE }}">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>{% block title %}{% if seo.title %}{{ seo.title }}{% else %}{{ DEFAULT_TITLE }} | {{ SITE_NAME }}{% endif %}{% endblock %}</title>
     <meta name="description" content="{% block description %}{% if seo.description %}{{ seo.description }}{% else %}{{ DEFAULT_DESCRIPTION }}{% endif %}{% endblock %}">
-    {% if seo.noindex %}<meta name="robots" content="noindex,follow">{% else %}<link rel="canonical" href="{{ CANONICAL_URL }}">{% endif %}
+    {% if seo.noindex %}<meta name="robots" content="noindex,follow">{% else %}<link rel="canonical" href="{{ CANONICAL_URL }}">
+    <link rel="alternate" hreflang="en" href="{{ LANGUAGE_URLS.en }}">
+    <link rel="alternate" hreflang="es" href="{{ LANGUAGE_URLS.es }}">
+    <link rel="alternate" hreflang="x-default" href="{{ LANGUAGE_URLS.en }}">{% endif %}
 
     <!-- Link previews (WhatsApp, Facebook, X, search results) -->
     <meta property="og:site_name" content="{{ SITE_NAME }}">
     <meta property="og:type" content="website">
-    <meta property="og:locale" content="en_GB">
+    <meta property="og:locale" content="{{ OG_LOCALE }}">
     <meta property="og:url" content="{{ CANONICAL_URL }}">
     <meta property="og:title" content="{% if seo.title %}{{ seo.title }}{% else %}{{ DEFAULT_TITLE }}{% endif %}">
     <meta property="og:description" content="{% if seo.description %}{{ seo.description }}{% else %}{{ DEFAULT_DESCRIPTION }}{% endif %}">
@@ -29,7 +32,7 @@
 <meta name="theme-color" content="#1e3a8a">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Camino Guide">
+<meta name="apple-mobile-web-app-title" content="{% t_attr "Camino Guide" %}">
 
     <!-- Favicon & Mobile Touch Icons -->
 <link rel="icon" type="image/png" sizes="48x48" href="{% static 'camino/img/favicon-48.png' %}">
@@ -1260,6 +1263,7 @@
 }
 .site-nav a { color: #e2e8f0; text-decoration: none; font-weight: 600; padding: 0.25rem 0; }
 .site-nav a:hover, .site-nav a:focus-visible { color: #fde68a; text-decoration: underline; }
+.site-nav a.lang-switch { color: #fde68a; }
 .footer-links { display: flex; justify-content: center; flex-wrap: wrap; gap: 0.25rem 1.25rem; }
 .footer-links a { color: var(--navy); font-weight: 600; }
 
@@ -1354,6 +1358,8 @@
     {% block head_extra %}{% endblock %}
   </head>
 
+<script src="{% static 'camino/js/i18n.js' %}" defer></script>
+{% if LANGUAGE == 'es' %}<script src="{% static 'camino/js/i18n-es.js' %}" defer></script>{% endif %}
 <script src="{% static 'camino/js/pwa.js' %}" defer></script>
 
   <body>
@@ -1365,16 +1371,17 @@
     <a href="{% url 'stage_list' %}" class="brand-container">
       <img src="{% static 'camino/img/icon-96.png' %}" alt="" width="44" height="44" class="brand-icon">
       <div class="brand-text">
-        <span class="brand-title">Saint Jean to Santiago</span>
-        <span class="brand-subtitle">Camino Accommodation Guide</span>
+        <span class="brand-title">{% t "Saint Jean to Santiago" %}</span>
+        <span class="brand-subtitle">{% t "Camino Accommodation Guide" %}</span>
       </div>
     </a>
   </header>
-  <nav class="site-nav" aria-label="Main">
-    <a href="{% url 'stage_list' %}">Stages</a>
-    <a href="{% url 'towns' %}">Towns</a>
-    <a href="{% url 'plan' %}">Plan</a>
-    <a href="{% url 'offline_pack' %}">Save for offline</a>
+  <nav class="site-nav" aria-label="{% t_attr "Main" %}">
+    <a href="{% url 'stage_list' %}">{% t "Stages" %}</a>
+    <a href="{% url 'towns' %}">{% t "Towns" %}</a>
+    <a href="{% url 'plan' %}">{% t "Plan" %}</a>
+    <a href="{% url 'offline_pack' %}">{% t "Save for offline" %}</a>
+    <a href="{{ LANGUAGE_SWITCH.url }}" class="lang-switch" lang="{{ LANGUAGE_SWITCH.code }}" hreflang="{{ LANGUAGE_SWITCH.code }}">{{ LANGUAGE_SWITCH.label }}</a>
   </nav>
   
   <main>
@@ -1384,24 +1391,25 @@
   <footer>
     <div class="footer-content">
       <div class="footer-brand">
-        Saint Jean to Santiago &bull; Camino Accommodation Guide &bull; {{ APP_VERSION }}
+        {% t "Saint Jean to Santiago &bull; Camino Accommodation Guide &bull; {APP_VERSION}" APP_VERSION=APP_VERSION %}
       </div>
       <div class="footer-links">
-        <a href="{% url 'stage_list' %}">Stages</a>
-        <a href="{% url 'towns' %}">Towns</a>
-        <a href="{% url 'plan' %}">Plan</a>
-        <a href="{% url 'offline_pack' %}">Save for offline</a>
+        <a href="{% url 'stage_list' %}">{% t "Stages" %}</a>
+        <a href="{% url 'towns' %}">{% t "Towns" %}</a>
+        <a href="{% url 'plan' %}">{% t "Plan" %}</a>
+        <a href="{% url 'offline_pack' %}">{% t "Save for offline" %}</a>
+        <a href="{{ LANGUAGE_SWITCH.url }}" class="lang-switch" lang="{{ LANGUAGE_SWITCH.code }}" hreflang="{{ LANGUAGE_SWITCH.code }}">{{ LANGUAGE_SWITCH.label }}</a>
       </div>
       
       <div class="disclaimer-box">
         <p style="margin: 0 0 0.4rem 0;">
-          <strong>Affiliate Disclosure:</strong> Some lodging links on this guide are affiliate links through Booking.com. If you book an accommodation through these links, we may earn a small referral commission at no additional cost to you, which helps support maintenance of this guide.
+          <strong>{% t "Affiliate Disclosure:" %}</strong> {% t "Some lodging links on this guide are affiliate links through Booking.com. If you book an accommodation through these links, we may earn a small referral commission at no additional cost to you, which helps support maintenance of this guide." %}
         </p>
         <p style="margin: 0 0 0.4rem 0;">
-          <strong>Credits:</strong> Phone, email and website icons are <a href="https://fonts.google.com/icons" target="_blank" rel="noopener">Material Icons</a> by Google, licensed under <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a> (converted to SVG). Google Maps and WhatsApp names and logos are trademarks of their owners.
+          <strong>{% t "Credits:" %}</strong> {% t "Phone, email and website icons are" %} <a href="https://fonts.google.com/icons" target="_blank" rel="noopener">{% t "Material Icons" %}</a> {% t "by Google, licensed under" %} <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">{% t "CC BY 4.0" %}</a> {% t "(converted to SVG). Google Maps and WhatsApp names and logos are trademarks of their owners." %}
         </p>
         <p style="margin: 0;">
-          <strong>Privacy &amp; Cookies:</strong> This website only uses strictly necessary functional cookies required for core site operation and security. We do not track or profile personal browsing behavior.
+          <strong>{% t "Privacy &amp; Cookies:" %}</strong> {% t "This website only uses strictly necessary functional cookies required for core site operation and security. We do not track or profile personal browsing behavior." %}
         </p>
       </div>
     </div>

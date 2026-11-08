@@ -4,6 +4,7 @@
     python tool/audit_database.py camino.sqlite                      # report to the screen
     python tool/audit_database.py camino.sqlite --app path/to/app/camino.sqlite
     python tool/audit_database.py camino.sqlite --markdown report.md --json report.json
+    python tool/audit_database.py camino.sqlite --spanish camino/locale/es.json   # (found automatically next to the database)
 
 Uses only the Python standard library and opens the database read-only, so it is safe to run at
 any time. Findings are ranked:  ERROR  would show wrong or broken content,
@@ -13,6 +14,7 @@ Exit status: 0 when there are no ERROR findings, 1 otherwise.
 import argparse
 import json
 import math
+import os
 import re
 import sqlite3
 import sys
@@ -306,7 +308,7 @@ def check_stays(con):
             add(a, 'ERROR', table + ': GPS position of zero (0, 0)', len(zero), [label(r) for r in zero])
         parked = [r for r in data if r['locationID'] in placeholders]
         if parked:
-            add(a, 'ERROR', '%s: stays filed under a placeholder town (%s), so they appear on a public "Unassigned" page and in no real town' % (table, ', '.join(locs[i]['locationName'] for i in placeholders)),
+            add(a, 'INFO', '%s: %d stays are held under the placeholder town (%s): places off the route, listed on that town\'s own page and in no real town' % (table, len(parked), ', '.join(locs[i]['locationName'] for i in placeholders)),
                 len(parked), [label(r) for r in parked])
         if outside:
             add(a, 'ERROR', table + ': GPS position outside the Camino area (swapped or mistyped?)', len(outside), ['%s (%s, %s)' % (label(r), r['gps_lat'], r['gps_lng']) for r in outside])
@@ -470,9 +472,12 @@ def check_locations(con):
     nogps = [l for l in locs if num(l['latitude']) is None or num(l['longitude']) is None]
     if nogps:
         add(a, 'ERROR', 'Towns with no coordinates', len(nogps), ['%s %s' % (l['ID'], l['locationName']) for l in nogps])
-    out = [l for l in locs if num(l['latitude']) is not None and not in_box(num(l['latitude']), num(l['longitude']))]
+    holding = placeholder_town_ids(con)
+    out = [l for l in locs if num(l['latitude']) is not None and not in_box(num(l['latitude']), num(l['longitude'])) and l['ID'] not in holding]
     if out:
         add(a, 'ERROR', 'Towns outside the Camino area', len(out), ['%s %s (%s, %s)' % (l['ID'], l['locationName'], l['latitude'], l['longitude']) for l in out])
+    if holding:
+        add(a, 'INFO', 'Holding town for places off the route (its position is not on the Camino by design): %s' % ', '.join('%s %s' % (l['ID'], l['locationName']) for l in locs if l['ID'] in holding), len(holding))
     pts = Counter((num(l['latitude']), num(l['longitude'])) for l in locs if num(l['latitude']) is not None)
     dup = [k for k, v in pts.items() if v > 1]
     if dup:
@@ -792,16 +797,64 @@ def report(markdown):
     return '\n'.join(out) + '\n'
 
 
+ENGLISH_NAME = re.compile(r"\b(exit|detour|splits?|rejoin|leave|centre|center|fountain|shelter|winery|van|refreshments|crossing|junction|viewpoint|route)\b", re.I)
+
+
+def check_spanish(con, path):
+    """What the Spanish pages still show in English: the catalogue (camino/locale/es.json) is looked up by the English text."""
+    a = 'Spanish version'
+    if not path or not os.path.exists(path):
+        add(a, 'INFO', 'Spanish catalogue not found (looked for %s); this check was skipped' % path)
+        return
+    data = json.load(open(path, encoding='utf-8'))
+    have = set(data.get('ui', {})) | set(data.get('plan', {}))
+
+    def missing(sql):
+        seen = {}
+        for r in rows(con, sql):
+            v = r[0]
+            if v is not None and str(v).strip() and re.search('[A-Za-z]{3}', str(v)) and str(v).strip() not in have:
+                seen[str(v).strip()] = seen.get(str(v).strip(), 0) + 1
+        return seen
+    for title, sql in (('Stage names', 'select stageName from stages'),
+                       ('Opening periods of albergues', 'select openingPeriod from albergues'),
+                       ('Check-in times of albergues', 'select checkInTimes from albergues'),
+                       ('Price notes of albergues', 'select rateNotes from albergues'),
+                       ('Price notes of private places to stay', 'select rateNotes from privateAccommDetail')):
+        gone = missing(sql)
+        if gone:
+            add(a, 'ERROR' if title == 'Stage names' else 'WARN', '%s with no Spanish, so the Spanish pages show them in English (add them to es.json, "ui" for stage names and "plan" for stay text)' % title,
+                len(gone), ['%s (%d)' % (k[:90], v) for k, v in sorted(gone.items(), key=lambda kv: -kv[1])])
+        else:
+            ok(a, '%s: every value has Spanish' % title)
+    names = [r['locationName'].strip() for r in rows(con, 'select locationName from locations') if r['locationName']]
+    english = [n for n in names if ENGLISH_NAME.search(n) and n not in have]
+    if english:
+        add(a, 'WARN', 'Town names that look English and have no Spanish', len(english), english)
+    else:
+        ok(a, 'Town names that look English all have Spanish')
+    try:
+        total, with_es = rows(con, "select count(*), sum(paragraphTextEs is not null and trim(paragraphTextEs) <> '') from paragraphs")[0][0:2]
+        if total != (with_es or 0):
+            add(a, 'WARN', 'Town paragraphs with no Spanish text (the Spanish page shows the English paragraph)', total - (with_es or 0))
+        else:
+            ok(a, 'Every town paragraph has Spanish text (%d)' % total)
+    except sqlite3.Error:
+        add(a, 'INFO', 'paragraphs has no paragraphTextEs column')
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('website_db')
     ap.add_argument('--app', help='the app database to compare with')
+    ap.add_argument('--spanish', help='the Spanish catalogue (default: camino/locale/es.json next to the database)')
     ap.add_argument('--markdown', help='write the report as Markdown to this file')
     ap.add_argument('--json', help='write the findings as JSON to this file')
     args = ap.parse_args()
     web = connect(args.website_db)
     for fn in (check_integrity, check_references, check_graph, check_stays, check_text, check_locations, check_maps, check_route_data, check_indexes):
         fn(web)
+    check_spanish(web, args.spanish or os.path.join(os.path.dirname(os.path.abspath(args.website_db)), 'camino', 'locale', 'es.json'))
     if args.app:
         compare_app(web, connect(args.app))
     print(report(False))

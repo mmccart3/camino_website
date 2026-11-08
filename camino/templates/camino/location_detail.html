@@ -1,4 +1,5 @@
 {% extends 'camino/base.html' %}
+{% load camino_i18n %}
 {% load static %}
 
 {% block content %}
@@ -8,45 +9,45 @@
   <div>
     {% if prior_location %}
       <a href="{% url 'location_detail' prior_location.id %}" class="btn-nav">
-        ← {{ prior_location.location_name }}
+        ← {{ prior_location.display_name }}
       </a>
     {% else %}
-      <span class="btn-nav btn-disabled">← Route Start</span>
+      <span class="btn-nav btn-disabled">{% t "← Route Start" %}</span>
     {% endif %}
   </div>
 
 <div class="nav-center-buttons">
     {% if parent_stage %}
       <a href="{% url 'stage_detail' parent_stage.id %}" class="btn-nav btn-stage">
-        Stage {{ parent_stage.display_ref }}: {{ parent_stage.stage_name|truncatechars:20 }}
+        {% t "Stage {display_ref}: {stage_name}" display_ref=parent_stage.display_ref stage_name=parent_stage.stage_name|tr|truncatechars:20 %}
       </a>
     {% endif %}
-    <a href="{% url 'stage_list' %}" class="btn-nav btn-all-stages">All Stages</a>
+    <a href="{% url 'stage_list' %}" class="btn-nav btn-all-stages">{% t "All Stages" %}</a>
   </div>
 
   <div>
     {% if next_location %}
       <a href="{% url 'location_detail' next_location.id %}" class="btn-nav">
-        {{ next_location.location_name }} →
+        {{ next_location.display_name }} →
       </a>
     {% else %}
-      <span class="btn-nav btn-disabled">Route Finish →</span>
+      <span class="btn-nav btn-disabled">{% t "Route Finish →" %}</span>
     {% endif %}
   </div>
 </div>
 
-<h2>{{ location.location_name }}</h2>
+<h2>{{ location.display_name }}</h2>
 
 <!-- Village Facilities Pill Bar -->
 <div class="facility-bar">
   <span class="facility-badge {% if location.has_bar_cafe == 1 %}badge-available{% elif location.has_bar_cafe == 0 %}badge-none{% else %}badge-unknown{% endif %}">
-    ☕ <span class="{% if location.has_bar_cafe == 0 %}facility-strike{% endif %}">Bar / Café</span>
+    ☕ <span class="{% if location.has_bar_cafe == 0 %}facility-strike{% endif %}">{% t "Bar / Café" %}</span>
   </span>
   <span class="facility-badge {% if location.has_grocery_store == 1 %}badge-available{% elif location.has_grocery_store == 0 %}badge-none{% else %}badge-unknown{% endif %}">
-    🛒 <span class="{% if location.has_grocery_store == 0 %}facility-strike{% endif %}">Groceries</span>
+    🛒 <span class="{% if location.has_grocery_store == 0 %}facility-strike{% endif %}">{% t "Groceries" %}</span>
   </span>
   <span class="facility-badge {% if location.has_pharmacy == 1 %}badge-available{% elif location.has_pharmacy == 0 %}badge-none{% else %}badge-unknown{% endif %}">
-    ⚕️ <span class="{% if location.has_pharmacy == 0 %}facility-strike{% endif %}">Pharmacy</span>
+    ⚕️ <span class="{% if location.has_pharmacy == 0 %}facility-strike{% endif %}">{% t "Pharmacy" %}</span>
   </span>
 </div>
 
@@ -54,25 +55,25 @@
 {% if paragraphs %}
   <div class="card" style="margin-bottom: 1.5rem;">
     {% for p in paragraphs %}
-      <p style="margin-top: 0; line-height: 1.6;">{{ p.text }}</p>
+      <p style="margin-top: 0; line-height: 1.6;">{{ p.localized_text }}</p>
     {% endfor %}
   </div>
 {% endif %}
 
 <!-- Accommodation Section -->
-<h3 style="margin-bottom: 0.25rem;">Places to Stay ({{ stay_count }})</h3>
+<h3 style="margin-bottom: 0.25rem;">{% t "Places to Stay ({stay_count})" stay_count=stay_count %}</h3>
 <p style="color: #64748b; font-size: 0.85rem; margin-top: 0;">
-  Filter by accommodation style and available pilgrim services.
+  {% t "Filter by accommodation style and available pilgrim services." %}
 </p>
 
 <!-- Filter Chips -->
 <div class="filter-chip-bar">
-  <button class="filter-chip active" data-filter="all">All</button>
-  <button class="filter-chip" data-filter="albergue">Albergues</button>
-  <button class="filter-chip" data-filter="private">Private Rooms</button>
-  <button class="filter-chip" data-filter="kitchen">🍳 Kitchen</button>
-  <button class="filter-chip" data-filter="washer">🧺 Laundry</button>
-  <button class="filter-chip" data-filter="communal">🍽️ Communal Meal</button>
+  <button class="filter-chip active" data-filter="all">{% t "All" %}</button>
+  <button class="filter-chip" data-filter="albergue">{% t "Albergues" %}</button>
+  <button class="filter-chip" data-filter="private">{% t "Private Rooms" %}</button>
+  <button class="filter-chip" data-filter="kitchen">{% t "🍳 Kitchen" %}</button>
+  <button class="filter-chip" data-filter="washer">{% t "🧺 Laundry" %}</button>
+  <button class="filter-chip" data-filter="communal">{% t "🍽️ Communal Meal" %}</button>
 </div>
 
 {% include 'camino/_icons.html' %}
@@ -101,65 +102,65 @@
       <div class="accomm-body">
         <div class="accomm-header-row">
           <div>
-            <span class="badge" style="background:#e0f2fe; color:#0369a1; margin-bottom: 0.35rem;">Albergue</span>
+            <span class="badge" style="background:#e0f2fe; color:#0369a1; margin-bottom: 0.35rem;">{% t "Albergue" %}</span>
             <h4 class="accomm-title">{{ a.name }}</h4>
             {% if a.address %}
               <div style="font-size: 0.82rem; color: #64748b; margin-top: 2px;">📍 {{ a.address }}</div>
             {% endif %}
           </div>
           {% if a.rate_1p_min %}
-            <div class="price-pill">from €{{ a.rate_1p_min|floatformat:0 }}</div>
+            <div class="price-pill">{% t "from €{rate_1p_min}" rate_1p_min=a.rate_1p_min|floatformat:0 %}</div>
           {% endif %}
         </div>
 
         <!-- Facility Badges -->
         <div class="feature-pill-row">
           {% if a.beds %}
-            <span class="feature-pill">🛏️ {{ a.beds }} beds</span>
+            <span class="feature-pill">{% t "🛏️ {beds} beds" beds=a.beds %}</span>
           {% endif %}
           {% if a.kitchen %}
-            <span class="feature-pill">🍳 Kitchen</span>
+            <span class="feature-pill">{% t "🍳 Kitchen" %}</span>
           {% endif %}
           {% if a.washer %}
-            <span class="feature-pill">🧺 Washing machine</span>
+            <span class="feature-pill">{% t "🧺 Washing machine" %}</span>
           {% endif %}
           {% if a.communal_meal %}
-            <span class="feature-pill">🍽️ Communal meal</span>
+            <span class="feature-pill">{% t "🍽️ Communal meal" %}</span>
           {% endif %}
           {% if a.privateRoomsAvailable %}
-            <span class="feature-pill">🚪 Private rooms</span>
+            <span class="feature-pill">{% t "🚪 Private rooms" %}</span>
           {% endif %}
           {% if a.opening_period %}
-            <span class="feature-pill">📅 {{ a.opening_period }}</span>
+            <span class="feature-pill">📅 {{ a.opening_period|tr }}</span>
           {% endif %}
           {% if a.check_in_times %}
-            <span class="feature-pill">🕒 {{ a.check_in_times }}</span>
+            <span class="feature-pill">🕒 {{ a.check_in_times|tr }}</span>
           {% endif %}
         </div>
 
         {% if a.rate_notes %}
-          <p style="font-size: 0.85rem; color: #475569; margin: 0.4rem 0;">{{ a.rate_notes }}</p>
+          <p style="font-size: 0.85rem; color: #475569; margin: 0.4rem 0;">{{ a.rate_notes|tr }}</p>
         {% endif %}
 
         <!-- Action Links -->
         <div class="accomm-actions">
           {% if a.valid_booking_url %}
-            <a href="{{ a.valid_booking_url }}" target="_blank" rel="noopener" class="btn btn-booking"><span>Booking.com</span></a>
+            <a href="{{ a.valid_booking_url }}" target="_blank" rel="noopener" class="btn btn-booking"><span>{% t "Booking.com" %}</span></a>
           {% endif %}
           {% if a.whatsapp %}
-            <a href="https://wa.me/{{ a.whatsapp|cut:'+'|cut:' ' }}" target="_blank" rel="noopener" class="btn btn-wa" aria-label="Message {{ a.name }} on WhatsApp"><img src="{% static 'camino/img/whatsapp-logo-green.svg' %}" alt="" width="86" height="20"></a>
+            <a href="https://wa.me/{{ a.whatsapp|cut:'+'|cut:' ' }}" target="_blank" rel="noopener" class="btn btn-wa" aria-label="{% t_attr "Message {name} on WhatsApp" name=a.name %}"><img src="{% static 'camino/img/whatsapp-logo-green.svg' %}" alt="" width="86" height="20"></a>
           {% endif %}
           {% if a.phone %}
-            <a href="tel:{{ a.phone }}" class="btn btn-phone" aria-label="Call {{ a.name }}"><svg class="btn-icon" aria-hidden="true" focusable="false"><use href="#i-phone"></use></svg><span>{{ a.phone }}</span></a>
+            <a href="tel:{{ a.phone }}" class="btn btn-phone" aria-label="{% t_attr "Call {name}" name=a.name %}"><svg class="btn-icon" aria-hidden="true" focusable="false"><use href="#i-phone"></use></svg><span>{{ a.phone }}</span></a>
           {% endif %}
           {% if a.valid_email %}
-            <a href="mailto:{{ a.valid_email }}" class="btn btn-email" aria-label="Email {{ a.name }}"><svg class="btn-icon" aria-hidden="true" focusable="false"><use href="#i-email"></use></svg><span>Email</span></a>
+            <a href="mailto:{{ a.valid_email }}" class="btn btn-email" aria-label="{% t_attr "Email {name}" name=a.name %}"><svg class="btn-icon" aria-hidden="true" focusable="false"><use href="#i-email"></use></svg><span>{% t "Email" %}</span></a>
           {% endif %}
           {% if a.valid_website_url %}
-            <a href="{{ a.valid_website_url }}" target="_blank" rel="noopener" class="btn btn-web" aria-label="Website of {{ a.name }}"><svg class="btn-icon" aria-hidden="true" focusable="false"><use href="#i-language"></use></svg><span>Website</span></a>
+            <a href="{{ a.valid_website_url }}" target="_blank" rel="noopener" class="btn btn-web" aria-label="{% t_attr "Website of {name}" name=a.name %}"><svg class="btn-icon" aria-hidden="true" focusable="false"><use href="#i-language"></use></svg><span>{% t "Website" %}</span></a>
           {% endif %}
           {% if a.google_maps_url %}
-            <a href="{{ a.google_maps_url }}" target="_blank" rel="noopener" class="btn btn-map" aria-label="Show {{ a.name }} on Google Maps"><img src="{% static 'camino/img/google-maps-pin.png' %}" alt="" width="18" height="26"><span translate="no">Google Maps</span></a>
+            <a href="{{ a.google_maps_url }}" target="_blank" rel="noopener" class="btn btn-map" aria-label="{% t_attr "Show {name} on Google Maps" name=a.name %}"><img src="{% static 'camino/img/google-maps-pin.png' %}" alt="" width="18" height="26"><span translate="no">{% t "Google Maps" %}</span></a>
           {% endif %}
         </div>
       </div>
@@ -172,7 +173,7 @@
       <div class="accomm-body">
         <div class="accomm-header-row">
           <div>
-            <span class="badge" style="background:#f3e8ff; color:#7e22ce; margin-bottom: 0.35rem;">Private Room</span>
+            <span class="badge" style="background:#f3e8ff; color:#7e22ce; margin-bottom: 0.35rem;">{% t "Private Room" %}</span>
             <h4 class="accomm-title">{{ p.name }}</h4>
             {% if p.address %}
               <div style="font-size: 0.82rem; color: #64748b; margin-top: 2px;">📍 {{ p.address }}</div>
@@ -180,34 +181,34 @@
           </div>
           {% if p.rate_1p_min or p.rate_2p_min %}
             <div class="price-pill">
-              from €{% if p.rate_1p_min %}{{ p.rate_1p_min|floatformat:0 }}{% else %}{{ p.rate_2p_min|floatformat:0 }}{% endif %}
+              {% t "from €" %}{% if p.rate_1p_min %}{{ p.rate_1p_min|floatformat:0 }}{% else %}{{ p.rate_2p_min|floatformat:0 }}{% endif %}
             </div>
           {% endif %}
         </div>
 
         {% if p.rate_notes %}
-          <p style="font-size: 0.85rem; color: #475569; margin: 0.4rem 0;">{{ p.rate_notes }}</p>
+          <p style="font-size: 0.85rem; color: #475569; margin: 0.4rem 0;">{{ p.rate_notes|tr }}</p>
         {% endif %}
 
         <!-- Action Links -->
         <div class="accomm-actions">
           {% if p.valid_booking_url %}
-            <a href="{{ p.valid_booking_url }}" target="_blank" rel="noopener" class="btn btn-booking"><span>Booking.com</span></a>
+            <a href="{{ p.valid_booking_url }}" target="_blank" rel="noopener" class="btn btn-booking"><span>{% t "Booking.com" %}</span></a>
           {% endif %}
           {% if p.whatsapp %}
-            <a href="https://wa.me/{{ p.whatsapp|cut:'+'|cut:' ' }}" target="_blank" rel="noopener" class="btn btn-wa" aria-label="Message {{ p.name }} on WhatsApp"><img src="{% static 'camino/img/whatsapp-logo-green.svg' %}" alt="" width="86" height="20"></a>
+            <a href="https://wa.me/{{ p.whatsapp|cut:'+'|cut:' ' }}" target="_blank" rel="noopener" class="btn btn-wa" aria-label="{% t_attr "Message {name} on WhatsApp" name=p.name %}"><img src="{% static 'camino/img/whatsapp-logo-green.svg' %}" alt="" width="86" height="20"></a>
           {% endif %}
           {% if p.phone %}
-            <a href="tel:{{ p.phone }}" class="btn btn-phone" aria-label="Call {{ p.name }}"><svg class="btn-icon" aria-hidden="true" focusable="false"><use href="#i-phone"></use></svg><span>{{ p.phone }}</span></a>
+            <a href="tel:{{ p.phone }}" class="btn btn-phone" aria-label="{% t_attr "Call {name}" name=p.name %}"><svg class="btn-icon" aria-hidden="true" focusable="false"><use href="#i-phone"></use></svg><span>{{ p.phone }}</span></a>
           {% endif %}
           {% if p.valid_email %}
-            <a href="mailto:{{ p.valid_email }}" class="btn btn-email" aria-label="Email {{ p.name }}"><svg class="btn-icon" aria-hidden="true" focusable="false"><use href="#i-email"></use></svg><span>Email</span></a>
+            <a href="mailto:{{ p.valid_email }}" class="btn btn-email" aria-label="{% t_attr "Email {name}" name=p.name %}"><svg class="btn-icon" aria-hidden="true" focusable="false"><use href="#i-email"></use></svg><span>{% t "Email" %}</span></a>
           {% endif %}
           {% if p.valid_website_url %}
-            <a href="{{ p.valid_website_url }}" target="_blank" rel="noopener" class="btn btn-web" aria-label="Website of {{ p.name }}"><svg class="btn-icon" aria-hidden="true" focusable="false"><use href="#i-language"></use></svg><span>Website</span></a>
+            <a href="{{ p.valid_website_url }}" target="_blank" rel="noopener" class="btn btn-web" aria-label="{% t_attr "Website of {name}" name=p.name %}"><svg class="btn-icon" aria-hidden="true" focusable="false"><use href="#i-language"></use></svg><span>{% t "Website" %}</span></a>
           {% endif %}
           {% if p.google_maps_url %}
-            <a href="{{ p.google_maps_url }}" target="_blank" rel="noopener" class="btn btn-map" aria-label="Show {{ p.name }} on Google Maps"><img src="{% static 'camino/img/google-maps-pin.png' %}" alt="" width="18" height="26"><span translate="no">Google Maps</span></a>
+            <a href="{{ p.google_maps_url }}" target="_blank" rel="noopener" class="btn btn-map" aria-label="{% t_attr "Show {name} on Google Maps" name=p.name %}"><img src="{% static 'camino/img/google-maps-pin.png' %}" alt="" width="18" height="26"><span translate="no">{% t "Google Maps" %}</span></a>
           {% endif %}
         </div>
       </div>
@@ -228,12 +229,12 @@
   </iframe>
   
   <div style="background: #f8fafc; padding: 0.6rem 1rem; border-top: 1px solid #e2e8f0; font-size: 0.85rem; display: flex; justify-content: space-between; align-items: center;">
-    <span style="color: #64748b;">Coordinates: {{ location.latitude|floatformat:5 }}, {{ location.longitude|floatformat:5 }}</span>
+    <span style="color: #64748b;">{% t "Coordinates: {latitude}, {longitude}" latitude=location.latitude|floatformat:5 longitude=location.longitude|floatformat:5 %}</span>
     <a href="https://www.google.com/maps/search/?api=1&query={{ location.latitude }},{{ location.longitude }}" 
        target="_blank" 
        rel="noopener"
        style="color: #2563eb; text-decoration: none; font-weight: 600;">
-       Open in Google Maps App &nearr;
+       {% t "Open in Google Maps App &nearr;" %}
     </a>
   </div>
 </div>

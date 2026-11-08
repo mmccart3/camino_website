@@ -17,7 +17,10 @@ Including another URLconf
 # from django.contrib import admin
 # from django.urls import path
 # config/urls.py
+from django.conf.urls.i18n import i18n_patterns
 from django.urls import path, include
+
+from camino.urls import localized_urlpatterns
 
 handler404 = 'camino.views.not_found'
 handler500 = 'camino.views.server_error'
@@ -26,4 +29,7 @@ handler500 = 'camino.views.server_error'
 # changed by editing the SQLite database directly (DBeaver), see the README.
 urlpatterns = [
     path('', include('camino.urls')),
-]
+] + i18n_patterns(
+    path('', include(localized_urlpatterns)),
+    prefix_default_language=False,   # English keeps its plain addresses; Spanish is under /es/
+)

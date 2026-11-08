@@ -2,6 +2,8 @@
 from django import template
 from urllib.parse import urlparse
 
+from ..i18n import tr
+
 register = template.Library()
 
 PARTNER_QUERY = (
@@ -46,8 +48,8 @@ def format_duration(minutes):
 
     parts = []
     if hours > 0:
-        parts.append(f"{hours} hr" if hours == 1 else f"{hours} hrs")
+        parts.append(tr('{n} hr', n=hours) if hours == 1 else tr('{n} hrs', n=hours))
     if remaining_mins > 0:
-        parts.append(f"{remaining_mins} min" if remaining_mins == 1 else f"{remaining_mins} mins")
+        parts.append(tr('{n} min', n=remaining_mins) if remaining_mins == 1 else tr('{n} mins', n=remaining_mins))
 
-    return " ".join(parts) if parts else "0 mins"
+    return " ".join(parts) if parts else tr('0 mins')

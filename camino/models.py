@@ -2,6 +2,8 @@
 from django.db import models
 from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 
+from . import i18n
+
 BOOKING_AFFILIATE_PARAMS = {
     'aid': '818289',
     'label': 'affnetcj-15734710_pub-8073556_site-101884570_pname-MM3+Enterprise+Limited_clkid-_cjevent-5b29e765ba1911f180aa00a10a18b8f7',
@@ -149,6 +151,8 @@ class Stage(models.Model):
     elevation_chart_url = models.CharField(db_column='stageElevationChartURL', max_length=255, null=True)
     map_url_1024 = models.CharField(db_column='stageMap1024URL', max_length=255, null=True)
     map_url_1920 = models.CharField(db_column='stageMap1920URL', max_length=255, null=True)
+    map_url_640 = models.CharField(db_column='stageMap640URL', max_length=255, null=True)
+    map_url_360 = models.CharField(db_column='stageMap360URL', max_length=255, null=True)
     stage_map_url = models.CharField(db_column='stageMapURL', max_length=255, null=True)
     prior_stage = models.IntegerField(db_column='priorStage', null=True)
     alt_prior_stage = models.IntegerField(db_column='altPriorStage', null=True)
@@ -189,13 +193,23 @@ class Location(models.Model):
     def __str__(self):
         return self.location_name
 
+    @property
+    def display_name(self):
+        """The name to show on the page being built. Nearly every place has one name in every language; a few
+        markers on the route have English names ("Exit to Huarte") that the Spanish catalogue translates."""
+        name = self.location_name
+        if name and i18n.is_spanish():
+            return i18n.lookup(name.strip())
+        return name
+
 
 class MapLocationCoord(models.Model):
     id = models.IntegerField(db_column='ID', primary_key=True)
     stage_id = models.IntegerField(db_column='stageId')
     location = models.ForeignKey(Location, db_column='locationId', on_delete=models.DO_NOTHING)
     
-    # Base columns (which now hold 1920-scale coordinates)
+    # Base columns: the rectangle on the 1024-pixel-wide map picture (the TLX1024... columns hold the same
+    # numbers). The helpers below keep their old x_1920 names, but the values are on the 1024 grid.
     top_left_x = models.IntegerField(db_column='topLeftX', null=True)
     top_left_y = models.IntegerField(db_column='topLeftY', null=True)
     bottom_right_x = models.IntegerField(db_column='bottomRightX', null=True)
@@ -380,7 +394,16 @@ class Paragraph(models.Model):
     location = models.ForeignKey(Location, db_column='locationID', on_delete=models.DO_NOTHING, related_name='paragraphs')
     type = models.CharField(db_column='paragraphType', max_length=10)
     text = models.TextField(db_column='paragraphText')
+    text_es = models.TextField(db_column='paragraphTextEs', null=True, blank=True)
 
     class Meta:
         managed = False
         db_table = 'paragraphs'
+
+    @property
+    def localized_text(self):
+        """The paragraph in the language of the page: Spanish when there is one, otherwise the English text."""
+        from .i18n import is_spanish
+        if is_spanish() and (self.text_es or '').strip():
+            return self.text_es
+        return self.text

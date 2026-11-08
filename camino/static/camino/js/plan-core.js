@@ -24,11 +24,21 @@
  * describes it; tool/itinerary_file.py there is the reference implementation.
  */
 (function (root, factory) {
-  var api = factory();
+  var api = factory(typeof globalThis !== 'undefined' ? globalThis : root);
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.CaminoPlan = api;
-})(typeof self !== 'undefined' ? self : this, function () {
+})(typeof self !== 'undefined' ? self : this, function (root) {
   'use strict';
+
+  // The words shown to the visitor go through t(), so the Spanish page can translate them (see i18n.js). Without
+  // i18n.js (the Node tests) the English text is used as written.
+  function t(message) {
+    var args = Array.prototype.slice.call(arguments, 1);
+    var translate = root.camT;
+    if (typeof translate === 'function') return translate.apply(null, [message].concat(args));
+    return message.replace(/\{(\w+)\}/g, function (all, key) { return args[Number(key)] === undefined ? all : String(args[Number(key)]); });
+  }
+  function number(value) { return root.CaminoI18n ? root.CaminoI18n.num(value) : String(value); }
 
   var FORMAT = 'camino-personal-backup';
   var CUSTOM_STAY_BASE = 1700000000000000; // below 2^53, so a browser holds it exactly
@@ -66,9 +76,12 @@
     return Math.floor(Math.round(weighted * flat / pace * 1e6) / 1e6);
   }
 
-  function formatKm(metres) { return (metres / 1000).toFixed(1) + ' km'; }
+  function formatKm(metres) { return number((metres / 1000).toFixed(1)) + ' km'; }
   // Whole metres with a comma between thousands: "1,534 m".
-  function formatMetres(n) { return String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ',') + ' m'; }
+  function formatMetres(n) {
+    var separator = root.CaminoI18n && root.CaminoI18n.language() === 'es' ? '.' : ',';
+    return String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, separator) + ' m';
+  }
 
   // Minutes after midnight (0 to 1439) as "07:30", and back. parseClock accepts "7:30" and "0730";
   // anything else gives null.
@@ -108,7 +121,7 @@
   // ---------------------------------------------------------------- state
 
   function newState(data) {
-    return { v: 1, name: 'My Camino', startDate: '', pace: data.pace.default, days: [] };
+    return { v: 1, name: t('My Camino'), startDate: '', pace: data.pace.default, days: [] };
   }
 
   function cleanStay(raw, data) {
@@ -451,7 +464,7 @@
   // Short names for a set of alternative routes: only what tells them apart. Routes that share the
   // start of their name ("St Jean to Roncesvalles", "St Jean to Roncesvalles via Valcarlos") keep
   // just the difference; a route with nothing left is called by its kind.
-  var ROUTE_KIND_NAMES = { main: 'Main route', valley: 'Valley route', mountain: 'Mountain route', alt: 'Alternative route' };
+  var ROUTE_KIND_NAMES = { main: 'Main route', valley: 'Valley route', mountain: 'Mountain route', alt: 'Alternative route' };  // shown through t()
 
   function routeLabels(all, data) {
     var g = graph(data);
@@ -465,7 +478,7 @@
       var rest = w.slice(common).join(' ');
       if (!rest) {
         var stage = data.stages[String(g.byId[all[i][0]].stage)];
-        return (stage && ROUTE_KIND_NAMES[stage.kind]) || 'Standard route';
+        return t((stage && ROUTE_KIND_NAMES[stage.kind]) || 'Standard route');
       }
       return rest.charAt(0).toUpperCase() + rest.slice(1);
     });
@@ -511,15 +524,15 @@
         info.seconds = walkingSeconds(st.w, state.pace, data.flat);
         setClimb(info, chainTotals(st.paths, data));
         if (here && here.id !== st.start) {
-          info.warning = 'This day starts at ' + info.start.name + ', but the day before ended at ' + here.name + '.';
+          info.warning = t('This day starts at {0}, but the day before ended at {1}.', info.start.name, here.name);
         }
       } else if (day.t === 'r') {
         var restAt = here ? here : (String(day.at || '').trim() ? typedPlace(day.at) : null);
-        if (!restAt) info.invalid = 'Say where this rest day is.';
+        if (!restAt) info.invalid = t('Say where this rest day is.');
         else { info.start = restAt; info.end = restAt; info.metres = 0; info.seconds = 0; }
       } else if (day.t === 'c') {
         var total = chainTotals(day.paths, data);
-        if (!total) info.invalid = 'This part of the route is no longer in the guide. Remove the day and make it again.';
+        if (!total) info.invalid = t('This part of the route is no longer in the guide. Remove the day and make it again.');
         else {
           info.start = { id: total.from, name: data.places[total.from] };
           info.end = { id: total.to, name: data.places[total.to] };
@@ -527,18 +540,18 @@
           info.seconds = walkingSeconds(total.weighted, state.pace, data.flat);
           setClimb(info, total);
           if (here && here.id !== total.from) {
-            info.warning = 'This day starts at ' + info.start.name + ', but the day before ended at ' + here.name + '.';
+            info.warning = t('This day starts at {0}, but the day before ended at {1}.', info.start.name, here.name);
           }
         }
       } else {
         var from = String(day.from || '').trim() || (here ? here.name : '');
         var to = String(day.to || '').trim();
-        if (!from || !to) info.invalid = !from && !to ? 'Say where this journey starts and ends.' : (!from ? 'Say where this journey starts.' : 'Say where this journey ends.');
+        if (!from || !to) info.invalid = !from && !to ? t('Say where this journey starts and ends.') : (!from ? t('Say where this journey starts.') : t('Say where this journey ends.'));
         else {
           info.start = typedPlace(from);
           info.end = typedPlace(to);
           if (here && here.id !== info.start.id) {
-            info.warning = 'This day starts at ' + info.start.name + ', but the day before ended at ' + here.name + '.';
+            info.warning = t('This day starts at {0}, but the day before ended at {1}.', info.start.name, here.name);
           }
         }
       }
@@ -557,9 +570,9 @@
   }
 
   // How a day is named: "Day 3", or "Day 3 – part 2" when the day has more than one part.
-  function dayLabel(info) { return 'Day ' + info.no + (info.parts > 1 ? ' \u2013 part ' + info.part : ''); }
+  function dayLabel(info) { return info.parts > 1 ? t('Day {0} \u2013 part {1}', info.no, info.part) : t('Day {0}', info.no); }
   // The same for use in a sentence: "day 3" or "day 3, part 2".
-  function dayRef(info) { return 'day ' + info.no + (info.parts > 1 ? ', part ' + info.part : ''); }
+  function dayRef(info) { return info.parts > 1 ? t('day {0}, part {1}', info.no, info.part) : t('day {0}', info.no); }
 
   // `days` are calendar days (a journey on the same day as the day before does not add one); `entries`
   // counts every row of the plan. A night counts as chosen when any row of that day has a stay.
@@ -648,11 +661,11 @@
   var FACILITIES = { k: 'Kitchen', m: 'Communal meal', w: 'Washing machine', d: 'Dryer', r: 'Private rooms' };
   var FACILITIES_SHORT = { k: 'Kitchen', m: 'Meal', w: 'Washer', d: 'Dryer', r: 'Private rooms' };
 
-  function money(n) { return '\u20ac' + (n % 1 ? n.toFixed(2) : String(n)); }
+  function money(n) { return '\u20ac' + (n % 1 ? number(n.toFixed(2)) : String(n)); }
 
   function facilityNames(letters, short) {
     var words = short ? FACILITIES_SHORT : FACILITIES;
-    return String(letters || '').split('').filter(function (c) { return words[c]; }).map(function (c) { return words[c]; });
+    return String(letters || '').split('').filter(function (c) { return words[c]; }).map(function (c) { return t(words[c]); });
   }
 
   // The price, beds and facilities on one line, for the list of places: "from \u20ac16 \u00b7 32 beds \u00b7 Kitchen".
@@ -660,12 +673,12 @@
     if (!d) return '';
     var parts = [];
     if (kind === 'a') {
-      if (d.p) parts.push(d.px && d.px > d.p ? money(d.p) + ' to ' + money(d.px) : 'from ' + money(d.p));
-      if (d.n) parts.push(d.n + (d.n === 1 ? ' bed' : ' beds'));
+      if (d.p) parts.push(d.px && d.px > d.p ? t('{0} to {1}', money(d.p), money(d.px)) : t('from {0}', money(d.p)));
+      if (d.n) parts.push(d.n === 1 ? t('{0} bed', d.n) : t('{0} beds', d.n));
       parts = parts.concat(facilityNames(d.f, true));
     } else {
-      if (d.p) parts.push('single from ' + money(d.p));
-      if (d.p2) parts.push('double from ' + money(d.p2));
+      if (d.p) parts.push(t('single from {0}', money(d.p)));
+      if (d.p2) parts.push(t('double from {0}', money(d.p2)));
     }
     return parts.join(' \u00b7 ');
   }
@@ -698,9 +711,9 @@
     var booking = d.bk ? bookingLink(d.bk, affiliate) : null;
     if (booking) out.push({ key: 'booking', label: 'Booking.com', href: booking, text: 'Booking.com' });
     if (d.wa) out.push({ key: 'whatsapp', label: 'WhatsApp', href: 'https://wa.me/' + d.wa, text: 'WhatsApp' });
-    if (d.t) out.push({ key: 'call', label: 'Call', href: 'tel:' + d.t, text: formatPhone(d.t) });
-    if (d.em) out.push({ key: 'email', label: 'Email', href: 'mailto:' + d.em, text: 'Email' });
-    if (d.web) out.push({ key: 'website', label: 'Website', href: d.web, text: 'Website' });
+    if (d.t) out.push({ key: 'call', label: t('Call'), href: 'tel:' + d.t, text: formatPhone(d.t) });
+    if (d.em) out.push({ key: 'email', label: t('Email'), href: 'mailto:' + d.em, text: t('Email') });
+    if (d.web) out.push({ key: 'website', label: t('Website'), href: d.web, text: t('Website') });
     return out;
   }
 
@@ -866,7 +879,7 @@
   }
   function setMeta(state, patch, data) {
     var s = clone(state);
-    if ('name' in patch) s.name = text(patch.name, 80).trim() || 'My Camino';
+    if ('name' in patch) s.name = text(patch.name, 80).trim() || t('My Camino');
     if ('startDate' in patch) s.startDate = isIsoDate(patch.startDate) ? patch.startDate : '';
     if ('pace' in patch) {
       var p = Number(patch.pace);
@@ -880,8 +893,8 @@
   function buildFile(state, data, createdIso) {
     var l = layout(state, data);
     var bad = l.days.filter(function (i) { return i.invalid; })[0];
-    if (bad) throw new Error('Day ' + (bad.index + 1) + ': ' + bad.invalid);
-    if (!state.days.length) throw new Error('Add at least one day first.');
+    if (bad) throw new Error(t('Day {0}: {1}', bad.index + 1, bad.invalid));
+    if (!state.days.length) throw new Error(t('Add at least one day first.'));
     var guide = data.guide.slice(0, 8);
     var stayCount = 0;
     var days = state.days.map(function (day, n) {
@@ -922,11 +935,11 @@
     });
     var doc = {
       format: FORMAT, version: 1, created: createdIso || new Date().toISOString().replace('Z', '000Z'),
-      includesPhotos: false, plans: [{ name: String(state.name || '').trim() || 'My Camino', days: days }], entries: [], locationFavourites: [],
+      includesPhotos: false, plans: [{ name: String(state.name || '').trim() || t('My Camino'), days: days }], entries: [], locationFavourites: [],
       source: { tool: 'website-planner', itineraryFormat: 1, guideFingerprint: data.guide }
     };
     var errors = checkFile(doc);
-    if (errors.length) throw new Error('The file would not pass the app\'s checks: ' + errors[0]);
+    if (errors.length) throw new Error(t('The file would not pass the app\'s checks: {0}', errors[0]));
     return doc;
   }
 
@@ -1020,14 +1033,14 @@
     raw.pace = pace;
     var state = clean(raw, data);
     if (skipped.length) {
-      notes.push(skipped.length === 1 ? 'Day ' + skipped[0] + ' was left out, because its route is not in this guide.'
-        : skipped.length + ' days were left out (days ' + skipped.join(', ') + '), because their routes are not in this guide.');
+      notes.push(skipped.length === 1 ? t('Day {0} was left out, because its route is not in this guide.', skipped[0])
+        : t('{0} days were left out (days {1}), because their routes are not in this guide.', skipped.length, skipped.join(', ')));
     }
     var l = layout(state, data);
     if (fileDates.some(function (d, i) { return (d || '') !== ((l.days[i] && l.days[i].date) || ''); })) {
-      notes.push('The dates were changed so that each day follows on from the one before.');
+      notes.push(t('The dates were changed so that each day follows on from the one before.'));
     }
-    if (pace !== null && state.pace !== Math.round(pace * 10) / 10) notes.push('The walking pace was set back to the usual, because the file\'s pace is outside what this page offers.');
+    if (pace !== null && state.pace !== Math.round(pace * 10) / 10) notes.push(t('The walking pace was set back to the usual, because the file\'s pace is outside what this page offers.'));
     return { state: state, name: state.name, days: state.days.length, skipped: skipped, notes: notes };
   }
 
@@ -1036,15 +1049,15 @@
   function readFile(doc, data) {
     var errors = checkFile(doc);
     if (errors.length) {
-      return { ok: false, message: errors[0] === 'Not a Camino backup file.' ? 'This is not a Camino itinerary or backup file.'
-        : 'This file cannot be opened: ' + errors[0] + '.' };
+      return { ok: false, message: errors[0] === 'Not a Camino backup file.' ? t('This is not a Camino itinerary or backup file.')
+        : t('This file cannot be opened: {0}.', errors[0]) };
     }
     if (doc.source && typeof doc.source.guideFingerprint === 'string' && doc.source.guideFingerprint !== data.guide) {
-      return { ok: false, message: 'This file was made for a different edition of the guide, so its days cannot be opened here.' };
+      return { ok: false, message: t('This file was made for a different edition of the guide, so its days cannot be opened here.') };
     }
     var plans = doc.plans.filter(function (p) { return p.days.length; }).map(function (p) { return planFromFile(p, data); })
       .filter(function (p) { return p.days; });
-    if (!plans.length) return { ok: false, message: 'There are no days in this file that this page can open.' };
+    if (!plans.length) return { ok: false, message: t('There are no days in this file that this page can open.') };
     return { ok: true, plans: plans };
   }
 

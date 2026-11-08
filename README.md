@@ -7,7 +7,8 @@ An interactive, mobile-optimized guide for pilgrims walking the Camino de Santia
 ## Features
 
 * **Sequential Stage & Route Pairing:** Automatically orders stages from Saint-Jean-Pied-de-Port to Santiago de Compostela. Alternate route options (such as the Valcarlos variant or the Samos monastery detour) are grouped and displayed side by side with the main route.
-* **Interactive Responsive Maps:** Stage overview maps feature an adaptive SVG coordinate overlay with clickable town/village bounding boxes that scale across mobile, tablet, and desktop viewports.
+* **Interactive Responsive Maps:** Stage overview maps feature an adaptive SVG coordinate overlay with clickable town/village bounding boxes that scale across mobile, tablet, and desktop viewports. The browser is offered three sizes of each map (360, 640 and 1024 pixels wide) and picks one by screen width and sharpness, so a phone does not download the desktop picture; the hotspots are measured on the 1024 picture and scale to whichever one is shown.
+* **English and Spanish:** every page is available in English (plain addresses) and in Spanish (under `/es/`), with a language link in the menu and footer.
 * **Elevation Profiles & Stage Stats:** Each stage includes distance (km), estimated walking time, and elevation charts to help plan daily ascents and descents.
 * **Comprehensive Accommodation Directory:**
   * **Pilgrim Albergues:** Bed counts, seasonal opening periods, check-in windows, pricing, and amenity badges (kitchen, laundry, communal meals).
@@ -78,7 +79,7 @@ Edits made directly in this project's `camino.sqlite` are replaced the next time
 * **SEO:** titles, descriptions, canonical links, share previews and schema.org data are built in `camino/seo.py`. `/robots.txt` and `/sitemap.xml` are generated from the database.
 * **Set `SITE_URL`** (for example `https://www.example.com`) in production so canonical links, share previews and the sitemap use your public address.
 * **Search:** the home page suggests towns as you type (works offline); `/towns/` lists every town; `/search/?q=` is the no-JavaScript fallback.
-* **Tests:** `python manage.py test camino` (the last test class reads the real `camino.sqlite`, read-only).
+* **Tests:** `python manage.py test camino` (the live-data test classes read the real `camino.sqlite`, read-only) and `node --test camino/jstests/*.test.js`.
 
 ---
 
@@ -98,6 +99,16 @@ Production serves HTTPS only (HTTP is redirected) and uses secure cookies. The s
 Generate a key with: `python -c "import secrets; print(secrets.token_urlsafe(64))"`
 
 For local development, copy `.env.example` to `.env` (git-ignored). Settings read it automatically, so `python manage.py runserver` works without setting environment variables. Production uses Railway's variables instead, and uses a different `SECRET_KEY`.
+
+## English and Spanish
+
+Every page exists in English at its plain address and in Spanish under `/es/` (`/es/plan/`, `/es/stage/3/`, `/es/location/20/`). The plain address is always English, whatever language the browser asks for; the language link in the menu and footer goes to the same page in the other language, and every page carries `hreflang` links (and the sitemap lists both) so search engines show the right one. `/es/search/` is not indexed. The installed app, the offline pack and the offline pages follow the language of the page they were installed from.
+
+* **Text:** nothing is compiled. English is written in the templates (`{% t "Text" %}`, `{% t_attr %}` inside an attribute, `{% tjs %}` for text a page script shows) and in the code (`tr('Text {x}', x=1)`); the Spanish is in `camino/locale/es.json`, a plain list of `"English text": "Texto en español"` pairs. A phrase with no Spanish is shown in English, so a new English phrase never breaks a page. Keep the `{placeholders}` the same in both. The file has three parts: `ui` (pages and stage names), `js` (scripts on every page) and `plan` (the planner, plus the Spanish for the stays' opening periods, check-in times and price notes and for the few route markers named in English, such as "Exit to Huarte").
+* **After editing `es.json`** run `python tool/build_spanish_js.py` and commit the two files it writes (`camino/static/camino/js/i18n-es.js` and `i18n-es-plan.js`); a test fails when they are out of date. `python manage.py test camino` also fails if a phrase in a template, in the Python or in a script has no Spanish.
+* **Data:** the Spanish text of each town paragraph is `paragraphs.paragraphTextEs` (machine-translated in the app's database; have a Spanish speaker review it). Stage names come from the app's translations. When the database gets a new opening period, check-in time, price note or English-named marker, the Spanish pages show it in English until it is added to `es.json`; `python tool/audit_database.py camino.sqlite` lists them under "Spanish version".
+* **Numbers and dates** follow the language: 12,5 km in Spanish, 12.5 km in English. In templates and scripts that put a number into markup (SVG sizes, JSON), the number is written without the Spanish comma (`{% localize off %}`).
+* **Tests:** `camino/test_i18n.py` (helpers, catalogue completeness, the generated files, the pages in both languages) and `camino/jstests/i18n.test.js`.
 
 ## Itinerary planner
 

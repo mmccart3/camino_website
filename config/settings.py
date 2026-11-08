@@ -18,7 +18,7 @@ from django.core.exceptions import ImproperlyConfigured
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-APP_VERSION = "v1.2.53"  # Update this as you deploy new iterations
+APP_VERSION = "v1.3.0"  # Update this as you deploy new iterations
 
 # ---------------------------------------------------------------------------
 # Environment-driven settings
@@ -108,6 +108,9 @@ MIDDLEWARE = [
     # Compresses the pages and JSON that Django builds (WhiteNoise already compresses static files).
     # It sits after WhiteNoise, which answers static requests itself and never reaches it.
     'django.middleware.gzip.GZipMiddleware',
+    # Picks English or Spanish from the address (/es/...). Addresses without a language are always English:
+    # nobody is redirected because of their browser's language, and every page has one address per language.
+    'django.middleware.locale.LocaleMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
@@ -161,7 +164,13 @@ DATABASES = {
 # Internationalization
 # https://docs.djangoproject.com/en/6.1/topics/i18n/
 
-LANGUAGE_CODE = 'en-us'
+LANGUAGE_CODE = 'en'
+
+# English is at the plain addresses, Spanish under /es/ (see config/urls.py and camino/i18n.py).
+LANGUAGES = [
+    ('en', 'English'),
+    ('es', 'Español'),
+]
 
 TIME_ZONE = 'UTC'
 

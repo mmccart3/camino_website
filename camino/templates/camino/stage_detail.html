@@ -1,5 +1,7 @@
 {% extends 'camino/base.html' %}
+{% load camino_i18n %}
 {% load static %}
+{% load l10n %}
 {% load camino_tags %}
 {% block content %}
 
@@ -8,49 +10,49 @@
   <div class="nav-group nav-left">
     {% if prior_stage %}
       <a href="{% url 'stage_detail' prior_stage.id %}" class="btn-nav">
-        ← Stage {{ prior_stage.display_ref }}: {{ prior_stage.stage_name|truncatechars:26 }}
+        {% t "← Stage {display_ref}: {stage_name}" display_ref=prior_stage.display_ref stage_name=prior_stage.stage_name|tr|truncatechars:26 %}
       </a>
     {% endif %}
     {% if alt_prior_stage %}
       <a href="{% url 'stage_detail' alt_prior_stage.id %}" class="btn-nav btn-alt">
-        ⇠ Alt Prior (Stage {{ alt_prior_stage.display_ref }})
+        {% t "⇠ Alt Prior (Stage {display_ref})" display_ref=alt_prior_stage.display_ref %}
       </a>
     {% endif %}
     {% if not prior_stage and not alt_prior_stage %}
-      <span class="btn-nav btn-disabled">← Route Start (SJPP)</span>
+      <span class="btn-nav btn-disabled">{% t "← Route Start (SJPP)" %}</span>
     {% endif %}
   </div>
 
   <div class="nav-group nav-center">
-    <a href="{% url 'stage_list' %}" class="btn-nav btn-all-stages">All Stages</a>
+    <a href="{% url 'stage_list' %}" class="btn-nav btn-all-stages">{% t "All Stages" %}</a>
   </div>
 
   <div class="nav-group nav-right">
     {% if next_stage %}
       <a href="{% url 'stage_detail' next_stage.id %}" class="btn-nav">
-        Stage {{ next_stage.display_ref }}: {{ next_stage.stage_name|truncatechars:26 }} →
+        {% t "Stage {display_ref}: {stage_name} →" display_ref=next_stage.display_ref stage_name=next_stage.stage_name|tr|truncatechars:26 %}
       </a>
     {% endif %}
     {% if alt_next_stage %}
       <a href="{% url 'stage_detail' alt_next_stage.id %}" class="btn-nav btn-alt">
-        Alt Next (Stage {{ alt_next_stage.display_ref }}) ⇢
+        {% t "Alt Next (Stage {display_ref}) ⇢" display_ref=alt_next_stage.display_ref %}
       </a>
     {% endif %}
     {% if not next_stage and not alt_next_stage %}
-      <span class="btn-nav btn-disabled">Route Finish (Santiago) →</span>
+      <span class="btn-nav btn-disabled">{% t "Route Finish (Santiago) →" %}</span>
     {% endif %}
   </div>
 </div>
 
-<h2>Stage {{ stage.display_ref }}: {{ stage.stage_name }}</h2>
+<h2>{% t "Stage {display_ref}: {stage_name}" display_ref=stage.display_ref stage_name=stage.stage_name|tr %}</h2>
 
 <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
   <p style="margin: 0; font-size: 1.05rem;">
-    <strong>Distance:</strong> {{ stage.distance_km }} km |   
-    <strong>Est. Time:</strong> {{ stage.time_minutes|format_duration }}
+    <strong>{% t "Distance:" %}</strong> {{ stage.distance_km }} km |   
+    <strong>{% t "Est. Time:" %}</strong> {{ stage.time_minutes|format_duration }}
   </p>
   <button onclick="window.print()" class="btn" style="background: #e2e8f0; color: #1e293b; cursor: pointer; border: none; margin: 0;">
-    🖨️ Print / Save PDF
+    {% t "🖨️ Print / Save PDF" %}
   </button>
 </div>
 
@@ -58,27 +60,27 @@
 {% if elevation_stats %}
   <div class="stage-stats-strip">
     <div class="stat-item">
-      <span class="stat-label">Total Ascent</span>
+      <span class="stat-label">{% t "Total Ascent" %}</span>
       <span class="stat-val ascent">▲ +{{ elevation_stats.ascent_m }} <small>m</small></span>
     </div>
 
     <div class="stat-item">
-      <span class="stat-label">Total Descent</span>
+      <span class="stat-label">{% t "Total Descent" %}</span>
       <span class="stat-val descent">▼ -{{ elevation_stats.descent_m }} <small>m</small></span>
     </div>
 
     <div class="stat-item">
-      <span class="stat-label">Highest Point</span>
+      <span class="stat-label">{% t "Highest Point" %}</span>
       <span class="stat-val">{{ elevation_stats.highest_m }} <small>m ({{ elevation_stats.highest_km }} km)</small></span>
     </div>
 
     <div class="stat-item">
-      <span class="stat-label">Lowest Point</span>
+      <span class="stat-label">{% t "Lowest Point" %}</span>
       <span class="stat-val">{{ elevation_stats.lowest_m }} <small>m ({{ elevation_stats.lowest_km }} km)</small></span>
     </div>
 
     <div class="stat-item">
-      <span class="stat-label">Terrain Rating</span>
+      <span class="stat-label">{% t "Terrain Rating" %}</span>
       <span class="difficulty-pill {{ elevation_stats.difficulty_badge }}">
         {{ elevation_stats.difficulty_icon }} {{ elevation_stats.difficulty_label }}
       </span>
@@ -99,12 +101,12 @@
 <div class="card elevation-card">
   <div class="elevation-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
     <div>
-      <h3 style="margin: 0;">Elevation Profile</h3>
-      <span class="elevation-hint">Touch or hover across the curve to inspect altitudes</span>
+      <h3 style="margin: 0;">{% t "Elevation Profile" %}</h3>
+      <span class="elevation-hint">{% t "Touch or hover across the curve to inspect altitudes" %}</span>
     </div>
     {% if has_elevation_data %}
       <button type="button" id="openScrubModal" class="btn" style="background: #1e3a8a; color: #ffffff; cursor: pointer; border: none; margin: 0;">
-        🔍 Explore &amp; Scrub
+        {% t "🔍 Explore &amp; Scrub" %}
       </button>
     {% endif %}
   </div>
@@ -114,10 +116,10 @@
       <canvas id="elevationChart"></canvas>
     </div>
     <p id="chartNamesNote" class="elevation-hint" style="display: none; margin: 0.5rem 0 0;">
-      Not every place name fits on the chart. Touch the chart near a marker to see its name, or use the list of places below.
+      {% t "Not every place name fits on the chart. Touch the chart near a marker to see its name, or use the list of places below." %}
     </p>
   {% else %}
-    <p><small>Elevation data pending for this stage.</small></p>
+    <p><small>{% t "Elevation data pending for this stage." %}</small></p>
   {% endif %}
 </div>
 
@@ -125,26 +127,26 @@
 <div id="scrubModalBackdrop" class="scrub-modal-backdrop" aria-hidden="true">
   <div class="scrub-drawer" role="dialog" aria-modal="true" aria-labelledby="scrubDrawerTitle">
     <div class="scrub-drawer-header">
-      <h3 id="scrubDrawerTitle" class="scrub-drawer-title">Stage {{ stage.display_ref }} Elevation Explorer</h3>
-      <button type="button" id="closeScrubModal" class="btn-close-drawer" aria-label="Close modal">&times;</button>
+      <h3 id="scrubDrawerTitle" class="scrub-drawer-title">{% t "Stage {display_ref} Elevation Explorer" display_ref=stage.display_ref %}</h3>
+      <button type="button" id="closeScrubModal" class="btn-close-drawer" aria-label="{% t_attr "Close modal" %}">&times;</button>
     </div>
 
     <!-- Live HUD Readout -->
     <div class="scrub-hud">
       <div class="scrub-stat">
-        <span class="scrub-stat-label">Distance</span>
+        <span class="scrub-stat-label">{% t "Distance" %}</span>
         <span id="hudDistance" class="scrub-stat-value">0.0 km</span>
       </div>
       <div class="scrub-stat">
-        <span class="scrub-stat-label">Altitude</span>
+        <span class="scrub-stat-label">{% t "Altitude" %}</span>
         <span id="hudAltitude" class="scrub-stat-value">--- m</span>
       </div>
       <div class="scrub-stat">
-        <span class="scrub-stat-label">Grade / Slope</span>
+        <span class="scrub-stat-label">{% t "Grade / Slope" %}</span>
         <span id="hudGrade" class="scrub-stat-value">--- %</span>
       </div>
       <div class="scrub-stat">
-        <span class="scrub-stat-label">Nearest Waypoint</span>
+        <span class="scrub-stat-label">{% t "Nearest Waypoint" %}</span>
         <span id="hudWaypoint" class="scrub-stat-value">---</span>
       </div>
     </div>
@@ -158,8 +160,8 @@
     <div class="scrub-slider-container">
       <input type="range" id="elevationScrubber" class="scrub-slider" min="0" max="100" step="0.1" value="0">
       <div class="scrub-slider-labels">
-        <span>0 km (Start)</span>
-        <span id="scrubSliderMaxLabel">-- km (Finish)</span>
+        <span>{% t "0 km (Start)" %}</span>
+        <span id="scrubSliderMaxLabel">{% t "-- km (Finish)" %}</span>
       </div>
     </div>
   </div>
@@ -167,9 +169,9 @@
 
 <!-- Places Along the Way -->
 <div class="card locations-list-card" style="margin: 1.5rem 0; padding: 1.25rem;">
-  <h3 style="margin-top: 0; margin-bottom: 0.25rem; color: var(--navy);">Places Along This Stage</h3>
+  <h3 style="margin-top: 0; margin-bottom: 0.25rem; color: var(--navy);">{% t "Places Along This Stage" %}</h3>
   <p style="color: #64748b; font-size: 0.85rem; margin-top: 0; margin-bottom: 1rem;">
-    Walking order with cumulative distance, estimated time, and available services.
+    {% t "Walking order with cumulative distance, estimated time, and available services." %}
   </p>
 
   <div class="waypoint-timeline">
@@ -195,51 +197,60 @@
           <!-- Amenity Badges -->
           <div class="amenity-badges">
             {% if loc.has_stay %}
-              <span class="badge" title="Albergues & Lodging Available">&#128716; Lodging</span>
+              <span class="badge" title="{% t_attr "Albergues & Lodging Available" %}">{% t "&#128716; Lodging" %}</span>
             {% endif %}
             {% if loc.has_bar %}
-              <span class="badge" title="Bar / Café Available">&#9749; Café</span>
+              <span class="badge" title="{% t_attr "Bar / Café Available" %}">{% t "&#9749; Café" %}</span>
             {% endif %}
             {% if loc.has_grocery %}
-              <span class="badge" title="Grocery Store Available">&#128722; Shop</span>
+              <span class="badge" title="{% t_attr "Grocery Store Available" %}">{% t "&#128722; Shop" %}</span>
             {% endif %}
             {% if loc.has_pharmacy %}
-              <span class="badge" title="Pharmacy Available">&#9764; Pharmacy</span>
+              <span class="badge" title="{% t_attr "Pharmacy Available" %}">{% t "&#9764; Pharmacy" %}</span>
             {% endif %}
           </div>
         </div>
       </div>
     {% empty %}
-      <p><small>No intermediate locations recorded for this stage.</small></p>
+      <p><small>{% t "No intermediate locations recorded for this stage." %}</small></p>
     {% endfor %}
   </div>
 </div>
 
 <!-- Map View Selector -->
 <div class="map-view-switcher">
-  <h3 style="margin: 0; color: var(--navy);">Stage Route Map</h3>
+  <h3 style="margin: 0; color: var(--navy);">{% t "Stage Route Map" %}</h3>
   {% if has_gps_track %}
     <div class="map-toggle-group">
       <button type="button" id="btnShowIllustrated" class="map-toggle-btn active">
-        🗺️ Illustrated
+        {% t "🗺️ Illustrated" %}
       </button>
       <button type="button" id="btnShowInteractive" class="map-toggle-btn">
-        🛰️ Interactive GPS
+        {% t "🛰️ Interactive GPS" %}
       </button>
     </div>
   {% endif %}
 </div>
 
 <!-- 1. Static Illustrated Map Container -->
+{% localize off %}
 <div id="illustrated-map-container" class="map-box" style="position: relative; width: 100%; display: block; overflow: hidden; border-radius: 8px; border: 1px solid var(--border);">
+  {# Phones are sent a smaller picture (srcset). The hotspots are drawn on a fixed 1024-wide grid, so they line up with any width. If the file fails to load (for example offline, when only the full-size picture was saved), the page falls back to the full-size one. #}
   <img id="stage-map-img" 
-       src="{% if stage.stage_map_url %}{{ stage.stage_map_url }}{% elif stage.map_url_1920 %}{{ stage.map_url_1920 }}{% else %}{{ stage.map_url_1024 }}{% endif %}" 
-       alt="{{ stage.stage_name }} Map" 
+       src="{{ stage_map.src }}"{% if stage_map.srcset %}
+       srcset="{{ stage_map.srcset }}"
+       sizes="{{ stage_map.sizes }}"
+       data-full-src="{{ stage_map.src }}"
+       onerror="if(this.getAttribute('srcset')){this.removeAttribute('srcset');this.removeAttribute('sizes');this.src=this.getAttribute('data-full-src');}"{% endif %}{% if stage_map.height %}
+       width="{{ stage_map.width }}" height="{{ stage_map.height }}"{% endif %}
+       alt="{% t_attr "{stage_name} Map" stage_name=stage.stage_name|tr %}" 
        decoding="async"
        style="width: 100%; height: auto; display: block;" />
 
   <svg id="hotspot-svg" 
-       style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none;"
+       style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none;"{% if stage_map.grid_height %}
+       viewBox="0 0 {{ hotspot_grid_width }} {{ stage_map.grid_height }}"{% endif %}
+       data-grid-width="{{ hotspot_grid_width }}"
        preserveAspectRatio="none">
     {% for spot in hotspots %}
       {% if spot.x_1920 is not None and spot.w_1920 > 0 and spot.location_id %}
@@ -251,13 +262,14 @@
               class="hotspot" 
               data-location-id="{{ spot.location_id }}"
               rx="4">
-          <title>{% if spot.location %}{{ spot.location.location_name }}{% else %}Location {{ spot.location_id }}{% endif %}</title>
+          <title>{% if spot.location %}{{ spot.location.display_name }}{% else %}{% t "Location {location_id}" location_id=spot.location_id %}{% endif %}</title>
         </rect>
       </a>
       {% endif %}
     {% endfor %}
   </svg>
 </div>
+{% endlocalize %}
 
 <!-- 2. Interactive Leaflet Map Container -->
 {% if has_gps_track %}
@@ -265,8 +277,8 @@
     <p id="leaflet-status" role="status" style="font-size: 0.9rem; color: #475569; margin: 0 0 0.5rem;" hidden></p>
     <div id="leaflet-stage-map" style="width: 100%; height: 480px; border-radius: 8px; border: 1px solid var(--border);"></div>
     <div style="font-size: 0.78rem; color: #64748b; margin-top: 0.4rem; display: flex; justify-content: space-between;">
-      <span>Route track plotted from recorded Camino GPS coordinates.</span>
-      <span>Layer: Topo / Satellite switchable via top-right icon.</span>
+      <span>{% t "Route track plotted from recorded Camino GPS coordinates." %}</span>
+      <span>{% t "Layer: Topo / Satellite switchable via top-right icon." %}</span>
     </div>
   </div>
 {% endif %}
@@ -278,62 +290,86 @@
   <div class="nav-group nav-left">
     {% if prior_stage %}
       <a href="{% url 'stage_detail' prior_stage.id %}" class="btn-nav">
-        ← Stage {{ prior_stage.display_ref }}: {{ prior_stage.stage_name|truncatechars:26 }}
+        {% t "← Stage {display_ref}: {stage_name}" display_ref=prior_stage.display_ref stage_name=prior_stage.stage_name|tr|truncatechars:26 %}
       </a>
     {% endif %}
     {% if alt_prior_stage %}
       <a href="{% url 'stage_detail' alt_prior_stage.id %}" class="btn-nav btn-alt">
-        ⇠ Alt Prior (Stage {{ alt_prior_stage.display_ref }})
+        {% t "⇠ Alt Prior (Stage {display_ref})" display_ref=alt_prior_stage.display_ref %}
       </a>
     {% endif %}
     {% if not prior_stage and not alt_prior_stage %}
-      <span class="btn-nav btn-disabled">← Route Start (SJPP)</span>
+      <span class="btn-nav btn-disabled">{% t "← Route Start (SJPP)" %}</span>
     {% endif %}
   </div>
 
   <div class="nav-group nav-center">
-    <a href="{% url 'stage_list' %}" class="btn-nav btn-all-stages">All Stages</a>
+    <a href="{% url 'stage_list' %}" class="btn-nav btn-all-stages">{% t "All Stages" %}</a>
   </div>
 
   <div class="nav-group nav-right">
     {% if next_stage %}
       <a href="{% url 'stage_detail' next_stage.id %}" class="btn-nav">
-        Stage {{ next_stage.display_ref }}: {{ next_stage.stage_name|truncatechars:26 }} →
+        {% t "Stage {display_ref}: {stage_name} →" display_ref=next_stage.display_ref stage_name=next_stage.stage_name|tr|truncatechars:26 %}
       </a>
     {% endif %}
     {% if alt_next_stage %}
       <a href="{% url 'stage_detail' alt_next_stage.id %}" class="btn-nav btn-alt">
-        Alt Next (Stage {{ alt_next_stage.display_ref }}) ⇢
+        {% t "Alt Next (Stage {display_ref}) ⇢" display_ref=alt_next_stage.display_ref %}
       </a>
     {% endif %}
     {% if not next_stage and not alt_next_stage %}
-      <span class="btn-nav btn-disabled">Route Finish (Santiago) →</span>
+      <span class="btn-nav btn-disabled">{% t "Route Finish (Santiago) →" %}</span>
     {% endif %}
   </div>
 </div>
 
 <!-- Illustrated Map Overlay Sizing -->
 <script>
+  // The words this page's scripts put on the screen, in the language of the page. {name} marks a value to fill in.
+  const TXT = {
+    rendered: {% tjs "Rendered map: {w}px × {h}px" %},
+    kmFromStart: {% tjs "{km} km from start" %},
+    viewAccommodations: {% tjs "View accommodations &rarr;" %},
+    loadingMap: {% tjs "Loading the map…" %},
+    mapFailed: {% tjs "The interactive map could not be loaded. Check your connection, then choose Interactive GPS again." %},
+    elevationM: {% tjs "Elevation (m)" %},
+    distanceKm: {% tjs "Distance (km)" %},
+    altitudeM: {% tjs "Altitude (m)" %},
+    mAltitude: {% tjs "{m} m altitude" %},
+    kmFinish: {% tjs "{km} km (Finish)" %},
+    here: {% tjs "here" %},
+    inKm: {% tjs "in {km} km" %},
+    kmPast: {% tjs "{km} km past" %},
+  };
+  const fmt = (text, values) => text.replace(/\{(\w+)\}/g, (all, key) => (key in values ? values[key] : all));
+  // Numbers in text: a decimal comma in Spanish.
+  const num = (value) => (document.documentElement.lang === 'es' ? String(value).replace('.', ',') : String(value));
+  const LOCATION_URL = "{% url 'location_detail' 0 %}";   // the address of a place's page, in the page's language
+  const locationUrl = (id) => LOCATION_URL.replace(/0\/$/, id + '/');
+
   function syncOverlay() {
     const img = document.getElementById('stage-map-img');
     const svg = document.getElementById('hotspot-svg');
     const debug = document.getElementById('debug-info');
 
     if (img && svg && img.naturalWidth > 0 && img.naturalHeight > 0) {
-      svg.setAttribute('viewBox', `0 0 ${img.naturalWidth} ${img.naturalHeight}`);
+      // The hotspot rectangles are measured on a 1024-wide picture. Whichever width of picture the browser
+      // chose, the same grid applies: 1024 wide, and as tall as the picture's shape makes it.
+      const gridWidth = parseInt(svg.getAttribute('data-grid-width'), 10) || 1024;
+      svg.setAttribute('viewBox', `0 0 ${gridWidth} ${Math.round(gridWidth * img.naturalHeight / img.naturalWidth)}`);
       if (debug) {
-        debug.innerText = `Rendered map: ${img.naturalWidth}px × ${img.naturalHeight}px`;
+        debug.innerText = fmt(TXT.rendered, { w: img.naturalWidth, h: img.naturalHeight });
       }
     }
   }
 
   const mapImg = document.getElementById('stage-map-img');
   if (mapImg) {
-    if (mapImg.complete) {
-      syncOverlay();
-    } else {
-      mapImg.addEventListener('load', syncOverlay);
-    }
+    // Listen for every load: the browser loads another width of picture if the window changes size, and the
+    // page loads the full-size picture if a smaller one cannot be fetched.
+    mapImg.addEventListener('load', syncOverlay);
+    if (mapImg.complete) syncOverlay();
     window.addEventListener('resize', syncOverlay);
   }
 </script>
@@ -446,8 +482,8 @@
           .bindPopup(`
             <div style="font-family: sans-serif; padding: 2px;">
               <strong style="color: #1e3a8a; font-size: 1.05rem;">${wp.name}</strong><br>
-              <span style="color: #64748b; font-size: 0.85rem;">${wp.km} km from start</span><br>
-              <a href="/location/${wp.id}/" style="display:inline-block; margin-top:6px; color:#d97706; font-weight:bold; font-size:0.85rem; text-decoration:none;">View accommodations &rarr;</a>
+              <span style="color: #64748b; font-size: 0.85rem;">${fmt(TXT.kmFromStart, { km: num(wp.km) })}</span><br>
+              <a href="${locationUrl(wp.id)}" style="display:inline-block; margin-top:6px; color:#d97706; font-weight:bold; font-size:0.85rem; text-decoration:none;">${TXT.viewAccommodations}</a>
             </div>
           `);
       }
@@ -475,13 +511,13 @@
           status.textContent = text;
           status.hidden = !text;
         };
-        if (!leafletMap) showStatus('Loading the map…');
+        if (!leafletMap) showStatus(TXT.loadingMap);
         loadLeaflet().then(() => {
           showStatus('');
           initInteractiveMap();
           setTimeout(() => leafletMap && leafletMap.invalidateSize(), 50);
         }).catch(() => {
-          showStatus('The interactive map could not be loaded. Check your connection, then choose Interactive GPS again.');
+          showStatus(TXT.mapFailed);
         });
       }
     });
@@ -687,7 +723,7 @@
       type: 'line',
       data: {
         datasets: [{
-          label: 'Elevation (m)',
+          label: TXT.elevationM,
           data: dataPoints,
           fill: 'start',
           borderColor: '#d97706',
@@ -725,13 +761,13 @@
                 const hit = waypoints.find(w => Math.abs(w.km - km) <= 0.4);
                 if (hit) {
                   setStageHighlight(hit.location_id || hit.name);
-                  return `${hit.name} (${km} km)`;
+                  return `${hit.name} (${num(km)} km)`;
                 }
                 setStageHighlight(null);
-                return `${km} km from start`;
+                return fmt(TXT.kmFromStart, { km: num(km) });
               },
               label: function(item) {
-                return item.parsed.y + ' m altitude';
+                return fmt(TXT.mAltitude, { m: num(item.parsed.y) });
               }
             }
           }
@@ -741,14 +777,14 @@
             type: 'linear',
             min: 0,
             max: maxDist,
-            title: { display: true, text: 'Distance (km)', color: '#64748b', font: { size: 11 } },
+            title: { display: true, text: TXT.distanceKm, color: '#64748b', font: { size: 11 } },
             ticks: { stepSize: 5, color: '#94a3b8', callback: val => val + ' km' },
             grid: { color: '#f1f5f9' }
           },
           y: {
             min: yMin,
             max: yMax,
-            title: { display: true, text: 'Altitude (m)', color: '#64748b', font: { size: 11 } },
+            title: { display: true, text: TXT.altitudeM, color: '#64748b', font: { size: 11 } },
             ticks: { stepSize: 100, color: '#94a3b8' },
             grid: { color: '#e2e8f0' }
           }
@@ -773,7 +809,7 @@
     let currentScrubKm = 0;
 
     if (openBtn && backdrop && scrubCanvas && scrubber) {
-      maxLabel.textContent = `${maxDist.toFixed(1)} km (Finish)`;
+      maxLabel.textContent = fmt(TXT.kmFinish, { km: num(maxDist.toFixed(1)) });
       scrubber.max = maxDist;
 
       function getMetricsAtKm(km) {
@@ -802,16 +838,16 @@
 
       function updateHUD(km) {
         const { alt, grade } = getMetricsAtKm(km);
-        hudDist.textContent = `${km.toFixed(1)} km`;
+        hudDist.textContent = `${num(km.toFixed(1))} km`;
         hudAlt.textContent = `${alt} m`;
-        hudGrade.textContent = `${grade > 0 ? '+' : ''}${grade}%`;
+        hudGrade.textContent = `${grade > 0 ? '+' : ''}${num(grade)}%`;
 
         const nearest = waypoints.reduce((prev, curr) => {
           return Math.abs(curr.km - km) < Math.abs(prev.km - km) ? curr : prev;
         }, waypoints[0]);
 
         if (nearest && Math.abs(nearest.km - km) <= 0.8) {
-          hudWp.textContent = `${nearest.name} (${Math.abs(nearest.km - km) < 0.1 ? 'here' : (nearest.km > km ? 'in ' + (nearest.km - km).toFixed(1) + ' km' : (km - nearest.km).toFixed(1) + ' km past')})`;
+          hudWp.textContent = `${nearest.name} (${Math.abs(nearest.km - km) < 0.1 ? TXT.here : (nearest.km > km ? fmt(TXT.inKm, { km: num((nearest.km - km).toFixed(1)) }) : fmt(TXT.kmPast, { km: num((km - nearest.km).toFixed(1)) }))})`;
         } else {
           hudWp.textContent = nearest ? nearest.name : '---';
         }
@@ -856,7 +892,7 @@
             type: 'line',
             data: {
               datasets: [{
-                label: 'Elevation (m)',
+                label: TXT.elevationM,
                 data: dataPoints,
                 fill: 'start',
                 borderColor: '#d97706',
@@ -888,14 +924,14 @@
                   type: 'linear',
                   min: 0,
                   max: maxDist,
-                  title: { display: true, text: 'Distance (km)', color: '#64748b' },
+                  title: { display: true, text: TXT.distanceKm, color: '#64748b' },
                   ticks: { stepSize: 5, color: '#94a3b8', callback: val => val + ' km' },
                   grid: { color: '#f1f5f9' }
                 },
                 y: {
                   min: yMin,
                   max: yMax,
-                  title: { display: true, text: 'Altitude (m)', color: '#64748b' },
+                  title: { display: true, text: TXT.altitudeM, color: '#64748b' },
                   ticks: { stepSize: 100, color: '#94a3b8' },
                   grid: { color: '#e2e8f0' }
                 }

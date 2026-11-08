@@ -45,7 +45,7 @@
   }
 
   // opts: { language 'es'|'fr', channel 'whatsapp'|'email', placeName, arrival 'YYYY-MM-DD', nights, people,
-  //         room 'dormitory'|'room', yourName }
+  //         room 'dormitory'|'room', yourName, replyEnglish (default true: ask the owner to reply in English) }
   // Returns { subject (email only, else null), body, meaning }. Throws for an impossible party or stay.
   function build(opts) {
     var people = opts.people, nights = opts.nights;
@@ -56,6 +56,7 @@
     if (!when) throw new RangeError('Invalid arrival date');
     var name = cleanName(opts.yourName);
     var fr = opts.language === 'fr', email = opts.channel === 'email', priv = opts.room === 'room';
+    var replyEnglish = opts.replyEnglish !== false;   // false for a visitor who does not need English (the Spanish page)
     var placeName = String(opts.placeName === undefined || opts.placeName === null ? '' : opts.placeName).trim();
 
     var request = fr
@@ -81,12 +82,12 @@
       ? (email ? 'Madame, Monsieur,' : 'Bonjour,') + '\n\n' +
         (name === '' ? '' : "Je m'appelle " + name + '. ') + 'Je fais le Chemin de Saint-Jacques. Auriez-vous ' + request + ' pour ' + stay + ', en arrivant le ' + date + ' ?\n\n' +
         "S'il y a de la disponibilit\u00e9, pourriez-vous m'indiquer " + price + " et s'il est n\u00e9cessaire de r\u00e9server ou de confirmer mon arriv\u00e9e ?\n\n" +
-        "Si cela vous est possible, pourriez-vous me r\u00e9pondre en anglais, s'il vous pla\u00eet ? Mon fran\u00e7ais est limit\u00e9 et je vous remercie d'avance de votre compr\u00e9hension. (If possible, could you please reply in English? Thank you very much.)\n\n" +
+        (replyEnglish ? "Si cela vous est possible, pourriez-vous me r\u00e9pondre en anglais, s'il vous pla\u00eet ? Mon fran\u00e7ais est limit\u00e9 et je vous remercie d'avance de votre compr\u00e9hension. (If possible, could you please reply in English? Thank you very much.)\n\n" : '') +
         'Je vous remercie de votre temps et de votre gentillesse. Bon Chemin !' + signature
       : (email ? 'Estimados se\u00f1ores de ' + placeName + ':' : 'Buenos d\u00edas:') + '\n\n' +
         (name === '' ? '' : 'Me llamo ' + name + '. ') + 'Estoy haciendo el Camino de Santiago. \u00bfTendr\u00edan ' + request + ' para ' + stay + ', llegando el ' + date + '?\n\n' +
         'Si hay disponibilidad, les agradecer\u00eda mucho que me indicaran ' + price + ' y si es necesario reservar o confirmar la llegada.\n\n' +
-        'Si les resulta posible, \u00bfpodr\u00edan responderme en ingl\u00e9s, por favor? Mi espa\u00f1ol es limitado y se lo agradezco de antemano. (If possible, could you please reply in English? Thank you very much.)\n\n' +
+        (replyEnglish ? 'Si les resulta posible, \u00bfpodr\u00edan responderme en ingl\u00e9s, por favor? Mi espa\u00f1ol es limitado y se lo agradezco de antemano. (If possible, could you please reply in English? Thank you very much.)\n\n' : '') +
         'Muchas gracias por su tiempo y su amabilidad. \u00a1Buen Camino!' + signature;
 
     var englishRequest = priv

@@ -438,6 +438,13 @@ class LiveDatabaseSmokeTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200, path)
         return response.content.decode()
 
+    def test_location_paragraphs_are_in_id_order(self):
+        response = self.client.get('/location/9/')
+        self.assertEqual(response.status_code, 200)
+        ids = [paragraph.id for paragraph in response.context['paragraphs']]
+        self.assertGreater(len(ids), 1)
+        self.assertEqual(ids, sorted(ids))
+
     def test_home_page_has_search_title_and_schema(self):
         html = self.get('/')
         self.assertIn('id="town-search-input"', html)

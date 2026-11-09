@@ -741,7 +741,7 @@ def location_detail(request, location_id):
     location = get_object_or_404(Location, pk=location_id)
     albergues = location.albergues.all()
     private_accomm = location.private_accomm.all()
-    paragraphs = location.paragraphs.all()
+    paragraphs = location.paragraphs.order_by('id')
 
     prior_location = None
     if location.prior_loc and location.prior_loc != 0:

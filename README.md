@@ -9,7 +9,7 @@ An interactive, mobile-optimized guide for pilgrims walking the Camino de Santia
 * **Sequential Stage & Route Pairing:** Automatically orders stages from Saint-Jean-Pied-de-Port to Santiago de Compostela. Alternate route options (such as the Valcarlos variant or the Samos monastery detour) are grouped and displayed side by side with the main route.
 * **Interactive Responsive Maps:** Stage overview maps feature an adaptive SVG coordinate overlay with clickable town/village bounding boxes that scale across mobile, tablet, and desktop viewports. The browser is offered three sizes of each map (360, 640 and 1024 pixels wide) and picks one by screen width and sharpness, so a phone does not download the desktop picture; the hotspots are measured on the 1024 picture and scale to whichever one is shown.
 * **English and Spanish:** every page is available in English (plain addresses) and in Spanish (under `/es/`), with a language link in the menu and footer.
-* **Elevation Profiles & Stage Stats:** Each stage includes distance (km), estimated walking time, and elevation charts to help plan daily ascents and descents.
+* **Elevation Profiles & Stage Stats:** Each stage includes distance (km), estimated walking time, and elevation charts to help plan daily ascents and descents. A walking-pace slider on the stage page (2.0 to 6.0 km/h) rescales the stage time and the time to each place.
 * **Comprehensive Accommodation Directory:**
   * **Pilgrim Albergues:** Bed counts, seasonal opening periods, check-in windows, pricing, and amenity badges (kitchen, laundry, communal meals).
   * **Private Accommodations & B&Bs:** Single/double room rates, addresses, and property notes.
@@ -86,6 +86,26 @@ Edits made directly in this project's `camino.sqlite` are replaced the next time
 * **Set `SITE_URL`** (for example `https://www.example.com`) in production so canonical links, share previews and the sitemap use your public address.
 * **Search:** the home page suggests towns as you type (works offline); `/towns/` lists every town; `/search/?q=` is the no-JavaScript fallback.
 * **Tests:** `python manage.py test camino` (the live-data test classes read the real `camino.sqlite`, read-only) and `node --test camino/jstests/*.test.js`.
+
+## Walking pace on a stage page
+
+A stage page (`/stage/<id>/`, and `/es/stage/<id>/`) has a "Walking pace" slider under the distance and time. The times in the
+database are for the guide's pace of 4.2 km/h on the flat; the slider goes from 2.0 to 6.0 km/h in steps of 0.1 (the same
+limits as the planner, `PACE_MIN` / `PACE_MAX` / `PACE_STEP` in `camino/planner.py`). Time on foot is the weighted distance
+divided by the pace, so a different pace scales every time by 4.2 / pace, exactly as the planner does.
+
+- `camino/static/camino/js/stage-pace.js` rescales the "Est. Time" figure (`#stage-time`, which carries the guide's minutes in
+  `data-minutes`) and the time at each place (`.waypoint-time`, which carries the guide's seconds in `data-seconds`), and writes
+  "(at 3.6 km/h)" beside the stage time when the pace is not the guide's. The server still writes the guide's figures, so the
+  page is complete without JavaScript (the slider stays hidden), and the "Back to 4.2 km/h" button puts those figures back
+  exactly. The words come from `window.STAGE_PACE_TXT`, filled with `{% tjs %}` in `stage_detail.html`, so Spanish works
+  like the rest of the page (a decimal comma, "h" for hours). The control is left out of the printed page; the "(at ...)" note stays.
+- The pace is kept in the visitor's browser (`localStorage` key `camino-pace-v1`, a plain number) and applies to every stage page.
+  Until a pace has been chosen on a stage page it starts from the pace in the planner's saved plan (`camino-plan-v1`, read only);
+  after that the two are separate: changing the pace here does not change the planner, and the stage list page still shows the
+  guide's times.
+- `camino/jstests/stage-pace.test.js` checks the arithmetic, the wording against the server's (`format_duration` and
+  `make_location_entry`), the saved pace and the page behaviour. `stage-pace.js` is in the service worker's precache list.
 
 ---
 

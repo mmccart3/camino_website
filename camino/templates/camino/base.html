@@ -629,7 +629,7 @@
 }
 
 @media print {
-  header, footer, .stage-nav, .elevation-hint, .btn, #debug-info {
+  header, footer, .stage-nav, .elevation-hint, .btn, #debug-info, .stage-pace {
     display: none !important;
   }
   body {
@@ -1106,6 +1106,33 @@
   color: #ffffff;
   border-color: var(--gold);
 }
+
+/* Walking pace on a stage page (stage-pace.js shows it and rescales the times) */
+.stage-pace {
+  margin: 0.9rem 0 0;
+  padding: 0.6rem 1rem 0.7rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.stage-pace[hidden], .stage-pace-reset[hidden] { display: none; }
+.stage-pace-row { display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem 1rem; }
+.stage-pace-label { font-weight: 600; white-space: nowrap; }
+.stage-pace-label output { font-weight: 700; color: var(--navy); }
+.stage-pace-range { flex: 1 1 220px; min-width: 160px; min-height: 44px; accent-color: var(--navy, #1e3a8a); }
+.stage-pace-range:focus-visible, .stage-pace-reset:focus-visible { outline: 3px solid var(--gold, #d97706); outline-offset: 2px; }
+.stage-pace-reset {
+  min-height: 44px;
+  padding: 0 0.75rem;
+  background: none;
+  border: 0;
+  color: var(--navy, #1e3a8a);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.stage-pace-hint { margin: 0.1rem 0 0; font-size: 0.85rem; color: #64748b; }
+.stage-pace-note { font-weight: 600; color: #b45309; }
 
 /* Stage Metrics Strip */
 .stage-stats-strip {

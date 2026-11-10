@@ -49,12 +49,42 @@
 <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
   <p style="margin: 0; font-size: 1.05rem;">
     <strong>{% t "Distance:" %}</strong> {{ stage.distance_km }} km |   
-    <strong>{% t "Est. Time:" %}</strong> {{ stage.time_minutes|format_duration }}
+    <strong>{% t "Est. Time:" %}</strong> <span id="stage-time" data-minutes="{{ stage.time_minutes|default_if_none:'' }}">{{ stage.time_minutes|format_duration }}</span><span id="stage-time-note" class="stage-pace-note"></span>
   </p>
   <button onclick="window.print()" class="btn" style="background: #e2e8f0; color: #1e293b; cursor: pointer; border: none; margin: 0;">
     {% t "🖨️ Print / Save PDF" %}
   </button>
 </div>
+
+<!-- Walking pace: the script (stage-pace.js) shows this and rescales the times; without it the page keeps the guide's figures -->
+{% if stage.time_minutes %}
+<div class="stage-pace" id="stage-pace-box" data-default="{{ pace.default|unlocalize }}" data-min="{{ pace.min|unlocalize }}" data-max="{{ pace.max|unlocalize }}" hidden>
+  <div class="stage-pace-row">
+    <label for="stage-pace" class="stage-pace-label">{% t "Walking pace:" %} <output id="stage-pace-out" for="stage-pace"></output></label>
+    <input type="range" id="stage-pace" class="stage-pace-range" min="{{ pace.min|unlocalize }}" max="{{ pace.max|unlocalize }}" step="{{ pace.step|unlocalize }}" value="{{ pace.default|unlocalize }}" aria-describedby="stage-pace-hint">
+    <button type="button" id="stage-pace-reset" class="stage-pace-reset" hidden></button>
+  </div>
+  <p class="stage-pace-hint" id="stage-pace-hint"></p>
+</div>
+<script>
+  // The words the pace script puts on the screen, in the language of the page. {name} marks a value to fill in.
+  window.STAGE_PACE_TXT = {
+    hint: {% tjs "Your pace on the flat. The guide's times are for {pace} km/h; slow down for hot weather, a heavy pack or sore feet." %},
+    at: {% tjs "at {pace} km/h" %},
+    reset: {% tjs "Back to {pace} km/h" %},
+    hrMin: {% tjs "{hours} hr {minutes} min" %},
+    hr: {% tjs "{hours} hr" %},
+    min: {% tjs "{minutes} min" %},
+    zeroMin: {% tjs "0 min" %},
+    totalHr: {% tjs "{n} hr" %},
+    totalHrs: {% tjs "{n} hrs" %},
+    totalMin: {% tjs "{n} min" %},
+    totalMins: {% tjs "{n} mins" %},
+    totalZero: {% tjs "0 mins" %},
+  };
+</script>
+<script src="{% static 'camino/js/stage-pace.js' %}" defer></script>
+{% endif %}
 
 <!-- Quick-Stats Strip -->
 {% if elevation_stats %}
@@ -190,7 +220,7 @@
               <strong>{{ loc.name }}</strong>
             </a>
             <span class="waypoint-metrics">
-              {{ loc.distance_km }} km &bull; {{ loc.time_formatted }}
+              {{ loc.distance_km }} km &bull; <span class="waypoint-time" data-seconds="{{ loc.seconds }}">{{ loc.time_formatted }}</span>
             </span>
           </div>
 

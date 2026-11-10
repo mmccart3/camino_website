@@ -369,6 +369,7 @@ def service_worker(request):
         static('camino/js/qr.js'),
         static('camino/js/plan-share.js'),
         static('camino/js/plan-message.js'),
+        static('camino/js/stage-pace.js'),   # the pace slider on a stage page (not only the planner) works offline
         static('camino/js/plan.js'),
         static('camino/css/plan.css'),
         static('camino/chart.umd.min.js'),
@@ -549,6 +550,7 @@ def stage_detail(request, stage_id):
                     'name': loc.display_name or tr('Location {id}', id=loc.pk),
                     'distance_km': round(dist_m / 1000.0, 1),
                     'time_formatted': time_str,
+                    'seconds': int(secs),   # at the guide's pace; the pace slider scales this
                     'has_stay': (loc.pk in albergue_loc_ids) or (loc.pk in private_loc_ids),
                     'has_bar': bool(loc.has_bar_cafe),
                     'has_pharmacy': bool(loc.has_pharmacy),
@@ -729,6 +731,8 @@ def stage_detail(request, stage_id):
         'gps_track_json': json.dumps(gps_track),
         'map_waypoints_json': json.dumps(map_waypoints),
         'has_gps_track': len(gps_track) > 0,
+        'pace': {'default': planner.DEFAULT_PACE, 'min': planner.PACE_MIN, 'max': planner.PACE_MAX,
+                 'step': planner.PACE_STEP},
     }
     origin = seo.site_origin(request)
     context['seo'] = seo.stage_seo(

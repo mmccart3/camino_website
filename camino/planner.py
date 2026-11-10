@@ -20,6 +20,7 @@ from .stage_names import clean_stage_name
 
 FORMAT_VERSION = 1
 DEFAULT_PACE = 4.2
+PACE_MIN, PACE_MAX, PACE_STEP = 2.0, 6.0, 0.1   # what the planner's and the stage page's pace sliders offer, in km/h
 # lib/services/walking_time.dart: weights are stored for a 7% downhill, so normalise to flat ground.
 FLAT_SLOPE_EFFECT = math.exp(-2.25 * 0.07)
 EARTH_RADIUS = 6378137.0
@@ -312,7 +313,7 @@ def build_planner_data(stages, paths, points_by_path, locations, stays, sections
         'v': FORMAT_VERSION,
         'guide': guide_fingerprint(paths, locations.keys()),
         'flat': FLAT_SLOPE_EFFECT,
-        'pace': {'default': DEFAULT_PACE, 'min': 2.0, 'max': 6.0},
+        'pace': {'default': DEFAULT_PACE, 'min': PACE_MIN, 'max': PACE_MAX},
         'sections': sorted(clean_sections, key=lambda s: s['n']),
         'stages': out_stages,
         'places': places,

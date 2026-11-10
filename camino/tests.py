@@ -20,7 +20,7 @@ from urllib.parse import parse_qs, urlparse
 from django.conf import settings
 from django.test import Client, RequestFactory, SimpleTestCase
 
-from . import seo, stage_maps, views
+from . import planner, seo, stage_maps, views
 from .models import BOOKING_AFFILIATE_PARAMS, Albergue, MapLocationCoord, PrivateAccomm, Stage, clean_email, google_maps_url
 
 
@@ -114,6 +114,11 @@ class PwaEndpointTests(SimpleTestCase):
         self.assertIn('/plan/', urls)
         for name in ('plan-core.js', 'qr.js', 'plan-share.js', 'plan-message.js', 'plan.js', 'plan.css'):
             self.assertTrue(any(u.endswith('/' + name) for u in urls), name)
+
+    def test_the_stage_page_pace_script_works_offline(self):
+        body = self.client.get('/sw.js').content.decode()
+        urls = json.loads(re.search(r'const PRECACHE_URLS = (\[.*?\]);', body, re.S).group(1))
+        self.assertTrue(any(u.endswith('/stage-pace.js') for u in urls))
 
     def test_the_stay_details_are_saved_for_offline_use(self):
         body = self.client.get('/sw.js').content.decode()
@@ -276,6 +281,49 @@ class AccommodationButtonAssetTests(SimpleTestCase):
     def test_google_maps_pin_is_a_png(self):
         pin = settings.BASE_DIR / 'camino' / 'static' / 'camino' / 'img' / 'google-maps-pin.png'
         self.assertEqual(pin.read_bytes()[:8], b'\x89PNG\r\n\x1a\n')
+
+
+class StagePaceContractTests(SimpleTestCase):
+    """The walking-pace slider on a stage page (v1.3.5): stage-pace.js finds its elements by id; this keeps the template and the script in step."""
+
+    def read(self, *parts):
+        return (settings.BASE_DIR / 'camino' / Path(*parts)).read_text(encoding='utf-8')
+
+    def test_every_id_the_script_uses_is_in_the_template(self):
+        script = self.read('static', 'camino', 'js', 'stage-pace.js')
+        template = self.read('templates', 'camino', 'stage_detail.html')
+        used = set(re.findall(r"getElementById\('([a-z-]+)'\)", script))
+        self.assertGreaterEqual(len(used), 7)
+        for element_id in sorted(used):
+            self.assertIn(f'id="{element_id}"', template, element_id)
+
+    def test_the_page_says_the_words_before_it_loads_the_script(self):
+        template = self.read('templates', 'camino', 'stage_detail.html')
+        self.assertLess(template.index('window.STAGE_PACE_TXT'), template.index("camino/js/stage-pace.js"))
+        self.assertIn('<script src="{% static \'camino/js/stage-pace.js\' %}" defer></script>', template)
+        words = set(re.findall(r'txt\.(\w+)', self.read('static', 'camino', 'js', 'stage-pace.js')))
+        for word in sorted(words):
+            self.assertRegex(template, rf'\b{word}:\s*\{{% tjs ', word)
+
+    def test_the_slider_offers_the_planners_paces_and_is_hidden_until_the_script_runs(self):
+        template = self.read('templates', 'camino', 'stage_detail.html')
+        box = re.search(r'<div class="stage-pace" id="stage-pace-box"[^>]*>', template).group(0)
+        self.assertRegex(box, r'\bhidden>$')   # without the script the page keeps the guide's figures
+        for name in ('default', 'min', 'max'):
+            self.assertIn(f'data-{name}="{{{{ pace.{name}|unlocalize }}}}"', box)
+        self.assertIn('step="{{ pace.step|unlocalize }}"', template)   # |unlocalize: Spanish must not write 4,2 into an attribute
+        self.assertEqual((planner.PACE_MIN, planner.PACE_MAX, planner.PACE_STEP), (2.0, 6.0, 0.1))
+        self.assertTrue(planner.PACE_MIN <= planner.DEFAULT_PACE <= planner.PACE_MAX)
+
+    def test_each_place_carries_its_seconds_and_the_stage_time_its_minutes(self):
+        template = self.read('templates', 'camino', 'stage_detail.html')
+        self.assertIn('<span id="stage-time" data-minutes="{{ stage.time_minutes|default_if_none:\'\' }}">', template)
+        self.assertIn('<span class="waypoint-time" data-seconds="{{ loc.seconds }}">{{ loc.time_formatted }}</span>', template)
+
+    def test_the_slider_is_left_out_of_the_printed_page(self):
+        base = self.read('templates', 'camino', 'base.html')
+        self.assertIn('#debug-info, .stage-pace {', base)   # in the list of things @media print hides
+        self.assertLess(base.index('@media print'), base.index('#debug-info, .stage-pace {'))
 
 
 class StageChartLabelTests(SimpleTestCase):
@@ -657,6 +705,33 @@ class LiveDatabaseSmokeTests(unittest.TestCase):
         self.assertIn(f'width="1024" height="{info["height"]}"', html)
         self.assertIn(f'viewBox="0 0 1024 {info["height"]}"', html)
         self.assertIn(f'src="{info["src"]}"', html)
+
+    def test_a_stage_page_has_the_pace_slider_with_the_guides_times(self):
+        stage = Stage.objects.exclude(time_minutes__isnull=True).exclude(time_minutes=0).order_by('id').first()
+        html = self.get(f'/stage/{stage.id}/')
+        self.assertIn('id="stage-pace-box"', html)
+        self.assertRegex(html, r'<input type="range" id="stage-pace"[^>]*\bmin="2\.0"[^>]*\bmax="6\.0"[^>]*\bstep="0\.1"[^>]*\bvalue="4\.2"')
+        self.assertIn(f'data-minutes="{stage.time_minutes}"', html)
+        self.assertIn('Walking pace:', html)
+        seconds = [int(n) for n in re.findall(r'class="waypoint-time" data-seconds="(\d+)"', html)]
+        self.assertGreater(len(seconds), 1)
+        self.assertGreater(max(seconds), 0)   # the places further along are some time away
+        self.assertIn('window.STAGE_PACE_TXT', html)
+        self.assertIn('stage-pace.js', html)
+
+    def test_the_spanish_stage_page_has_the_pace_slider_in_spanish(self):
+        stage = Stage.objects.exclude(time_minutes__isnull=True).exclude(time_minutes=0).order_by('id').first()
+        html = self.get(f'/es/stage/{stage.id}/')
+        self.assertIn('Ritmo de marcha:', html)
+        self.assertRegex(html, r'<input type="range" id="stage-pace"[^>]*\bstep="0\.1"[^>]*\bvalue="4\.2"')   # a point, never a comma, in the attribute
+        self.assertIn('a {pace} km/h', html)
+        self.assertIn('Volver a {pace} km/h', html)
+
+    def test_every_stage_with_a_time_has_the_pace_slider(self):
+        for stage in Stage.objects.order_by('id'):
+            html = self.get(f'/stage/{stage.id}/')
+            has_time = bool(stage.time_minutes)
+            self.assertEqual('id="stage-pace-box"' in html, has_time, f'stage {stage.id}')
 
     def test_every_hotspot_lies_inside_the_grid_of_its_map(self):
         stages = {s.id: s for s in Stage.objects.all()}

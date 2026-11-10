@@ -2,7 +2,8 @@
  *
  * The times the page is built with are for the guide's pace (4.2 km/h on the flat). Time on foot is the
  * weighted distance divided by the pace, so a different pace scales every time by guidePace / pace, exactly
- * what the planner does (plan-core.js, walkingSeconds). This file rescales the "Est. Time" figure and the
+ * what the planner does (plan-core.js, walkingSeconds). The stage's "Est. Time" is worked out the way the app does
+ * it, from the stage's weighted distance (stageMinutes), so the page and the app agree to the minute. This file rescales the "Est. Time" figure and the
  * time at each place along the stage when the visitor moves the slider, and remembers the choice in this
  * browser. Without the script (or with storage blocked) the page shows the guide's figures and the slider
  * stays hidden.
@@ -43,6 +44,14 @@
     return Math.round(seconds * base / pace * 1000) / 1000;
   }
 
+  // The stage's whole minutes at `pace`, from the stage's weighted distance: the app's own rule. It makes a Duration of
+  // round(weighted * flat / pace * 1e6) microseconds and shows it rounded UP to a minute (WalkingTime in the app). At the
+  // guide's pace this is the stored stage time, for every stage.
+  function stageMinutes(weighted, pace, flat) {
+    return Math.ceil(Math.floor(weighted * flat / pace * 1e6 + 0.5) / 6e7);
+  }
+
+  // The fallback when a page has no weighted distance: the stored minutes, scaled (can differ from the app by a minute or more).
   function scaleMinutes(minutes, pace, base) {
     if (pace === base) return minutes;
     return Math.round(minutes * base / pace);
@@ -107,6 +116,9 @@
       max: Number(box.getAttribute('data-max'))
     };
     if (!isFinite(limits.def) || !isFinite(limits.min) || !isFinite(limits.max)) return;
+    var flat = Number(box.getAttribute('data-flat'));
+    var weighted = total ? Number(total.getAttribute('data-weighted')) : NaN;
+    var exact = total && total.getAttribute('data-weighted') !== null && isFinite(weighted) && weighted > 0 && isFinite(flat) && flat > 0;
     var lang = doc.documentElement.lang === 'es' ? 'es' : 'en';
     var storage = null;
     try { storage = win.localStorage; } catch (error) { storage = null; }
@@ -125,7 +137,8 @@
       if (hint) hint.textContent = fill(txt.hint, { pace: paceNumber(base, lang) });
       if (total && total.getAttribute('data-minutes')) {
         total.textContent = isGuide ? originalTotal
-          : totalTime(scaleMinutes(Number(total.getAttribute('data-minutes')), pace, base), txt);
+          : totalTime(exact ? stageMinutes(weighted, pace, flat)
+            : scaleMinutes(Number(total.getAttribute('data-minutes')), pace, base), txt);
       }
       places.forEach(function (el, i) {
         el.textContent = isGuide ? originals[i]
@@ -151,7 +164,7 @@
 
   return {
     STORAGE_KEY: STORAGE_KEY, PLAN_KEY: PLAN_KEY, fill: fill, tidyPace: tidyPace, scaleSeconds: scaleSeconds,
-    scaleMinutes: scaleMinutes, placeTime: placeTime, totalTime: totalTime, paceNumber: paceNumber,
+    scaleMinutes: scaleMinutes, stageMinutes: stageMinutes, placeTime: placeTime, totalTime: totalTime, paceNumber: paceNumber,
     readSaved: readSaved, savePace: savePace, start: start
   };
 });

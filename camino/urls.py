@@ -11,6 +11,7 @@ from . import views
 localized_urlpatterns = [
     path('', views.stage_list, name='stage_list'),
     path('stage/<int:stage_id>/', views.stage_detail, name='stage_detail'),
+    path('stage/<int:stage_id>/route.gpx', views.stage_gpx, name='stage_gpx'),   # the stage's route as a GPX download
     path('location/<int:location_id>/', views.location_detail, name='location_detail'),
     path('towns/', views.towns, name='towns'),
     path('plan/', views.plan, name='plan'),

@@ -59,6 +59,10 @@ self.addEventListener('fetch', (event) => {
     const path = url.pathname;
     // Never keep the worker itself or the offline pack list.
     if (path === '/sw.js' || path === '/offline-pack.json') return;
+    // A GPX download is a plain file, never a page, so the worker keeps out of it: it can never answer one with the "you're offline"
+    // page or keep a copy among the saved pages. (Chrome does not send a download link through the worker at all; this is for
+    // any browser that does.)
+    if (path.endsWith('.gpx')) return;
     if (path === '/plan/stays.json') {
       event.respondWith(networkFirstData(event, request));
       return;

@@ -20,7 +20,7 @@ from .stage_names import clean_stage_name
 
 FORMAT_VERSION = 1
 DEFAULT_PACE = 4.2
-PACE_MIN, PACE_MAX, PACE_STEP = 2.0, 6.0, 0.1   # what the planner's and the stage page's pace sliders offer, in km/h
+PACE_MIN, PACE_MAX, PACE_STEP = 1.0, 8.5, 0.1   # what the planner's and the stage page's pace sliders offer, in km/h: all the app accepts and saves (its own Settings slider shows 2.0 to 7.0)
 # lib/services/walking_time.dart: weights are stored for a 7% downhill, so normalise to flat ground.
 FLAT_SLOPE_EFFECT = math.exp(-2.25 * 0.07)
 EARTH_RADIUS = 6378137.0
@@ -30,6 +30,16 @@ MAX_TRACK_GAP = 250.0     # metres between two consecutive track points
 
 class RouteData(Exception):
     """The app would refuse to guide along this stage."""
+
+
+def walking_minutes(weighted, pace):
+    """The whole minutes the app shows for a stage at a flat-ground pace (km/h).
+
+    The app turns the stage's weighted distance into a Duration of round(weighted * flat / pace * 1e6) microseconds and
+    shows it rounded UP to a minute (WalkingTime in lib/services/walking_time.dart). The stored stage minutes are this
+    figure at 4.2 km/h, for every stage (test_planner checks it), so the stage page uses it to show any other pace.
+    """
+    return math.ceil(math.floor(weighted * FLAT_SLOPE_EFFECT / pace * 1e6 + 0.5) / 6e7)
 
 
 def haversine(a, b):
@@ -359,7 +369,7 @@ def load_inputs(cursor):
 
 
 _lock = threading.Lock()
-_cache = {'key': None, 'body': None}
+_cache = {'key': None, 'body': None, 'weights': {}}
 
 
 def get_planner_json(connection, sections_provider=None):
@@ -378,8 +388,15 @@ def get_planner_json(connection, sections_provider=None):
             sections = sections_provider() if sections_provider else None
             data = build_planner_data(stages, paths, points_by_path, locations, stays, sections, elevations)
             body = json.dumps(data, ensure_ascii=False, separators=(',', ':'))
-            _cache.update(key=key, body=body)
+            weights = {int(sid): stage['w'] for sid, stage in data['stages'].items()}
+            _cache.update(key=key, body=body, weights=weights)
         return _cache['body']
+
+
+def get_stage_weights(connection, sections_provider=None):
+    """{stage id: weighted distance}, from the same cached build as the planner JSON."""
+    get_planner_json(connection, sections_provider)
+    return _cache['weights']
 
 
 # --- the details of each place to stay (a second, lazily loaded file) ------------------------------

@@ -391,6 +391,16 @@ class RealGuideTests(unittest.TestCase):
             minutes = s['w'] * planner.FLAT_SLOPE_EFFECT / planner.DEFAULT_PACE / 60
             self.assertLess(abs(minutes - stored_min), 1.5, sid)
 
+    def test_the_apps_rule_gives_the_stored_stage_minutes_exactly(self):
+        # exact time at 4.2 km/h, rounded up to the minute: what the app shows and what the stage page shows at any pace
+        for sid, stored_min in self.db.execute('SELECT ID, stageTimeInMinutes FROM stages'):
+            self.assertEqual(planner.walking_minutes(self.data['stages'][str(sid)]['w'], 4.2), stored_min, sid)
+        # a slower pace takes longer, a faster one less, in whole minutes
+        w = self.data['stages']['1']['w']
+        self.assertGreater(planner.walking_minutes(w, 3.6), planner.walking_minutes(w, 4.2))
+        self.assertLess(planner.walking_minutes(w, 5.0), planner.walking_minutes(w, 4.2))
+        self.assertEqual(planner.walking_minutes(w, 3.0), 569)    # not 568, which scaling the stored 406 minutes gives
+
     def test_walking_a_whole_stage_through_the_graph_gives_the_stage_figures(self):
         graph = self.data['routes']
         by_id = {row[0]: row for row in graph['paths']}

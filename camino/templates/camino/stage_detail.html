@@ -49,7 +49,7 @@
 <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
   <p style="margin: 0; font-size: 1.05rem;">
     <strong>{% t "Distance:" %}</strong> {{ stage.distance_km }} km |   
-    <strong>{% t "Est. Time:" %}</strong> <span id="stage-time" data-minutes="{{ stage.time_minutes|default_if_none:'' }}">{{ stage.time_minutes|format_duration }}</span><span id="stage-time-note" class="stage-pace-note"></span>
+    <strong>{% t "Est. Time:" %}</strong> <span id="stage-time" data-minutes="{{ stage.time_minutes|default_if_none:'' }}"{% if stage_weighted %} data-weighted="{{ stage_weighted|unlocalize }}"{% endif %}>{{ stage.time_minutes|format_duration }}</span><span id="stage-time-note" class="stage-pace-note"></span>
   </p>
   <button onclick="window.print()" class="btn" style="background: #e2e8f0; color: #1e293b; cursor: pointer; border: none; margin: 0;">
     {% t "🖨️ Print / Save PDF" %}
@@ -58,7 +58,7 @@
 
 <!-- Walking pace: the script (stage-pace.js) shows this and rescales the times; without it the page keeps the guide's figures -->
 {% if stage.time_minutes %}
-<div class="stage-pace" id="stage-pace-box" data-default="{{ pace.default|unlocalize }}" data-min="{{ pace.min|unlocalize }}" data-max="{{ pace.max|unlocalize }}" hidden>
+<div class="stage-pace" id="stage-pace-box" data-default="{{ pace.default|unlocalize }}" data-min="{{ pace.min|unlocalize }}" data-max="{{ pace.max|unlocalize }}" data-flat="{{ pace.flat|unlocalize }}" hidden>
   <div class="stage-pace-row">
     <label for="stage-pace" class="stage-pace-label">{% t "Walking pace:" %} <output id="stage-pace-out" for="stage-pace"></output></label>
     <input type="range" id="stage-pace" class="stage-pace-range" min="{{ pace.min|unlocalize }}" max="{{ pace.max|unlocalize }}" step="{{ pace.step|unlocalize }}" value="{{ pace.default|unlocalize }}" aria-describedby="stage-pace-hint">
@@ -311,6 +311,14 @@
       <span>{% t "Layer: Topo / Satellite switchable via top-right icon." %}</span>
     </div>
   </div>
+{% endif %}
+
+{# The stage's route as a GPX file (made from the same stored points as the elevation profile); it is not a page, so the offline worker leaves it alone #}
+{% if has_elevation_data %}
+<div class="route-download" id="route-download">
+  <a class="route-download-btn" href="{% url 'stage_gpx' stage.id %}" download rel="nofollow">{% t "⬇️ Download GPX" %}</a>
+  <p class="route-download-hint">{% t "The route of this stage as a GPX file, with the places along it. Open it in a GPS app such as Organic Maps, Komoot or Gaia GPS to follow the route on your phone. Save the file before you set off, so you have it without a signal." %}</p>
+</div>
 {% endif %}
 
 <p id="debug-info" style="font-size: 0.8rem; color: #64748b; margin-top: 0.5rem;"></p>

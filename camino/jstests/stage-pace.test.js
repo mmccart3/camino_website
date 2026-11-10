@@ -19,6 +19,8 @@ const ES = Object.assign({}, EN, {
   totalHr: '{n} h', totalHrs: '{n} h', totalMin: '{n} min', totalMins: '{n} min', totalZero: '0 min',
 });
 const LIMITS = { def: 4.2, min: 2, max: 6 };
+const APP_LIMITS = { def: 4.2, min: 1, max: 8.5 };   // all the app accepts and saves (SettingsService), which the site now offers too
+const FLAT = 0.8542768136084795;   // exp(-2.25 * 0.07), the app's flat-ground factor
 
 test('a pace is one decimal inside the limits, or nothing', () => {
   assert.strictEqual(P.tidyPace('3.6', LIMITS), 3.6);
@@ -26,6 +28,35 @@ test('a pace is one decimal inside the limits, or nothing', () => {
   assert.strictEqual(P.tidyPace('2', LIMITS), 2);
   assert.strictEqual(P.tidyPace('6', LIMITS), 6);
   for (const bad of [null, undefined, '', ' ', 'fast', NaN, 1.9, 6.1, '9', -3]) assert.strictEqual(P.tidyPace(bad, LIMITS), null, String(bad));
+});
+
+test('the pace range is the app\'s: 1.0 to 8.5 km/h', () => {
+  for (const ok of [1, '1.0', 8.5, '8.5', 4.2]) assert.strictEqual(P.tidyPace(ok, APP_LIMITS), Number(ok), String(ok));
+  for (const bad of [0.9, 8.6, 0, 12]) assert.strictEqual(P.tidyPace(bad, APP_LIMITS), null, String(bad));
+});
+
+test('the stage time follows the app: exact time at the pace, rounded up to the minute (figures from the real stages)', () => {
+  // [weighted distance, stored minutes, {pace: the app's minutes}], worked out in Python with the same rule
+  const stages = [
+    [119721.78008019499, 406, { 1: 1705, 3: 569, 3.6: 474, 4.2: 406, 5: 341, 6: 285, 8.5: 201 }],
+    [92383.43819409882, 314, { 1: 1316, 3: 439, 3.6: 366, 4.2: 314, 5: 264, 6: 220, 8.5: 155 }],
+    [90002.93390085259, 306, { 1: 1282, 3: 428, 3.6: 356, 4.2: 306, 5: 257, 6: 214, 8.5: 151 }],
+    [90672.12070129177, 308, { 1: 1291, 3: 431, 3.6: 359, 4.2: 308, 5: 259, 6: 216, 8.5: 152 }],
+  ];
+  for (const [weighted, stored, byPace] of stages) {
+    assert.strictEqual(P.stageMinutes(weighted, 4.2, FLAT), stored);   // the stored stage time is this rule at the guide's pace
+    for (const [pace, minutes] of Object.entries(byPace)) assert.strictEqual(P.stageMinutes(weighted, Number(pace), FLAT), minutes, pace);
+  }
+  // scaling the stored minutes is close but not the same: 406 min at 3.0 km/h is 568.4, the app says 569
+  assert.strictEqual(P.scaleMinutes(406, 3.0, 4.2), 568);
+  assert.strictEqual(P.totalTime(P.stageMinutes(119721.78008019499, 3.0, FLAT), EN), '9 hrs 29 mins');
+  // slower is never quicker
+  let last = 0;
+  for (let pace = 8.5; pace >= 1; pace = Math.round((pace - 0.1) * 10) / 10) {
+    const minutes = P.stageMinutes(119721.78008019499, pace, FLAT);
+    assert.ok(minutes >= last, String(pace));
+    last = minutes;
+  }
 });
 
 test('the guide pace gives back the seconds and minutes unchanged, so no minute boundary is lost', () => {
@@ -112,12 +143,12 @@ function element(attributes, text) {
   };
 }
 
-function miniPage(lang, stored) {
+function miniPage(lang, stored, exact) {
   const els = {
-    'stage-pace-box': element({ 'data-default': '4.2', 'data-min': '2', 'data-max': '6' }),
+    'stage-pace-box': element(Object.assign({ 'data-default': '4.2', 'data-min': '2', 'data-max': '6' }, exact ? { 'data-flat': String(FLAT) } : {})),
     'stage-pace': element({}), 'stage-pace-out': element({}), 'stage-pace-hint': element({}),
     'stage-pace-reset': element({}), 'stage-time-note': element({}),
-    'stage-time': element({ 'data-minutes': '406' }, '6 hrs 46 mins'),
+    'stage-time': element(Object.assign({ 'data-minutes': '406' }, exact ? { 'data-weighted': '119721.78008019499' } : {}), '6 hrs 46 mins'),
   };
   els['stage-pace-box'].hidden = true;
   els['stage-pace-reset'].hidden = true;
@@ -198,4 +229,29 @@ test('the planner\'s pace is the starting point when none was chosen here', () =
   P.start(page.doc, page.win);
   assert.strictEqual(page.els['stage-pace'].value, '3.4');
   assert.deepStrictEqual(page.kept, { [P.PLAN_KEY]: plan });   // read only: the plan is left as it was
+});
+
+test('with the weighted distance on the page the stage time is the app\'s, and the guide\'s figure comes back at 4.2', () => {
+  const page = miniPage('en', null, true);
+  P.start(page.doc, page.win);
+  assert.strictEqual(page.els['stage-time'].textContent, '6 hrs 46 mins');   // the server's own figure
+  page.els['stage-pace'].value = '3.0';
+  page.els['stage-pace'].handlers.input();
+  assert.strictEqual(page.els['stage-time'].textContent, '9 hrs 29 mins');   // 569, where scaling the stored 406 gives 568
+  page.els['stage-pace'].value = '4.2';
+  page.els['stage-pace'].handlers.input();
+  assert.strictEqual(page.els['stage-time'].textContent, '6 hrs 46 mins');
+  assert.strictEqual(page.els['stage-time-note'].textContent, '');
+});
+
+test('a page whose weighted distance is missing or not a number falls back to scaling the stored minutes', () => {
+  for (const bad of [undefined, '', 'x', '0', '-5']) {
+    const page = miniPage('en', null, true);
+    if (bad === undefined) delete page.els['stage-time'].attributes['data-weighted'];
+    else page.els['stage-time'].attributes['data-weighted'] = bad;
+    P.start(page.doc, page.win);
+    page.els['stage-pace'].value = '3.0';
+    page.els['stage-pace'].handlers.input();
+    assert.strictEqual(page.els['stage-time'].textContent, '9 hrs 28 mins', String(bad));   // 406 * 4.2 / 3.0 = 568.4
+  }
 });

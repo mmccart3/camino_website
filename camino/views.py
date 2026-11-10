@@ -1,5 +1,6 @@
 # camino/views.py
 import json
+import logging
 import traceback
 from datetime import date
 from xml.sax.saxutils import escape
@@ -7,18 +8,20 @@ from xml.sax.saxutils import escape
 from django.conf import settings
 from django.db import connection
 from django.db.models import Count
-from django.http import HttpResponse, HttpResponseServerError, JsonResponse
+from django.http import Http404, HttpResponse, HttpResponseServerError, JsonResponse
 from django.shortcuts import render, get_object_or_404, redirect
 from django.templatetags.static import static
 from django.urls import reverse
 from django.utils import translation
 
-from . import i18n, planner, seo, stage_maps
+from . import gpx, i18n, planner, seo, stage_maps
 from .i18n import tr
 from .models import (
     Stage, Path, ElevationPoint, MapLocationCoord, Location,
     Albergue, PrivateAccomm, TrackPoint, BOOKING_AFFILIATE_PARAMS
 )
+
+logger = logging.getLogger(__name__)
 
 # camino/views.py
 
@@ -398,6 +401,7 @@ def robots_txt(request):
         'Disallow: /es/search/\n'
         'Disallow: /offline-pack.json\n'
         'Disallow: /plan/stays.json\n'
+        'Disallow: /*.gpx$\n'
         f'Sitemap: {origin}/sitemap.xml\n'
     )
     return HttpResponse(body, content_type='text/plain; charset=utf-8')
@@ -714,6 +718,14 @@ def stage_detail(request, stage_id):
         traceback.print_exc()
         print(f"[Warning] Error assembling stage data for Stage {stage.id}: {err}")
 
+    # The stage's weighted distance, from the planner's cached figures: the page works out the time at any pace the way the
+    # app does. Without it (a build problem) the page scales the stored minutes instead.
+    try:
+        stage_weighted = planner.get_stage_weights(connection, plan_sections).get(stage.id)
+    except Exception:
+        logger.warning('Could not get the weighted distance of stage %s', stage.id, exc_info=True)
+        stage_weighted = None
+
     context = {
         'stage': stage,
         'prior_stage': prior_stage,
@@ -727,18 +739,47 @@ def stage_detail(request, stage_id):
         'elevation_stats': elevation_stats,
         'chart_points_json': json.dumps(chart_points),
         'waypoint_markers_json': json.dumps(waypoint_markers),
-        'has_elevation_data': len(chart_points) > 0,
+        'has_elevation_data': len(chart_points) > 0,   # also what the GPX download is made from
         'gps_track_json': json.dumps(gps_track),
         'map_waypoints_json': json.dumps(map_waypoints),
         'has_gps_track': len(gps_track) > 0,
         'pace': {'default': planner.DEFAULT_PACE, 'min': planner.PACE_MIN, 'max': planner.PACE_MAX,
-                 'step': planner.PACE_STEP},
+                 'step': planner.PACE_STEP, 'flat': planner.FLAT_SLOPE_EFFECT},
+        'stage_weighted': stage_weighted,
     }
     origin = seo.site_origin(request)
     context['seo'] = seo.stage_seo(
         stage, origin, origin + request.path, elevation=elevation_stats, stage_map=context['stage_map']
     )
     return render(request, 'camino/stage_detail.html', context)
+
+
+def stage_gpx(request, stage_id):
+    """The stage's route as a GPX download, for GPS apps (Organic Maps, Komoot, Gaia GPS and the like).
+
+    The line is the guide's stored route with the height of every point, and the places along the stage are
+    waypoints. The stage and place names are in the language of the page the link was on (/es/ gives Spanish).
+    """
+    stage = get_object_or_404(Stage, pk=stage_id)
+    with connection.cursor() as cursor:
+        route = gpx.load_route(cursor, stage.id)
+    if len(route['points']) < 2:
+        raise Http404('This stage has no route recorded.')
+    locations = Location.objects.in_bulk(route['place_ids'])
+    places = [
+        (locations[pk].display_name, locations[pk].latitude, locations[pk].longitude)
+        for pk in route['place_ids']
+        if pk in locations and not locations[pk].is_placeholder
+    ]
+    name = tr('Stage {display_ref}: {stage_name}', display_ref=stage.display_ref, stage_name=i18n.lookup(str(stage.stage_name).strip()))
+    body = gpx.build_gpx(
+        name, route['points'], places,
+        page_url=seo.site_origin(request) + reverse('stage_detail', args=[stage.id]),
+    )
+    response = HttpResponse(body, content_type='application/gpx+xml; charset=utf-8')
+    response['Content-Disposition'] = f'attachment; filename="{gpx.filename(stage.display_ref, stage.id)}"'
+    response['Cache-Control'] = 'public, max-age=3600'
+    return response
 
 
 def location_detail(request, location_id):

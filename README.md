@@ -9,7 +9,7 @@ An interactive, mobile-optimized guide for pilgrims walking the Camino de Santia
 * **Sequential Stage & Route Pairing:** Automatically orders stages from Saint-Jean-Pied-de-Port to Santiago de Compostela. Alternate route options (such as the Valcarlos variant or the Samos monastery detour) are grouped and displayed side by side with the main route.
 * **Interactive Responsive Maps:** Stage overview maps feature an adaptive SVG coordinate overlay with clickable town/village bounding boxes that scale across mobile, tablet, and desktop viewports. The browser is offered three sizes of each map (360, 640 and 1024 pixels wide) and picks one by screen width and sharpness, so a phone does not download the desktop picture; the hotspots are measured on the 1024 picture and scale to whichever one is shown.
 * **English and Spanish:** every page is available in English (plain addresses) and in Spanish (under `/es/`), with a language link in the menu and footer.
-* **Elevation Profiles & Stage Stats:** Each stage includes distance (km), estimated walking time, and elevation charts to help plan daily ascents and descents. A walking-pace slider on the stage page (2.0 to 6.0 km/h) rescales the stage time and the time to each place.
+* **Elevation Profiles & Stage Stats:** Each stage includes distance (km), estimated walking time, and elevation charts to help plan daily ascents and descents. A walking-pace slider on the stage page (1.0 to 8.5 km/h, which is all the app accepts) rescales the stage time and the time to each place. Each stage page also offers its route as a GPX file to download (for Organic Maps, Komoot, Gaia GPS and the like).
 * **Comprehensive Accommodation Directory:**
   * **Pilgrim Albergues:** Bed counts, seasonal opening periods, check-in windows, pricing, and amenity badges (kitchen, laundry, communal meals).
   * **Private Accommodations & B&Bs:** Single/double room rates, addresses, and property notes.
@@ -90,9 +90,15 @@ Edits made directly in this project's `camino.sqlite` are replaced the next time
 ## Walking pace on a stage page
 
 A stage page (`/stage/<id>/`, and `/es/stage/<id>/`) has a "Walking pace" slider under the distance and time. The times in the
-database are for the guide's pace of 4.2 km/h on the flat; the slider goes from 2.0 to 6.0 km/h in steps of 0.1 (the same
-limits as the planner, `PACE_MIN` / `PACE_MAX` / `PACE_STEP` in `camino/planner.py`). Time on foot is the weighted distance
-divided by the pace, so a different pace scales every time by 4.2 / pace, exactly as the planner does.
+database are for the guide's pace of 4.2 km/h on the flat; the slider goes from 1.0 to 8.5 km/h in steps of 0.1 (everything the app accepts and saves,
+so a plan keeps its pace when it goes between the app and the site; the app's own Settings slider shows 2.0 to 7.0 and stretches to include a saved speed outside that; the planner offers the same range as this slider,
+`PACE_MIN` / `PACE_MAX` / `PACE_STEP` in `camino/planner.py`). Time on foot is the weighted distance divided by the pace.
+
+The stage's "Est. Time" is worked out the way the app does it, so the two agree to the minute: `planner.walking_minutes()` takes the stage's
+weighted distance (the planner's cached figures, `planner.get_stage_weights()`, written on the page as `data-weighted`, with
+`data-flat` the flat-ground factor), makes round(weighted x flat / pace x 1e6) microseconds and rounds up to a minute. At 4.2 km/h this
+is the stored stage time for every stage (`RealGuideTests` checks it). Scaling the stored minutes instead can be a minute or more out, so
+that is only the fallback when a page has no weighted distance. The time at each place scales the stored seconds.
 
 - `camino/static/camino/js/stage-pace.js` rescales the "Est. Time" figure (`#stage-time`, which carries the guide's minutes in
   `data-minutes`) and the time at each place (`.waypoint-time`, which carries the guide's seconds in `data-seconds`), and writes
@@ -126,6 +132,32 @@ to its guide page), centred on the town. One map serves every town: the page onl
   each file, delete the old layers and rename the new ones "Route" and "Places". The map keeps its id, so nothing on the site changes.
 - `RouteMapTests` and `MyMapsFilesToolTests` in `camino/tests.py` check the address (centre, zoom, language, no `/u/`), the
   fallback and the tool; `LiveDatabaseSmokeTests` checks that a real town page and every town with a position gets the map.
+
+## Route download (GPX) on the stage pages
+
+Every stage page (`/stage/<id>/`, and `/es/stage/<id>/`) has a "Download GPX" button under the maps. It fetches
+`/stage/<id>/route.gpx` (`/es/stage/<id>/route.gpx` in Spanish): the stage's route as a GPX 1.1 file that a GPS app can follow,
+for pilgrims who want the line on their phone or watch. The page already has the interactive map; the file is what it could not give.
+
+- The file is made on request from the database, nothing is stored: `camino/gpx.py` reads the stage's `elevation_points` (every leg
+  of the stage in walking order, 1,500 to 3,100 points, each with its height; the page's interactive map uses the sparser
+  `track_points`, which lie within about 3 m of the same line) and writes one track. A point that is the same place as the one before
+  it (the end of one leg is sometimes the start of the next) is dropped. The places along the stage (the ones the page lists, in the
+  same order) are waypoints, and the file links back to the stage page. A file is about 150 KB.
+- `camino/gpx.py` has no Django in it (`load_route()` takes a database cursor, `build_gpx()` returns the text), and
+  `views.stage_gpx` adds the names in the language of the page: the track is "Stage 1a: ..." or "Etapa 1a: ...". The file name is the
+  same in both languages (`saint-jean-to-santiago-stage-1a.gpx`).
+- The button is shown when the stage has elevation data (`has_elevation_data`), is left out of a printed page, and is
+  `rel="nofollow"`. `/robots.txt` asks search engines to skip `*.gpx`.
+- **The service worker leaves `*.gpx` alone** (`sw.js`), as a precaution: a download is not a page, so the worker must never answer
+  one with the "you're offline" page or keep a copy among the saved pages. It was tested in Chrome, which does not send a download
+  link through the worker at all (offline the download simply fails, with or without the rule), so the rule matters only to a
+  browser that does; Safari and Firefox were not tested.
+  The offline pack does not include the files: the page's hint tells visitors to save the file before they set off.
+- `camino/test_gpx.py` (no Django needed, reads the real database read-only) checks the file for all 44 stages: valid XML in the order
+  the GPX schema asks for, every point and place present, the route starting and ending at its first and last place, and no jump
+  between consecutive points. `StageGpxContractTests` and `LiveDatabaseSmokeTests` in `camino/tests.py` check the address, the
+  headers, the Spanish version and that the file's places are the page's places; `camino/jstests/sw.test.js` checks the worker.
 
 ---
 

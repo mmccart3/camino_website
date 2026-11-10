@@ -9,16 +9,21 @@ unittest case that only performs GET requests against the real camino.sqlite.
 """
 import gzip
 import json
+import math
 import re
 import struct
 import unittest
+import xml.etree.ElementTree as ET
 from decimal import Decimal
+from html import unescape
 from pathlib import Path
 from types import SimpleNamespace
 from urllib.parse import parse_qs, urlparse
 
 from django.conf import settings
 from django.test import Client, RequestFactory, SimpleTestCase, override_settings
+from django.urls import reverse
+from django.utils import translation
 
 from . import planner, seo, stage_maps, views
 from .models import (BOOKING_AFFILIATE_PARAMS, Albergue, Location, MapLocationCoord, PrivateAccomm, Stage, clean_email,
@@ -382,18 +387,60 @@ class StagePaceContractTests(SimpleTestCase):
         for name in ('default', 'min', 'max'):
             self.assertIn(f'data-{name}="{{{{ pace.{name}|unlocalize }}}}"', box)
         self.assertIn('step="{{ pace.step|unlocalize }}"', template)   # |unlocalize: Spanish must not write 4,2 into an attribute
-        self.assertEqual((planner.PACE_MIN, planner.PACE_MAX, planner.PACE_STEP), (2.0, 6.0, 0.1))
+        self.assertEqual((planner.PACE_MIN, planner.PACE_MAX, planner.PACE_STEP), (1.0, 8.5, 0.1))   # all the app accepts and saves
         self.assertTrue(planner.PACE_MIN <= planner.DEFAULT_PACE <= planner.PACE_MAX)
+
+    def test_the_stage_time_carries_the_weighted_distance_the_app_works_it_out_from(self):
+        template = self.read('templates', 'camino', 'stage_detail.html')
+        self.assertIn('{% if stage_weighted %} data-weighted="{{ stage_weighted|unlocalize }}"{% endif %}', template)
+        self.assertIn('data-flat="{{ pace.flat|unlocalize }}"', template)
+        self.assertAlmostEqual(planner.FLAT_SLOPE_EFFECT, math.exp(-2.25 * 0.07))   # the app's flat-ground factor
+
+    def test_the_planner_page_slider_offers_the_same_range(self):
+        template = self.read('templates', 'camino', 'plan.html')
+        self.assertIn(f'id="plan-pace" step="0.1" min="{planner.PACE_MIN:g}" max="{planner.PACE_MAX:g}"', template)
 
     def test_each_place_carries_its_seconds_and_the_stage_time_its_minutes(self):
         template = self.read('templates', 'camino', 'stage_detail.html')
-        self.assertIn('<span id="stage-time" data-minutes="{{ stage.time_minutes|default_if_none:\'\' }}">', template)
+        self.assertIn('<span id="stage-time" data-minutes="{{ stage.time_minutes|default_if_none:\'\' }}"', template)
         self.assertIn('<span class="waypoint-time" data-seconds="{{ loc.seconds }}">{{ loc.time_formatted }}</span>', template)
 
     def test_the_slider_is_left_out_of_the_printed_page(self):
         base = self.read('templates', 'camino', 'base.html')
-        self.assertIn('#debug-info, .stage-pace {', base)   # in the list of things @media print hides
-        self.assertLess(base.index('@media print'), base.index('#debug-info, .stage-pace {'))
+        self.assertIn('#debug-info, .stage-pace, .route-download {', base)   # in the list of things @media print hides
+        self.assertLess(base.index('@media print'), base.index('#debug-info, .stage-pace, .route-download {'))
+
+
+class StageGpxContractTests(SimpleTestCase):
+    """The GPX download of a stage's route (v1.3.8): the address, the button, and the places that must leave it alone."""
+
+    def read(self, *parts):
+        return (settings.BASE_DIR / 'camino' / Path(*parts)).read_text(encoding='utf-8')
+
+    def test_the_download_has_an_address_in_each_language(self):
+        self.assertEqual(reverse('stage_gpx', args=[5]), '/stage/5/route.gpx')
+        with translation.override('es'):
+            self.assertEqual(reverse('stage_gpx', args=[5]), '/es/stage/5/route.gpx')
+
+    def test_the_stage_page_has_the_button_only_when_there_is_a_route(self):
+        template = self.read('templates', 'camino', 'stage_detail.html')
+        block = re.search(r'\{% if has_elevation_data %\}\s*<div class="route-download" id="route-download">(.*?)\{% endif %\}', template, re.S)
+        self.assertIsNotNone(block)
+        self.assertIn('<a class="route-download-btn" href="{% url \'stage_gpx\' stage.id %}" download rel="nofollow">', block.group(1))
+        self.assertIn('{% t "\u2b07\ufe0f Download GPX" %}', block.group(1))
+
+    def test_the_worker_leaves_a_gpx_download_alone(self):
+        """A download is not a page: the worker must never answer it with the "you're offline" page or keep a copy of it among the pages."""
+        body = Client().get('/sw.js').content.decode()
+        self.assertIn("if (path.endsWith('.gpx')) return;", body)
+        self.assertLess(body.index("path.endsWith('.gpx')"), body.index("request.mode === 'navigate'"))
+
+    def test_search_engines_are_asked_to_skip_the_downloads(self):
+        self.assertIn('Disallow: /*.gpx$', Client().get('/robots.txt').content.decode())
+
+    def test_the_button_is_left_out_of_the_printed_page(self):
+        base = self.read('templates', 'camino', 'base.html')
+        self.assertLess(base.index('@media print'), base.index('#debug-info, .stage-pace, .route-download {'))
 
 
 class StageChartLabelTests(SimpleTestCase):
@@ -780,12 +827,17 @@ class LiveDatabaseSmokeTests(unittest.TestCase):
         stage = Stage.objects.exclude(time_minutes__isnull=True).exclude(time_minutes=0).order_by('id').first()
         html = self.get(f'/stage/{stage.id}/')
         self.assertIn('id="stage-pace-box"', html)
-        self.assertRegex(html, r'<input type="range" id="stage-pace"[^>]*\bmin="2\.0"[^>]*\bmax="6\.0"[^>]*\bstep="0\.1"[^>]*\bvalue="4\.2"')
+        low, high = re.escape(str(planner.PACE_MIN)), re.escape(str(planner.PACE_MAX))   # 1.0 and 8.5: all the app accepts
+        self.assertRegex(html, rf'<input type="range" id="stage-pace"[^>]*\bmin="{low}"[^>]*\bmax="{high}"[^>]*\bstep="0\.1"[^>]*\bvalue="4\.2"')
         self.assertIn(f'data-minutes="{stage.time_minutes}"', html)
         self.assertIn('Walking pace:', html)
         seconds = [int(n) for n in re.findall(r'class="waypoint-time" data-seconds="(\d+)"', html)]
         self.assertGreater(len(seconds), 1)
         self.assertGreater(max(seconds), 0)   # the places further along are some time away
+        weighted = re.search(r'id="stage-time" data-minutes="(\d+)" data-weighted="([\d.]+)"', html)
+        self.assertIsNotNone(weighted)   # the weighted distance the app's rule needs
+        self.assertEqual(planner.walking_minutes(float(weighted.group(2)), planner.DEFAULT_PACE), int(weighted.group(1)))
+        self.assertIn('data-flat="', html)
         self.assertIn('window.STAGE_PACE_TXT', html)
         self.assertIn('stage-pace.js', html)
 
@@ -821,6 +873,44 @@ class LiveDatabaseSmokeTests(unittest.TestCase):
             if location.is_placeholder or not location.latitude:
                 continue
             self.assertIsNotNone(location.route_map_url, f'location {location.id}')
+
+    def gpx_of(self, path):
+        response = self.client.get(path)
+        self.assertEqual(response.status_code, 200, path)
+        return response, ET.fromstring(response.content)
+
+    def test_every_stage_page_offers_a_gpx_download_that_works(self):
+        ns = '{http://www.topografix.com/GPX/1/1}'
+        for stage in Stage.objects.order_by('id'):
+            html = self.get(f'/stage/{stage.id}/')
+            self.assertIn(f'<a class="route-download-btn" href="/stage/{stage.id}/route.gpx" download rel="nofollow">', html, stage.id)
+            response, root = self.gpx_of(f'/stage/{stage.id}/route.gpx')
+            self.assertEqual(response['Content-Type'], 'application/gpx+xml; charset=utf-8')
+            ref = re.sub(r'[^a-z0-9]+', '-', stage.display_ref.lower()).strip('-')
+            self.assertEqual(response['Content-Disposition'], f'attachment; filename="saint-jean-to-santiago-stage-{ref}.gpx"')
+            self.assertEqual(root.find(f'{ns}trk/{ns}name').text, root.find(f'{ns}metadata/{ns}name').text)
+            self.assertTrue(root.find(f'{ns}trk/{ns}name').text.startswith(f'Stage {stage.display_ref}: '), stage.id)
+            self.assertEqual(root.find(f'{ns}metadata/{ns}link').get('href'), f'http://testserver/stage/{stage.id}/')
+            self.assertGreater(len(root.findall(f'{ns}trk/{ns}trkseg/{ns}trkpt')), 1000, stage.id)
+            self.assertGreaterEqual(len(root.findall(f'{ns}wpt')), 2, stage.id)
+            page_places = [unescape(name) for name in re.findall(r'class="waypoint-link">\s*<strong>(.*?)</strong>', html, re.S)]
+            self.assertEqual([w.find(f'{ns}name').text for w in root.findall(f'{ns}wpt')], page_places, stage.id)   # the page's places, in its order
+
+    def test_the_spanish_download_has_spanish_names_and_links_back_to_the_spanish_page(self):
+        ns = '{http://www.topografix.com/GPX/1/1}'
+        stage = Stage.objects.order_by('id').first()
+        html = self.get(f'/es/stage/{stage.id}/')
+        self.assertIn(f'href="/es/stage/{stage.id}/route.gpx"', html)
+        self.assertIn('\u2b07\ufe0f Descargar GPX', html)
+        response, root = self.gpx_of(f'/es/stage/{stage.id}/route.gpx')
+        self.assertTrue(root.find(f'{ns}trk/{ns}name').text.startswith(f'Etapa {stage.display_ref}: '))
+        self.assertEqual(root.find(f'{ns}metadata/{ns}link').get('href'), f'http://testserver/es/stage/{stage.id}/')
+        page_places = [unescape(name) for name in re.findall(r'class="waypoint-link">\s*<strong>(.*?)</strong>', html, re.S)]
+        self.assertEqual([w.find(f'{ns}name').text for w in root.findall(f'{ns}wpt')], page_places)
+        self.assertIn('filename="saint-jean-to-santiago-stage-', response['Content-Disposition'])   # the file name is the same in both languages
+
+    def test_a_stage_that_does_not_exist_has_no_download(self):
+        self.assertEqual(self.client.get('/stage/999999/route.gpx').status_code, 404)
 
     def test_every_hotspot_lies_inside_the_grid_of_its_map(self):
         stages = {s.id: s for s in Stage.objects.all()}

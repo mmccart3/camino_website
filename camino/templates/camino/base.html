@@ -629,7 +629,7 @@
 }
 
 @media print {
-  header, footer, .stage-nav, .elevation-hint, .btn, #debug-info, .stage-pace {
+  header, footer, .stage-nav, .elevation-hint, .btn, #debug-info, .stage-pace, .route-download {
     display: none !important;
   }
   body {
@@ -1133,6 +1133,34 @@
 }
 .stage-pace-hint { margin: 0.1rem 0 0; font-size: 0.85rem; color: #64748b; }
 .stage-pace-note { font-weight: 600; color: #b45309; }
+
+/* Download the stage's route as a GPX file */
+.route-download {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  margin: 1rem 0 0;
+  padding: 0.75rem 1rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.route-download-btn {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 1.1rem;
+  background: var(--navy, #1e3a8a);
+  color: #ffffff;
+  border-radius: 8px;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.route-download-btn:hover { background: #172e6e; }
+.route-download-btn:focus-visible { outline: 3px solid var(--gold, #d97706); outline-offset: 2px; }
+.route-download-hint { margin: 0; flex: 1 1 260px; font-size: 0.85rem; color: #64748b; }
 
 /* Stage Metrics Strip */
 .stage-stats-strip {

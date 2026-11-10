@@ -222,7 +222,8 @@
     height="600"
     frameborder="0"
     style="border:0; display:block;"
-    src="https://maps.google.com/maps?q={{ location.latitude|unlocalize }},{{ location.longitude|unlocalize }}&hl={% if LANGUAGE == 'es' %}es{% else %}en{% endif %}&z=17&output=embed"
+    title="{% t_attr "Map of the route through {name}" name=location.display_name %}"
+    src="{% if location.route_map_url %}{{ location.route_map_url }}{% else %}https://maps.google.com/maps?q={{ location.latitude|unlocalize }},{{ location.longitude|unlocalize }}&hl={% if LANGUAGE == 'es' %}es{% else %}en{% endif %}&z=17&output=embed{% endif %}"
     allowfullscreen
     loading="lazy"
     referrerpolicy="no-referrer-when-downgrade">

@@ -17,7 +17,7 @@ from unittest import mock
 
 from django.conf import settings
 from django.template import Context, Template
-from django.test import Client, SimpleTestCase
+from django.test import Client, SimpleTestCase, override_settings
 from django.utils import translation
 
 from . import i18n
@@ -366,9 +366,26 @@ class SpanishPagesTests(unittest.TestCase):
         coordinates = r'-?\d+\.\d+,-?\d+\.\d+'
         for path, language in ((f'/location/{place}/', 'en'), (f'/es/location/{place}/', 'es')):
             html = self.get(path)
-            self.assertRegex(html, r'maps\?q=' + coordinates + '&hl=' + language + '&z=17')       # the embedded map
+            # the embedded map is the route map (Google My Maps), centred by "ll=lat%2Clng" (v1.3.6)
+            self.assertRegex(html, r'maps/d/embed\?mid=[\w-]+(?:&amp;|&)ehbc=\w+(?:&amp;|&)ll=-?\d+\.\d+%2C-?\d+\.\d+(?:&amp;|&)z=\d+(?:&amp;|&)hl=' + language + '"')
             self.assertRegex(html, r'api=1&query=' + coordinates + '"')                               # "Open in Google Maps"
             self.assertNotRegex(html, r'(?:q|query)=-?\d+,\d')
+            self.assertNotRegex(html, r'll=-?\d+,\d')
+
+    def test_the_plain_google_map_is_still_there_when_the_route_map_is_turned_off(self):
+        # MY_MAPS_ID empty: the town pages go back to the pin on a plain Google map, with the same decimal points
+        con = sqlite3.connect('file:%s?mode=ro' % (settings.BASE_DIR / 'camino.sqlite'), uri=True)
+        try:
+            place = con.execute('select ID from locations where latitude is not null and longitude is not null '
+                                'and abs(latitude) > 1 and abs(longitude) > 0.1 order by ID limit 1').fetchone()[0]
+        finally:
+            con.close()
+        coordinates = r'-?\d+\.\d+,-?\d+\.\d+'
+        with override_settings(MY_MAPS_ID=''):
+            for path, language in ((f'/location/{place}/', 'en'), (f'/es/location/{place}/', 'es')):
+                html = self.get(path)
+                self.assertRegex(html, r'maps\?q=' + coordinates + '&hl=' + language + '&z=17')
+                self.assertNotIn('maps/d/embed', html)
 
     def test_the_stage_page_script_carries_the_spanish_words(self):
         stage, _ = self.a_stage_and_a_place()

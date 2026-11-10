@@ -107,6 +107,26 @@ divided by the pace, so a different pace scales every time by 4.2 / pace, exactl
 - `camino/jstests/stage-pace.test.js` checks the arithmetic, the wording against the server's (`format_duration` and
   `make_location_entry`), the saved pace and the page behaviour. `stage-pace.js` is in the service worker's precache list.
 
+## Route map on the town pages
+
+The map on each town page (`/location/<id>/`, and `/es/location/<id>/`) is a published Google My Maps map, "Camino Frances":
+the route of every stage (44 lines, an alternative route being a stage of its own) and every place (253 pins, each with a link
+to its guide page), centred on the town. One map serves every town: the page only changes where the map opens.
+
+- `my_maps_embed_url()` and `Location.route_map_url` in `camino/models.py` build the address
+  (`https://www.google.com/maps/d/embed?mid=...&ll=<town>&z=15&hl=en|es`). `MY_MAPS_ID` and `MY_MAPS_ZOOM` are in
+  `config/settings.py`; an environment variable `MY_MAPS_ID` overrides the id, and an empty one turns the route map off, so the
+  pages go back to the plain Google map pin (the page keeps that as its fallback too). Do not put `/u/0/` in the address: it ties the
+  map to the visitor's own Google account.
+- The map is made by hand at mymaps.google.com (Google has no way to make one from a program) and shared as "Anyone with the link can view".
+  `python tool/make_my_maps_files.py` writes the two files to import, into `my_maps_files/` (it opens `camino.sqlite` read-only):
+  `camino_route.gpx` (every stage as a named track, thinned to within 5 m of the stored track: about 9,500 points instead of
+  about 100,000, well inside My Maps' limits) and `camino_towns.csv` (Name, Latitude, Longitude, Description).
+- To refresh the map after the routes or places change: make the two files again, in My Maps add a new layer with **Import** for
+  each file, delete the old layers and rename the new ones "Route" and "Places". The map keeps its id, so nothing on the site changes.
+- `RouteMapTests` and `MyMapsFilesToolTests` in `camino/tests.py` check the address (centre, zoom, language, no `/u/`), the
+  fallback and the tool; `LiveDatabaseSmokeTests` checks that a real town page and every town with a position gets the map.
+
 ---
 
 ## Environment variables and security

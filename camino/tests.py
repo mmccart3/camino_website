@@ -18,10 +18,11 @@ from types import SimpleNamespace
 from urllib.parse import parse_qs, urlparse
 
 from django.conf import settings
-from django.test import Client, RequestFactory, SimpleTestCase
+from django.test import Client, RequestFactory, SimpleTestCase, override_settings
 
 from . import planner, seo, stage_maps, views
-from .models import BOOKING_AFFILIATE_PARAMS, Albergue, MapLocationCoord, PrivateAccomm, Stage, clean_email, google_maps_url
+from .models import (BOOKING_AFFILIATE_PARAMS, Albergue, Location, MapLocationCoord, PrivateAccomm, Stage, clean_email,
+                     google_maps_url, my_maps_embed_url)
 
 
 class SeoHelperTests(SimpleTestCase):
@@ -281,6 +282,75 @@ class AccommodationButtonAssetTests(SimpleTestCase):
     def test_google_maps_pin_is_a_png(self):
         pin = settings.BASE_DIR / 'camino' / 'static' / 'camino' / 'img' / 'google-maps-pin.png'
         self.assertEqual(pin.read_bytes()[:8], b'\x89PNG\r\n\x1a\n')
+
+
+class RouteMapTests(SimpleTestCase):
+    """The town pages show the published Google My Maps map (v1.3.6), centred on the town."""
+
+    def read(self, *parts):
+        return (settings.BASE_DIR / 'camino' / Path(*parts)).read_text(encoding='utf-8')
+
+    @override_settings(MY_MAPS_ID='abc123', MY_MAPS_ZOOM=15)
+    def test_the_address_names_the_map_the_centre_the_zoom_and_the_language(self):
+        url = my_maps_embed_url(Decimal('42.88060'), Decimal('-8.54490'), 'es')
+        parts = urlparse(url)
+        self.assertEqual((parts.scheme, parts.netloc, parts.path), ('https', 'www.google.com', '/maps/d/embed'))
+        query = parse_qs(parts.query)
+        self.assertEqual(query['mid'], ['abc123'])
+        self.assertEqual(query['ll'], ['42.880600,-8.544900'])
+        self.assertEqual(query['z'], ['15'])
+        self.assertEqual(query['hl'], ['es'])
+        self.assertEqual(parse_qs(urlparse(my_maps_embed_url(42.9, -8.5)).query)['hl'], ['en'])   # English unless Spanish is asked for
+        self.assertNotIn('/u/', parts.path)   # "/u/0/" would tie the address to the visitor's own Google account
+
+    @override_settings(MY_MAPS_ID='abc123')
+    def test_no_address_for_a_position_that_is_missing_or_a_placeholder(self):
+        for lat, lng in ((None, None), ('', ''), ('x', 'y'), (0, 0), (0.0001, -0.0002), (91, 0), (42, 181)):
+            self.assertIsNone(my_maps_embed_url(lat, lng), (lat, lng))
+
+    def test_no_address_without_a_map_id(self):
+        for value in ('', None, '   '):
+            with override_settings(MY_MAPS_ID=value):
+                self.assertIsNone(my_maps_embed_url(42.9, -8.5), repr(value))
+
+    def test_the_town_page_uses_the_route_map_and_keeps_the_plain_pin_as_a_fallback(self):
+        template = self.read('templates', 'camino', 'location_detail.html')
+        self.assertIn('{% if location.route_map_url %}{{ location.route_map_url }}{% else %}https://maps.google.com/maps?q=', template)
+        self.assertIn('title="{% t_attr "Map of the route through {name}" name=location.display_name %}"', template)
+        self.assertIn('loading="lazy"', template)   # the map is only fetched when the visitor scrolls to it
+
+    def test_the_site_is_set_up_with_a_map(self):
+        self.assertRegex(settings.MY_MAPS_ID, r'^[A-Za-z0-9_-]{20,}$')
+        self.assertTrue(10 <= settings.MY_MAPS_ZOOM <= 18)
+
+
+class MyMapsFilesToolTests(SimpleTestCase):
+    """tool/make_my_maps_files.py makes the files that are imported into Google My Maps."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        import importlib.util
+        spec = importlib.util.spec_from_file_location('make_my_maps_files', settings.BASE_DIR / 'tool' / 'make_my_maps_files.py')
+        cls.tool = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.tool)
+
+    def test_thinning_keeps_a_turn_but_drops_wobble_inside_the_tolerance(self):
+        degree = 1 / 110540   # one metre of latitude
+        straight = [(42.0 + i * 0.0001, -8.0) for i in range(11)]
+        self.assertEqual(self.tool.thin(straight), [straight[0], straight[-1]])
+        wobble = [(lat, lon + (2 * degree if i % 2 else 0)) for i, (lat, lon) in enumerate(straight)]
+        self.assertEqual(len(self.tool.thin(wobble)), 2)   # 2 m off the line is inside 5 m
+        corner = straight[:6] + [(42.0005, -8.0 + 0.0005 * (i + 1)) for i in range(5)]
+        thinned = self.tool.thin(corner)
+        self.assertIn(straight[5], thinned)   # the corner, where the line turns east, is kept
+        self.assertEqual(len(thinned), 3)
+        self.assertLess(len(thinned), len(corner))
+        self.assertEqual((thinned[0], thinned[-1]), (corner[0], corner[-1]))
+
+    def test_stage_names_lose_their_own_number(self):
+        self.assertEqual(self.tool.clean_name('16b: Fromista to Carrion', '16b'), 'Fromista to Carrion')
+        self.assertEqual(self.tool.clean_name('Roncesvalles to Zubiri', '2'), 'Roncesvalles to Zubiri')
 
 
 class StagePaceContractTests(SimpleTestCase):
@@ -732,6 +802,25 @@ class LiveDatabaseSmokeTests(unittest.TestCase):
             html = self.get(f'/stage/{stage.id}/')
             has_time = bool(stage.time_minutes)
             self.assertEqual('id="stage-pace-box"' in html, has_time, f'stage {stage.id}')
+
+    def test_a_town_page_shows_the_route_map_centred_on_the_town(self):
+        location = Location.objects.get(pk=9)
+        for path, language in (('/location/9/', 'en'), ('/es/location/9/', 'es')):
+            html = self.get(path)
+            src = re.search(r'<iframe[^>]*\ssrc="([^"]+)"', html).group(1).replace('&amp;', '&')
+            query = parse_qs(urlparse(src).query)
+            self.assertEqual(urlparse(src).path, '/maps/d/embed', path)
+            self.assertEqual(query['mid'], [settings.MY_MAPS_ID], path)
+            self.assertEqual(query['hl'], [language], path)
+            lat, lng = (float(n) for n in query['ll'][0].split(','))
+            self.assertAlmostEqual(lat, float(location.latitude), places=4)
+            self.assertAlmostEqual(lng, float(location.longitude), places=4)
+
+    def test_every_town_with_a_position_gets_a_route_map(self):
+        for location in Location.objects.order_by('id'):
+            if location.is_placeholder or not location.latitude:
+                continue
+            self.assertIsNotNone(location.route_map_url, f'location {location.id}')
 
     def test_every_hotspot_lies_inside_the_grid_of_its_map(self):
         stages = {s.id: s for s in Stage.objects.all()}

@@ -18,7 +18,7 @@ from django.core.exceptions import ImproperlyConfigured
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-APP_VERSION = "v1.3.5"  # Update this as you deploy new iterations
+APP_VERSION = "v1.3.6"  # Update this as you deploy new iterations
 
 # ---------------------------------------------------------------------------
 # Environment-driven settings
@@ -195,6 +195,12 @@ MAILERS = {
 
 
 # Leaflet is loaded from unpkg. The offline service worker saves these files.
+# The Google My Maps map (every stage's route and every place) that the town pages show, centred on the town. It is made
+# by hand in Google My Maps and shared with "anyone with the link"; see the README. Set MY_MAPS_ID to an empty value to
+# go back to the plain Google map pin.
+MY_MAPS_ID = os.environ.get('MY_MAPS_ID', '1rxbJwWNt3qq_LxQ_k8SVPTfAHHQtiic')
+MY_MAPS_ZOOM = 15
+
 LEAFLET_VERSION = '1.9.4'
 LEAFLET_BASE_URL = f'https://unpkg.com/leaflet@{LEAFLET_VERSION}/dist'
 LEAFLET_CSS_URL = f'{LEAFLET_BASE_URL}/leaflet.css'

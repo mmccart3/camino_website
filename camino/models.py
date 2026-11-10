@@ -1,6 +1,7 @@
 # camino/models.py
 import re
 
+from django.conf import settings
 from django.db import models
 from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 
@@ -45,6 +46,31 @@ def google_maps_url(latitude, longitude):
     if abs(lat) < 0.001 and abs(lng) < 0.001:
         return None
     return f'https://www.google.com/maps/search/?api=1&query={lat:.6f},{lng:.6f}'
+
+
+def my_maps_embed_url(latitude, longitude, language='en'):
+    """Address of the published Google My Maps map (every stage's route and every place), centred on a position.
+
+    The map is made by hand in Google My Maps (see the README); MY_MAPS_ID in settings is its id. Returns None when
+    there is no map id, or the coordinates are missing, out of range or a placeholder (0, 0), so a page then falls
+    back to the plain Google map pin.
+    """
+    map_id = str(getattr(settings, 'MY_MAPS_ID', '') or '').strip()
+    if not map_id:
+        return None
+    try:
+        lat, lng = float(latitude), float(longitude)
+    except (TypeError, ValueError):
+        return None
+    if not (-90 <= lat <= 90 and -180 <= lng <= 180) or (abs(lat) < 0.001 and abs(lng) < 0.001):
+        return None
+    return 'https://www.google.com/maps/d/embed?' + urlencode({
+        'mid': map_id,
+        'ehbc': '2E312F',   # the colour of the map's title bar
+        'll': f'{lat:.6f},{lng:.6f}',
+        'z': getattr(settings, 'MY_MAPS_ZOOM', 15),
+        'hl': 'es' if language == 'es' else 'en',
+    })
 
 
 def attach_booking_affiliate(url_string):
@@ -226,6 +252,11 @@ class Location(models.Model):
         if name and i18n.is_spanish():
             return i18n.lookup(name.strip())
         return name
+
+    @property
+    def route_map_url(self):
+        """The route map (Google My Maps) centred on this place, in the language of the page, or None."""
+        return my_maps_embed_url(self.latitude, self.longitude, i18n.current_language())
 
 
 class MapLocationCoord(models.Model):

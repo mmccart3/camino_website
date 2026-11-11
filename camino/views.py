@@ -75,10 +75,14 @@ def get_stage_groups():
 
     def classify_variant(stage):
         name_lower = stage.stage_name.lower()
+        # The three ways over the Pyrenees have their own titles: 1a is the Napoleon Route as first drawn, 1c the same
+        # route with the recommended descent, 1b the lower road through Valcarlos.
+        if str(stage.display_ref).strip().lower() == '1a':
+            return {'label': tr('Napoleon Route - Original'), 'badge_class': 'badge-main', 'icon': '🚶'}
         if 'valcarlos' in name_lower or 'low' in name_lower or 'winter' in name_lower:
-            return {'label': tr('Low-Valley / Winter Variant'), 'badge_class': 'badge-valley', 'icon': '🌦️'}
+            return {'label': tr('Valcarlos Lower / Winter Route'), 'badge_class': 'badge-valley', 'icon': '🌦️'}
         elif 'napoleon' in name_lower or 'high' in name_lower or 'mountain' in name_lower:
-            return {'label': tr('Mountain Route / High Pass'), 'badge_class': 'badge-mountain', 'icon': '⛰️'}
+            return {'label': tr('Napoleon Route - Recommended variant'), 'badge_class': 'badge-mountain', 'icon': '⛰️'}
         elif 'via' in name_lower or 'option' in name_lower or 'alt' in name_lower:
             return {'label': tr('Alternative Variant'), 'badge_class': 'badge-alt', 'icon': '🔀'}
         return {'label': tr('Main Camino Route'), 'badge_class': 'badge-main', 'icon': '🚶'}

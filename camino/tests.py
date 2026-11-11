@@ -787,6 +787,17 @@ class LiveDatabaseSmokeTests(unittest.TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertRegex(response['Location'], r'^/location/\d+/$')
 
+    def test_the_three_pyrenees_routes_have_their_own_titles_and_other_stages_keep_theirs(self):
+        html = self.get('/')
+        for title in ('Napoleon Route - Original', 'Napoleon Route - Recommended variant', 'Valcarlos Lower / Winter Route'):
+            self.assertEqual(html.count(title), 1, title)
+        self.assertEqual(html.count('Main Camino Route'), 36)
+        for old in ('Mountain Route / High Pass', 'Low-Valley / Winter Variant'):
+            self.assertNotIn(old, html)
+        spanish = self.get('/es/')
+        for title in ('Ruta de Napoleón - Original', 'Ruta de Napoleón - Variante recomendada', 'Ruta baja de Valcarlos / de invierno'):
+            self.assertEqual(spanish.count(title), 1, title)
+
     def test_town_page_has_a_forecast_button_and_a_junction_page_has_none(self):
         from .models import Location
         town = Location.objects.get(location_name='Zubiri')

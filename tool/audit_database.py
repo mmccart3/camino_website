@@ -813,10 +813,15 @@ def check_spanish(con, path):
         seen = {}
         for r in rows(con, sql):
             v = r[0]
+            if v is not None and len(r) > 1 and r[1] is not None and str(r[1]).strip():
+                # The pages show a stage name without a leading "<its own number>: " ("16b: ..." on stage 16b), and
+                # that shorter text is what the catalogue holds (camino/stage_names.clean_stage_name does the same).
+                shorter = re.sub(r'^\s*' + re.escape(str(r[1]).strip()) + r'\s*:\s*', '', str(v), count=1, flags=re.I)
+                v = shorter if shorter.strip() else v
             if v is not None and str(v).strip() and re.search('[A-Za-z]{3}', str(v)) and str(v).strip() not in have:
                 seen[str(v).strip()] = seen.get(str(v).strip(), 0) + 1
         return seen
-    for title, sql in (('Stage names', 'select stageName from stages'),
+    for title, sql in (('Stage names', 'select stageName, stageDisplayReference from stages'),
                        ('Opening periods of albergues', 'select openingPeriod from albergues'),
                        ('Check-in times of albergues', 'select checkInTimes from albergues'),
                        ('Price notes of albergues', 'select rateNotes from albergues'),

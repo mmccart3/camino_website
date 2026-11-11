@@ -161,6 +161,27 @@ for pilgrims who want the line on their phone or watch. The page already has the
 
 ---
 
+## Forecast and route-map links on the stage pages
+
+Under the GPX button each stage page has two links that leave the site (`stage_links` in `views.stage_detail`):
+
+- **Weather forecast for the place the stage ends at**: a Google search, "weather Zubiri" ("el tiempo en Zubiri" on the Spanish
+  page), built by `models.weather_search_url`. Only the place's name is sent, and only when the link is followed. The site has no
+  weather data of its own.
+- **Open the route in Google Maps**: the published My Maps map (`MY_MAPS_ID`) full size, centred between the stage's two ends,
+  built by `models.my_maps_viewer_url`. It is left out when `MY_MAPS_ID` is empty.
+
+Both open in a new tab, need a connection, and are left out of a printed page.
+
+## Search
+
+`/search/` finds towns, stages and, from two letters up, places to stay by name (accents and capitals do not matter). A place to
+stay links to its own card on the town's page (`#stay-a<id>` for an albergue, `#stay-p<id>` for a private place; the card is
+outlined when it is the target). At most 40 are listed, with a line saying how many more match. Stays kept in a holding place
+("Unassigned") are not offered. A search that matches one town and no stage still goes straight to the town; one that matches a
+single place to stay and nothing else goes straight to its card. The suggestions under the home page's search box work offline
+and still list towns only.
+
 ## Environment variables and security
 
 | Variable | Where | Purpose |
@@ -193,6 +214,8 @@ Every page exists in English at its plain address and in Spanish under `/es/` (`
 `/plan/` lets a visitor build an itinerary (walking days, rest days, travel days, places to stay) and download a
 file that the Saint Jean to Santiago app opens with Settings, Backup and restore, Restore backup. Nothing
 is sent to the server: the plan is kept in the visitor's browser.
+
+The three things to do with a finished plan ("Send it to the app", "Keep your plan", "Print or save as PDF") are folding panels (`<details class="plan-fold">`). Sending and printing are hidden until the plan has a day; "Send it to the app" opens by itself the first time it has one, because it holds anything to check before sending. The steps for opening the file in the app fold away inside it.
 
 A walking day is added by choosing where to stop: the page lists the towns ahead (anywhere with a place
 to stay, or a guidebook stage start or finish), nearest first, with the distance and time. A day can end

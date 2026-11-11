@@ -8,8 +8,8 @@
 
 <div class="town-search">
   <form action="{% url 'search' %}" method="get" role="search">
-    <label for="q" class="visually-hidden">{% t "Find a town or stage" %}</label>
-    <input type="search" id="q" name="q" value="{{ query }}" placeholder="{% t_attr "Find a town, e.g. Pamplona" %}" maxlength="80">
+    <label for="q" class="visually-hidden">{% t "Find a town, stage or place to stay" %}</label>
+    <input type="search" id="q" name="q" value="{{ query }}" placeholder="{% t_attr "Town or place to stay, e.g. Pamplona" %}" maxlength="80">
     <button type="submit">{% t "Search" %}</button>
   </form>
 </div>
@@ -43,7 +43,24 @@
     </ul>
   {% endif %}
 
-  {% if not town_results and not stage_results %}
+  {% if stay_results %}
+    <h3>{% t "Places to stay" %}</h3>
+    <ul class="town-list">
+      {% for stay in stay_results %}
+        <li>
+          <a href="{{ stay.url }}">
+            <span>{{ stay.name }}</span>
+            <span class="suggest-note">{{ stay.kind|tr }} · {{ stay.town }}</span>
+          </a>
+        </li>
+      {% endfor %}
+    </ul>
+    {% if more_stays %}
+      <p style="text-align: center; color: #475569;">{% t "{n} more places to stay match. Type more of the name to narrow the list." n=more_stays %}</p>
+    {% endif %}
+  {% endif %}
+
+  {% if not town_results and not stage_results and not stay_results %}
     <p style="text-align: center; color: #475569;">
       {% t "Nothing matches “{query}”. Check the spelling, or" query=query %} <a href="{% url 'towns' %}">{% t "browse all towns" %}</a>.
     </p>

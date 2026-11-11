@@ -632,6 +632,7 @@
   header, footer, .stage-nav, .elevation-hint, .btn, #debug-info, .stage-pace, .route-download {
     display: none !important;
   }
+  .stage-links { display: none !important; }   /* links are no use on paper */
   body {
     background: #ffffff !important;
     color: #000000 !important;
@@ -707,6 +708,13 @@
   border: 1px solid var(--border);
   background: var(--surface);
   box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  scroll-margin-top: 1rem;
+}
+
+/* The place a search result or a shared link points at. */
+.accomm-card:target {
+  border-color: var(--navy);
+  box-shadow: 0 0 0 3px rgba(30, 58, 138, 0.25);
 }
 
 .accomm-photo-strip {
@@ -1161,6 +1169,33 @@
 .route-download-btn:hover { background: #172e6e; }
 .route-download-btn:focus-visible { outline: 3px solid var(--gold, #d97706); outline-offset: 2px; }
 .route-download-hint { margin: 0; flex: 1 1 260px; font-size: 0.85rem; color: #64748b; }
+
+/* Stage page: links that leave the site (forecast, route on Google Maps) */
+.stage-links {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
+  margin: 0.75rem 0 0;
+  padding: 0.75rem 1rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.stage-link-btn {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 1rem;
+  border: 1px solid var(--navy, #1e3a8a);
+  border-radius: 8px;
+  color: var(--navy, #1e3a8a);
+  background: #ffffff;
+  font-weight: 600;
+  text-decoration: none;
+}
+.stage-link-btn:hover { background: #eef2ff; }
+.stage-link-btn:focus-visible { outline: 3px solid var(--gold, #d97706); outline-offset: 2px; }
 
 /* Stage Metrics Strip */
 .stage-stats-strip {

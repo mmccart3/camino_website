@@ -18,7 +18,8 @@ from . import gpx, i18n, planner, seo, stage_maps
 from .i18n import tr
 from .models import (
     Stage, Path, ElevationPoint, MapLocationCoord, Location,
-    Albergue, PrivateAccomm, TrackPoint, BOOKING_AFFILIATE_PARAMS
+    Albergue, PrivateAccomm, TrackPoint, BOOKING_AFFILIATE_PARAMS,
+    my_maps_viewer_url, weather_search_url,
 )
 
 logger = logging.getLogger(__name__)
@@ -244,9 +245,33 @@ def plan_stays(request):
     return response
 
 
+STAY_RESULT_LIMIT = 40
+
+
+def stay_results(needle):
+    """Places to stay whose name holds the search text: albergues first, then private places, each A to Z.
+
+    Each result links to its card on the town's page (the card's id is stay-a<id> or stay-p<id>).
+    """
+    found = []
+    for model, kind, prefix in ((Albergue, 'Albergue', 'a'), (PrivateAccomm, 'Private Room', 'p')):
+        for stay in model.objects.select_related('location').order_by('name'):
+            name = seo.normalise(stay.name)
+            # A holding place such as "Unassigned" keeps stays that are off the route: they are not offered.
+            if needle in name and not stay.location.is_placeholder:
+                found.append((0 if name.startswith(needle) else 1, name, {
+                    'name': str(stay.name).strip(),
+                    'kind': kind,
+                    'town': stay.location.display_name,
+                    'url': reverse('location_detail', args=[stay.location_id]) + '#stay-%s%d' % (prefix, stay.id),
+                }))
+    found.sort(key=lambda row: (row[0], row[1]))
+    return [row[2] for row in found]
+
+
 def search(request):
     query = request.GET.get('q', '').strip()[:80]
-    town_results, stage_results = [], []
+    town_results, stage_results, stays, more_stays = [], [], [], 0
     if query:
         needle = seo.normalise(query)
         for town in towns_with_counts():
@@ -259,13 +284,21 @@ def search(request):
         ]
         if len(town_results) == 1 and not stage_results:
             return redirect('location_detail', location_id=town_results[0].id)
+        # One letter would match hundreds of names, so places to stay are searched from two letters up.
+        stays = stay_results(needle) if len(needle) >= 2 else []
+        if len(stays) == 1 and not town_results and not stage_results:
+            return redirect(stays[0]['url'])
+        more_stays = max(0, len(stays) - STAY_RESULT_LIMIT)
+        stays = stays[:STAY_RESULT_LIMIT]
     context = {
         'query': query,
         'town_results': town_results,
         'stage_results': stage_results,
+        'stay_results': stays,
+        'more_stays': more_stays,
         'seo': {
             'title': seo.compose_title(tr('Search: {query}', query=query) if query else tr('Search the guide')),
-            'description': tr('Search towns and stages on the Camino Francés.'),
+            'description': tr('Search towns, stages and places to stay on the Camino Francés.'),
             'noindex': True,
         },
     }
@@ -726,6 +759,19 @@ def stage_detail(request, stage_id):
         logger.warning('Could not get the weighted distance of stage %s', stage.id, exc_info=True)
         stage_weighted = None
 
+    # Two links that leave the site, for the day before the walk: the forecast where the stage ends, and the route on
+    # the published Google map (centred between the stage's two ends). Nothing is sent until a link is followed.
+    language = 'es' if i18n.is_spanish() else 'en'
+    stage_links = {}
+    if map_waypoints:
+        first, last = map_waypoints[0], map_waypoints[-1]
+        stage_links = {
+            'end_name': last['name'],
+            'weather_url': weather_search_url(last['name'], language),
+            'route_map_url': my_maps_viewer_url(
+                (first['lat'] + last['lat']) / 2, (first['lng'] + last['lng']) / 2, language),
+        }
+
     context = {
         'stage': stage,
         'prior_stage': prior_stage,
@@ -746,6 +792,7 @@ def stage_detail(request, stage_id):
         'pace': {'default': planner.DEFAULT_PACE, 'min': planner.PACE_MIN, 'max': planner.PACE_MAX,
                  'step': planner.PACE_STEP, 'flat': planner.FLAT_SLOPE_EFFECT},
         'stage_weighted': stage_weighted,
+        'stage_links': stage_links,
     }
     origin = seo.site_origin(request)
     context['seo'] = seo.stage_seo(

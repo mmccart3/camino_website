@@ -443,6 +443,55 @@ class StageGpxContractTests(SimpleTestCase):
         self.assertLess(base.index('@media print'), base.index('#debug-info, .stage-pace, .route-download {'))
 
 
+class StageLinkTests(SimpleTestCase):
+    """The stage page's links that leave the site (models.weather_search_url and my_maps_viewer_url)."""
+
+    def test_weather_search_sends_only_the_name(self):
+        from .models import weather_search_url
+        self.assertEqual(weather_search_url('Logroño'), 'https://www.google.com/search?q=weather+Logro%C3%B1o')
+        self.assertEqual(weather_search_url('  Santo Domingo  de la Calzada ', 'es'),
+                         'https://www.google.com/search?q=el+tiempo+en+Santo+Domingo+de+la+Calzada')
+        self.assertEqual(weather_search_url("O'Cebreiro & co"), 'https://www.google.com/search?q=weather+O%27Cebreiro+%26+co')
+        for empty in (None, '', '   '):
+            self.assertIsNone(weather_search_url(empty))
+
+    def test_route_map_link_needs_a_map_and_a_real_position(self):
+        from .models import my_maps_viewer_url
+        with self.settings(MY_MAPS_ID='abc123'):
+            self.assertEqual(my_maps_viewer_url(42.5, -1.25, 'es'),
+                             'https://www.google.com/maps/d/viewer?mid=abc123&ll=42.500000%2C-1.250000&z=11&hl=es')
+            for lat, lng in ((None, 1), ('x', 1), (0, 0), (95, 1), (1, 200)):
+                self.assertIsNone(my_maps_viewer_url(lat, lng))
+        with self.settings(MY_MAPS_ID=''):
+            self.assertIsNone(my_maps_viewer_url(42.5, -1.25))
+
+    def test_the_links_are_left_out_of_the_printed_page(self):
+        base = (settings.BASE_DIR / 'camino' / 'templates' / 'camino' / 'base.html').read_text(encoding='utf-8')
+        self.assertLess(base.index('@media print'), base.index('.stage-links { display: none !important; }'))
+
+
+class PlannerFoldTests(SimpleTestCase):
+    """Send, keep and print fold away on the planner; plan.js finds them by these ids."""
+
+    def test_the_three_panels_fold_and_keep_their_controls(self):
+        template = (settings.BASE_DIR / 'camino' / 'templates' / 'camino' / 'plan.html').read_text(encoding='utf-8')
+        script = (settings.BASE_DIR / 'camino' / 'static' / 'camino' / 'js' / 'plan.js').read_text(encoding='utf-8')
+        for panel, controls in (('plan-send-panel', ('plan-download', 'plan-share', 'plan-qr-open', 'plan-send-problem')),
+                                ('plan-keep-panel', ('plan-save-copy', 'plan-save-browser', 'plan-open-file', 'plan-saved-list')),
+                                ('plan-print-panel', ('plan-print-go', 'plan-print-dates'))):
+            block = re.search(r'<details class="plan-card plan-fold [^>]*id="%s"[^>]*>\s*<summary>.*?</summary>(.*?)\n  </details>' % panel,
+                              template, re.S)
+            self.assertIsNotNone(block, panel)
+            for control in controls:
+                self.assertIn('id="%s"' % control, block.group(1), control)
+        self.assertNotIn(' open', re.search(r'<details class="plan-card plan-fold plan-keep"[^>]*>', template).group(0))
+        self.assertIn('id="plan-later"', template)
+        # a {# #} comment only works on one line; a longer one would be printed on the page
+        self.assertEqual([line for line in template.splitlines() if '{#' in line and '#}' not in line], [])
+        for name in ('plan-send-panel', 'plan-print-panel', 'plan-later'):
+            self.assertIn("$('%s')" % name, script)
+
+
 class StageChartLabelTests(SimpleTestCase):
     def test_place_names_on_the_elevation_chart_are_laid_out_in_rows(self):
         """The names go in rows above the plot so that none can be drawn over another (the phone layout depends on it)."""
@@ -698,6 +747,57 @@ class LiveDatabaseSmokeTests(unittest.TestCase):
     def test_search_finds_accent_insensitively(self):
         html = self.get('/search/?q=logrono')
         self.assertIn('noindex', html)
+
+    def test_search_finds_a_place_to_stay_by_name_and_links_to_its_card(self):
+        from .models import Albergue, PrivateAccomm
+        html = self.get('/search/?q=hostal')
+        links = re.findall(r'<a href="(/location/(\d+)/#stay-([ap])(\d+))">', html)
+        self.assertGreater(len(links), 5)
+        self.assertNotIn('Nothing matches', html)
+        self.assertNotIn('Unassigned', html)   # stays kept in the holding place are not offered
+        for url, location_id, kind, stay_id in links[:12]:
+            stay = (Albergue if kind == 'a' else PrivateAccomm).objects.get(pk=int(stay_id))
+            self.assertEqual(stay.location_id, int(location_id))
+            self.assertIn('hostal', seo.normalise(stay.name))
+        # the card the link points at is on that town's page
+        url, location_id, kind, stay_id = links[0]
+        self.assertIn('id="stay-%s%s"' % (kind, stay_id), self.get('/location/%s/' % location_id))
+
+    def test_search_for_one_place_to_stay_goes_straight_to_it_and_one_letter_lists_none(self):
+        from .models import Albergue
+        names = [seo.normalise(n) for n in Albergue.objects.values_list('name', flat=True)]
+        stay = next(a for a in Albergue.objects.order_by('id')
+                    if len(seo.normalise(a.name)) > 12 and sum(seo.normalise(a.name) in n for n in names) == 1)
+        response = self.client.get('/search/', {'q': stay.name})
+        if response.status_code == 302:   # nothing else in the guide holds this name
+            self.assertEqual(response['Location'], '/location/%d/#stay-a%d' % (stay.location_id, stay.id))
+        else:
+            self.assertIn('#stay-a%d"' % stay.id, response.content.decode())
+        self.assertNotIn('#stay-', self.get('/search/?q=a'))
+
+    def test_a_town_still_wins_a_search_for_its_name(self):
+        response = self.client.get('/search/', {'q': 'Huntto'})   # in no stage's name, and the only such town
+        self.assertEqual(response.status_code, 302)
+        self.assertRegex(response['Location'], r'^/location/\d+/$')
+
+    def test_stage_page_links_to_the_forecast_and_the_route_map(self):
+        from urllib.parse import parse_qs, urlparse
+        for prefix, words in (('', 'weather Roncesvalles'), ('/es', 'el tiempo en Roncesvalles')):
+            html = self.get(prefix + '/stage/1/')
+            block = re.search(r'<div class="stage-links" id="stage-links">(.*?)</div>', html, re.S).group(1)
+            links = [unescape(h) for h in re.findall(r'href="([^"]+)"', block)]
+            self.assertEqual(len(links), 2)
+            weather, route = urlparse(links[0]), urlparse(links[1])
+            self.assertEqual((weather.scheme, weather.netloc, weather.path), ('https', 'www.google.com', '/search'))
+            self.assertEqual(parse_qs(weather.query), {'q': [words]})   # the place's name and nothing else
+            self.assertEqual((route.netloc, route.path), ('www.google.com', '/maps/d/viewer'))
+            query = parse_qs(route.query)
+            self.assertEqual(query['mid'], [settings.MY_MAPS_ID])
+            self.assertEqual(query['hl'], ['es' if prefix else 'en'])
+            lat, lng = (float(v) for v in query['ll'][0].split(','))
+            self.assertTrue(42.9 < lat < 43.2 and -1.4 < lng < -1.2, query['ll'])   # between Saint-Jean and Roncesvalles
+            self.assertNotIn('/u/', links[1])
+            self.assertEqual(block.count('target="_blank" rel="noopener"'), 2)
 
     def test_sitemap_and_pack_list(self):
         xml = self.get('/sitemap.xml')

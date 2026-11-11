@@ -106,8 +106,15 @@
     </details>
   </section>
 
-  <section class="plan-card plan-send" aria-labelledby="plan-send-title">
-    <h3 id="plan-send-title">{% t "Send it to the app" %}</h3>
+  {% comment %}
+  The three things to do with a finished plan fold away, so the page ends with three short headings in place of three long
+  cards. plan.js shows the first and the last only once the plan has a day, and opens "Send it to the app" the first time
+  it has one.
+  {% endcomment %}
+  <p class="plan-hint plan-later" id="plan-later" hidden>{% t "Once your plan has a day, you can send it to the app, save a copy or print it from here." %}</p>
+
+  <details class="plan-card plan-fold plan-send" id="plan-send-panel" aria-labelledby="plan-send-title">
+    <summary><h3 id="plan-send-title">{% t "Send it to the app" %}</h3><span class="plan-fold-hint">{% t "As a file or a QR code" %}</span></summary>
     <p class="plan-hint" id="plan-send-count"></p>
     <p class="plan-send-route" id="plan-send-route" hidden></p>
     <p class="plan-warning" id="plan-send-warn" hidden></p>
@@ -119,7 +126,8 @@
       <button type="button" class="plan-btn" id="plan-qr-open" data-focus="qr-open" hidden>{% t "Share as QR code" %}</button>
     </div>
     <p class="plan-send-msg" id="plan-send-msg" role="status" hidden></p>
-    <h4 class="plan-steps-title">{% t "Opening it in the app" %}</h4>
+    <details class="plan-more plan-steps-fold">
+    <summary>{% t "Opening it in the app" %}</summary>
     <ol class="plan-steps">
       <li>{% t "Get the file onto your phone: share it from here, or email or message it to yourself." %}</li>
       <li>{% t "In the app, open" %} <strong>{% t "Settings" %}</strong>{% t ", then" %} <strong>{% t "Backup and restore" %}</strong>{% t ", then" %} <strong>{% t "Restore backup" %}</strong>.</li>
@@ -127,10 +135,11 @@
       <li>{% t "Your plan appears in the app next to any plans you already have. Nothing is replaced." %}</li>
     </ol>
     <p class="plan-hint">{% t "Opening the same file twice does not make a second copy." %}</p>
-  </section>
+    </details>
+  </details>
 
-  <section class="plan-card plan-keep" aria-labelledby="plan-keep-title">
-    <h3 id="plan-keep-title">{% t "Keep your plan" %}</h3>
+  <details class="plan-card plan-fold plan-keep" id="plan-keep-panel" aria-labelledby="plan-keep-title">
+    <summary><h3 id="plan-keep-title">{% t "Keep your plan" %}</h3><span class="plan-fold-hint">{% t "Save a copy, or open one you saved" %}</span></summary>
     <p class="plan-hint" id="plan-keep-status"></p>
     <p class="plan-hint" id="plan-keep-storage" hidden></p>
     <div class="plan-send-actions">
@@ -152,10 +161,10 @@
     <ul class="plan-saved-list" id="plan-saved-list" aria-labelledby="plan-saved-title"></ul>
     <p class="plan-hint" id="plan-saved-empty">{% t "Nothing saved here yet." %}</p>
     <p class="plan-hint">{% t "A saved file has your booking references and notes in it. Keep it private, and keep it somewhere you trust, such as a folder on your computer or in your own cloud drive." %}</p>
-  </section>
+  </details>
 
-  <section class="plan-card plan-printing" aria-labelledby="plan-printing-title">
-    <h3 id="plan-printing-title">{% t "Print or save as PDF" %}</h3>
+  <details class="plan-card plan-fold plan-printing" id="plan-print-panel" aria-labelledby="plan-printing-title">
+    <summary><h3 id="plan-printing-title">{% t "Print or save as PDF" %}</h3><span class="plan-fold-hint">{% t "A sheet to carry or to give to someone" %}</span></summary>
     <p class="plan-hint">{% t 'Makes a clean sheet of your plan to carry or to give to someone. In the print window, choose "Save as PDF" in place of a printer to keep it as a PDF.' %}</p>
     <fieldset class="plan-print-options">
       <legend>{% t "What to put on the sheet" %}</legend>
@@ -169,7 +178,7 @@
     <div class="plan-send-actions">
       <button type="button" class="plan-btn plan-btn-primary" id="plan-print-go">{% t "Print or save as PDF…" %}</button>
     </div>
-  </section>
+  </details>
 
   <section class="plan-print" id="plan-print" aria-hidden="true"></section>
 

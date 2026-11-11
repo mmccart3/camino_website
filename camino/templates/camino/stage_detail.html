@@ -321,6 +321,19 @@
 </div>
 {% endif %}
 
+{# Links that leave the site: the forecast where the stage ends, and the whole route on the published Google map #}
+{% if stage_links.weather_url or stage_links.route_map_url %}
+<div class="stage-links" id="stage-links">
+  {% if stage_links.weather_url %}
+    <a class="stage-link-btn" href="{{ stage_links.weather_url }}" target="_blank" rel="noopener">{% t "🌤️ Weather forecast for {place}" place=stage_links.end_name %}</a>
+  {% endif %}
+  {% if stage_links.route_map_url %}
+    <a class="stage-link-btn" href="{{ stage_links.route_map_url }}" target="_blank" rel="noopener">{% t "🗺️ Open the route in Google Maps" %}</a>
+  {% endif %}
+  <p class="route-download-hint">{% t "These open Google in a new tab and need a connection." %}</p>
+</div>
+{% endif %}
+
 <p id="debug-info" style="font-size: 0.8rem; color: #64748b; margin-top: 0.5rem;"></p>
 
 <!-- Bottom Stage Navigation Bar -->

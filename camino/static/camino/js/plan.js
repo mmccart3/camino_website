@@ -60,7 +60,7 @@
 
   var storageWorks = true;
   var ui = { fromPlace: null, stayIndex: -1, insertAt: null, editAt: null, restAt: null, undo: null, far: false, openStop: null, shared: null, openMore: {}, details: null, detailsLoading: false, openPick: null,
-    savedAt: null, savedId: null, persisted: null, keepAsk: null, confirmDelete: null };
+    savedAt: null, savedId: null, persisted: null, keepAsk: null, confirmDelete: null, sendShown: false };
   var MODE_LABELS = { flight: 'Flight', train: 'Train', bus: 'Bus', taxi: 'Taxi', ferry: 'Ferry', other: 'Other' };
   var state = loadState();
 
@@ -798,6 +798,14 @@
       var bad = l.days.filter(function (d) { return d.invalid; })[0];
       if (bad) problem = tr('{0} needs attention: {1}', cap(Plan.dayRef(bad)), bad.invalid);
     }
+    // Sending and printing need a day, so they stay away until there is one. "Send it to the app" opens by itself the first
+    // time (it holds anything to check before sending); after that it stays as the visitor leaves it.
+    var empty = !state.days.length, sendPanel = $('plan-send-panel');
+    sendPanel.hidden = empty;
+    $('plan-print-panel').hidden = empty;
+    $('plan-later').hidden = !empty;
+    if (empty) ui.sendShown = false;
+    else if (!ui.sendShown) { ui.sendShown = true; sendPanel.open = true; }
     $('plan-download').disabled = !!problem;
     var qrButton = $('plan-qr-open');
     qrButton.hidden = !(Share && QR);

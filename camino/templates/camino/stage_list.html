@@ -14,8 +14,8 @@
 
 <div class="town-search">
   <form id="town-search-form" action="{% url 'search' %}" method="get" role="search" autocomplete="off">
-    <label for="town-search-input" class="visually-hidden">{% t "Find a town or stage" %}</label>
-    <input type="search" id="town-search-input" name="q" placeholder="{% t_attr "Find a town, e.g. Pamplona" %}" maxlength="80"
+    <label for="town-search-input" class="visually-hidden">{% t "Find a town, stage or place to stay" %}</label>
+    <input type="search" id="town-search-input" name="q" placeholder="{% t_attr "Town or place to stay, e.g. Pamplona" %}" maxlength="80"
            role="combobox" aria-expanded="false" aria-controls="town-suggestions" aria-autocomplete="list">
     <button type="submit">{% t "Search" %}</button>
   </form>

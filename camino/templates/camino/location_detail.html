@@ -82,7 +82,7 @@
 <div id="accomm-list">
   <!-- 1. ALBERGUES -->
   {% for a in albergues %}
-    <div class="accomm-card" 
+    <div class="accomm-card" id="stay-a{{ a.id }}" 
          data-type="albergue" 
          data-kitchen="{{ a.kitchen|yesno:'1,0' }}" 
          data-washer="{{ a.washer|yesno:'1,0' }}" 
@@ -169,7 +169,7 @@
 
   <!-- 2. PRIVATE ACCOMMODATIONS -->
   {% for p in private_accomm %}
-    <div class="accomm-card" data-type="private" data-kitchen="0" data-washer="0" data-communal="0">
+    <div class="accomm-card" id="stay-p{{ p.id }}" data-type="private" data-kitchen="0" data-washer="0" data-communal="0">
       <div class="accomm-body">
         <div class="accomm-header-row">
           <div>

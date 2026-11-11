@@ -73,6 +73,33 @@ def my_maps_embed_url(latitude, longitude, language='en'):
     })
 
 
+def my_maps_viewer_url(latitude, longitude, language='en', zoom=11):
+    """Address that opens the same My Maps map full size (in the Google Maps app on a phone), centred on a position.
+
+    None in the same cases as my_maps_embed_url. The path never holds /u/0/, which would tie the link to the
+    visitor's own Google account.
+    """
+    embed = my_maps_embed_url(latitude, longitude, language)
+    if not embed:
+        return None
+    return 'https://www.google.com/maps/d/viewer?' + urlencode({
+        'mid': str(settings.MY_MAPS_ID).strip(),
+        'll': f'{float(latitude):.6f},{float(longitude):.6f}',
+        'z': zoom,
+        'hl': 'es' if language == 'es' else 'en',
+    })
+
+
+def weather_search_url(place, language='en'):
+    """A web search for the weather forecast of a place: only the place's name is sent, and only when the link is
+    followed. None for an empty name."""
+    name = ' '.join(str(place or '').split())
+    if not name:
+        return None
+    query = f'el tiempo en {name}' if language == 'es' else f'weather {name}'
+    return 'https://www.google.com/search?' + urlencode({'q': query})
+
+
 def attach_booking_affiliate(url_string):
     """Validates the URL protocol and appends affiliate tracking parameters."""
     if not url_string:

@@ -51,6 +51,12 @@
   </span>
 </div>
 
+{% if weather_url %}
+<p class="place-links">
+  <a class="stage-link-btn" href="{{ weather_url }}" target="_blank" rel="noopener">{% t "🌤️ Weather forecast" %}</a>
+</p>
+{% endif %}
+
 <!-- Location Description / History -->
 {% if paragraphs %}
   <div class="card" style="margin-bottom: 1.5rem;">

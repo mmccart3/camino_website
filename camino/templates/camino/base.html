@@ -632,7 +632,7 @@
   header, footer, .stage-nav, .elevation-hint, .btn, #debug-info, .stage-pace, .route-download {
     display: none !important;
   }
-  .stage-links { display: none !important; }   /* links are no use on paper */
+  .stage-links, .place-links { display: none !important; }   /* links are no use on paper */
   body {
     background: #ffffff !important;
     color: #000000 !important;
@@ -1195,6 +1195,7 @@
   text-decoration: none;
 }
 .stage-link-btn:hover { background: #eef2ff; }
+.place-links { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.5rem; margin: 0 0 1.25rem; }
 .stage-link-btn:focus-visible { outline: 3px solid var(--gold, #d97706); outline-offset: 2px; }
 
 /* Stage Metrics Strip */

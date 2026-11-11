@@ -455,6 +455,13 @@ class StageLinkTests(SimpleTestCase):
         for empty in (None, '', '   '):
             self.assertIsNone(weather_search_url(empty))
 
+    def test_a_junction_or_holding_place_has_no_forecast_and_a_note_in_brackets_is_left_off(self):
+        from .models import Location, weather_place_name
+        for name, expected in (('Zubiri', 'Zubiri'), ('Irache (Wine Fountain)', 'Irache'), ('Puente La Reina', 'Puente La Reina'),
+                               ('Route Splits', None), ('Camino Splits Sahagún', None), ('Rejoin N135', None),
+                               ('Exit to Sotés (1.9km detour)', None), ('Unassigned', None)):
+            self.assertEqual(weather_place_name(Location(location_name=name, latitude=42.5, longitude=-2.0)), expected, name)
+
     def test_route_map_link_needs_a_map_and_a_real_position(self):
         from .models import my_maps_viewer_url
         with self.settings(MY_MAPS_ID='abc123'):
@@ -467,7 +474,7 @@ class StageLinkTests(SimpleTestCase):
 
     def test_the_links_are_left_out_of_the_printed_page(self):
         base = (settings.BASE_DIR / 'camino' / 'templates' / 'camino' / 'base.html').read_text(encoding='utf-8')
-        self.assertLess(base.index('@media print'), base.index('.stage-links { display: none !important; }'))
+        self.assertLess(base.index('@media print'), base.index('.stage-links, .place-links { display: none !important; }'))
 
 
 class PlannerFoldTests(SimpleTestCase):
@@ -779,6 +786,15 @@ class LiveDatabaseSmokeTests(unittest.TestCase):
         response = self.client.get('/search/', {'q': 'Huntto'})   # in no stage's name, and the only such town
         self.assertEqual(response.status_code, 302)
         self.assertRegex(response['Location'], r'^/location/\d+/$')
+
+    def test_town_page_has_a_forecast_button_and_a_junction_page_has_none(self):
+        from .models import Location
+        town = Location.objects.get(location_name='Zubiri')
+        html = self.get('/location/%d/' % town.id)
+        self.assertIn('<a class="stage-link-btn" href="https://www.google.com/search?q=weather+Zubiri" target="_blank" rel="noopener">', html)
+        self.assertIn('href="https://www.google.com/search?q=el+tiempo+en+Zubiri"', self.get('/es/location/%d/' % town.id))
+        junction = Location.objects.get(location_name='Route Splits')
+        self.assertNotIn('place-links', self.get('/location/%d/' % junction.id).split('</style>')[-1])
 
     def test_stage_page_links_to_the_forecast_and_the_route_map(self):
         from urllib.parse import parse_qs, urlparse

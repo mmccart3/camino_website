@@ -1099,6 +1099,7 @@
   "← Stage {display_ref}: {stage_name}": "← Etapa {display_ref}: {stage_name}",
   "⇠ Alternative route: Stage {display_ref}: {stage_name}": "⇠ Ruta alternativa: etapa {display_ref}: {stage_name}",
   "⬇️ Download GPX": "⬇️ Descargar GPX",
+  "🌤️ Weather forecast": "🌤️ Previsión del tiempo",
   "🌤️ Weather forecast for {place}": "🌤️ Previsión del tiempo para {place}",
   "🍳 Kitchen": "🍳 Cocina",
   "🍽️ Communal Meal": "🍽️ Comida comunitaria",

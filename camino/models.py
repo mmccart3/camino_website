@@ -100,6 +100,21 @@ def weather_search_url(place, language='en'):
     return 'https://www.google.com/search?' + urlencode({'q': query})
 
 
+# Places that are a point on the route, not somewhere with a forecast of its own ("Route Splits", "Rejoin N135").
+_JUNCTION_NAME = re.compile(r'\b(splits?|rejoin|exit to)\b', re.IGNORECASE)
+
+
+def weather_place_name(location):
+    """The name to look a place's weather up by, or None when it has no forecast of its own.
+
+    Junctions and holding places get none. A note in brackets is left off: "Irache (Wine Fountain)" is "Irache".
+    """
+    name = str(location.location_name or '')
+    if location.is_placeholder or _JUNCTION_NAME.search(name):
+        return None
+    return ' '.join(re.sub(r'\([^)]*\)', ' ', name).split()) or None
+
+
 def attach_booking_affiliate(url_string):
     """Validates the URL protocol and appends affiliate tracking parameters."""
     if not url_string:

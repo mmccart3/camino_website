@@ -19,7 +19,7 @@ from .i18n import tr
 from .models import (
     Stage, Path, ElevationPoint, MapLocationCoord, Location,
     Albergue, PrivateAccomm, TrackPoint, BOOKING_AFFILIATE_PARAMS,
-    my_maps_viewer_url, weather_search_url,
+    my_maps_viewer_url, weather_search_url, weather_place_name,
 )
 
 logger = logging.getLogger(__name__)
@@ -863,6 +863,8 @@ def location_detail(request, location_id):
         location, albergues, private_accomm, parent_stage, origin, origin + request.path, stage_url
     )
     context['stay_count'] = len(albergues) + len(private_accomm)
+    # A link that leaves the site: a web search for this place's forecast. Only the place's name is sent.
+    context['weather_url'] = weather_search_url(weather_place_name(location), 'es' if i18n.is_spanish() else 'en')
     return render(request, 'camino/location_detail.html', context)
 
 

@@ -171,7 +171,7 @@ Under the GPX button each stage page has two links that leave the site (`stage_l
 - **Open the route in Google Maps**: the published My Maps map (`MY_MAPS_ID`) full size, centred between the stage's two ends,
   built by `models.my_maps_viewer_url`. It is left out when `MY_MAPS_ID` is empty.
 
-Both open in a new tab, need a connection, and are left out of a printed page.
+Both open in a new tab, need a connection, and are left out of a printed page. Each town page has the same weather link under its services ("Weather forecast"); a junction ("Route Splits") or holding place has none, and a note in brackets is left off the name (`models.weather_place_name`).
 
 ## Search
 

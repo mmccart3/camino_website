@@ -867,6 +867,7 @@ def location_detail(request, location_id):
         location, albergues, private_accomm, parent_stage, origin, origin + request.path, stage_url
     )
     context['stay_count'] = len(albergues) + len(private_accomm)
+    context['has_stay_photos'] = any(a.photos for a in albergues)   # the photo viewer is only sent to pages that need it
     # A link that leaves the site: a web search for this place's forecast. Only the place's name is sent.
     context['weather_url'] = weather_search_url(weather_place_name(location), 'es' if i18n.is_spanish() else 'en')
     return render(request, 'camino/location_detail.html', context)

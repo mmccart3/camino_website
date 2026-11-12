@@ -173,6 +173,31 @@ Under the GPX button each stage page has two links that leave the site (`stage_l
 
 Both open in a new tab, need a connection, and are left out of a printed page. Each town page has the same weather link under its services ("Weather forecast"); a junction ("Route Splits") or holding place has none, and a note in brackets is left off the name (`models.weather_place_name`).
 
+## Photos of albergues
+
+An albergue can have up to three photos on its card on the town page. Most have none, and a card without photos looks as it
+always did: there is no placeholder. Tapping a photo opens it larger over the page (`stay-photos.js`; without the script the
+link simply opens the picture).
+
+The photo columns of the `albergues` table (`alberguepic1URL`, `alberguepic2URL`, `alberguepic3URL`) say which pictures a
+place has. Each holds a file name such as `a4412-1.webp` (a picture kept in `camino/static/camino/img/stays/`) or a full
+`https://` address of a picture kept elsewhere. Anything else, or a file name whose file is missing, shows nothing
+(`camino/stay_photos.py`). The page shows the first three that are filled in.
+
+To add a photo:
+
+1. Make sure you may publish it (the owner sent it, or you took it).
+2. In the website folder run, for example,
+   `python tool/add_stay_photo.py 4412 1 C:\path\to\photo.jpg --database C:\Users\markj\src\camino_app\assets\database\camino.sqlite`
+   (albergue ID, photo 1, 2 or 3, the picture). It needs Pillow once: `pip install Pillow`. The tool turns the picture upright,
+   removes what the camera recorded in it (place, date, phone), saves a large copy (at most 1400 px wide) and a 480 x 320 copy
+   for the card, and writes the file name into the app database. Without `--database` it tells you what to type into the column.
+3. Sync the website database from the app database as usual ("Updating the data").
+4. Commit the two new `.webp` files and `camino.sqlite`, and push.
+
+`--remove` in place of the picture deletes the two files and empties the column. Private places to stay have no photo columns
+yet, and the app does not show these photos yet.
+
 ## Search
 
 `/search/` finds towns, stages and, from two letters up, places to stay by name (accents and capitals do not matter). A place to

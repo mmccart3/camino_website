@@ -95,13 +95,12 @@
          data-communal="{{ a.communal_meal|yesno:'1,0' }}"
          data-private-rooms="{{ a.privateRoomsAvailable|yesno:'1,0' }}">
       
-      <!-- Photo Strip (Collapses completely if no images exist) -->
-      {% if a.pic1_url or a.pic2_url or a.pic3_url or a.pic4_url %}
-        <div class="accomm-photo-strip">
-          {% if a.pic1_url %}<img src="{{ a.pic1_url }}" alt="{{ a.name }}" loading="lazy">{% endif %}
-          {% if a.pic2_url %}<img src="{{ a.pic2_url }}" alt="{{ a.name }}" loading="lazy">{% endif %}
-          {% if a.pic3_url %}<img src="{{ a.pic3_url }}" alt="{{ a.name }}" loading="lazy">{% endif %}
-          {% if a.pic4_url %}<img src="{{ a.pic4_url }}" alt="{{ a.name }}" loading="lazy">{% endif %}
+      {# Photos: up to three, and most places have none, so the strip is simply left out. Each is a link to the large picture; stay-photos.js opens it over the page. #}
+      {% if a.photos %}
+        <div class="accomm-photo-strip" data-count="{{ a.photos|length }}">
+          {% for photo in a.photos %}
+            <a class="stay-photo" href="{{ photo.full }}"><img src="{{ photo.small }}" alt="{% t_attr "{name}: photo {n}" name=a.name n=forloop.counter %}" width="480" height="320" loading="lazy" decoding="async"></a>
+          {% endfor %}
         </div>
       {% endif %}
 
@@ -247,6 +246,19 @@
 </div>
 {% endif %}
 </div>
+
+{% if has_stay_photos %}
+<dialog id="photo-viewer" class="photo-viewer" aria-label="{% t_attr "Photo" %}">
+  <img alt="">
+  <p class="photo-viewer-caption"></p>
+  <div class="photo-viewer-buttons">
+    <button type="button" data-step="-1">{% t "← Previous" %}</button>
+    <button type="button" data-close>{% t "Close" %}</button>
+    <button type="button" data-step="1">{% t "Next →" %}</button>
+  </div>
+</dialog>
+<script src="{% static 'camino/js/stay-photos.js' %}" defer></script>
+{% endif %}
 
 <script>
   // Client-side instant filter logic

@@ -3,9 +3,10 @@ import re
 
 from django.conf import settings
 from django.db import models
+from django.utils.functional import cached_property
 from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 
-from . import i18n
+from . import i18n, stay_photos
 from .stage_names import clean_stage_name
 
 BOOKING_AFFILIATE_PARAMS = {
@@ -390,6 +391,13 @@ class Albergue(models.Model):
     pic2_url = models.CharField(db_column='alberguepic2URL', max_length=255, null=True, blank=True)
     pic3_url = models.CharField(db_column='alberguepic3URL', max_length=255, null=True, blank=True)
     pic4_url = models.CharField(db_column='alberguepic4URL', max_length=255, null=True, blank=True)
+
+    @cached_property
+    def photos(self):
+        """Up to three photos for the card: [{'small': ..., 'full': ...}]. Empty for most places. See stay_photos.py."""
+        return stay_photos.photos(
+            [self.pic1_url, self.pic2_url, self.pic3_url, self.pic4_url], settings.STATIC_URL)
+
     privateRoomsAvailable = models.BooleanField(
         default=False,
         null=True,

@@ -416,6 +416,7 @@ window.CAMINO_I18N.es = Object.assign(window.CAMINO_I18N.es || {}, {
   "March - October": "De marzo a octubre",
   "March - September": "De marzo a septiembre",
   "March - mid-November": "De marzo a mediados de noviembre",
+  "March 1 - November 15": "Del 1 de marzo al 15 de noviembre",
   "March 1 - October 31": "Del 1 de marzo al 31 de octubre",
   "March 1 till October 31": "Del 1 de marzo al 31 de octubre",
   "March 15 - October 31": "Del 15 de marzo al 31 de octubre",

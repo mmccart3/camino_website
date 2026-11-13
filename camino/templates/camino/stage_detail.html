@@ -51,7 +51,7 @@
     <strong>{% t "Distance:" %}</strong> {{ stage.distance_km }} km |   
     <strong>{% t "Est. Time:" %}</strong> <span id="stage-time" data-minutes="{{ stage.time_minutes|default_if_none:'' }}"{% if stage_weighted %} data-weighted="{{ stage_weighted|unlocalize }}"{% endif %}>{{ stage.time_minutes|format_duration }}</span><span id="stage-time-note" class="stage-pace-note"></span>
   </p>
-  <button onclick="window.print()" class="btn" style="background: #e2e8f0; color: #1e293b; cursor: pointer; border: none; margin: 0;">
+  <button onclick="window.print()" class="btn" style="background: var(--soft-strong); color: var(--text); cursor: pointer; border: none; margin: 0;">
     {% t "🖨️ Print / Save PDF" %}
   </button>
 </div>
@@ -135,7 +135,7 @@
       <span class="elevation-hint">{% t "Touch or hover across the curve to inspect altitudes" %}</span>
     </div>
     {% if has_elevation_data %}
-      <button type="button" id="openScrubModal" class="btn" style="background: #1e3a8a; color: #ffffff; cursor: pointer; border: none; margin: 0;">
+      <button type="button" id="openScrubModal" class="btn" style="background: var(--primary); color: var(--on-primary); cursor: pointer; border: none; margin: 0;">
         {% t "🔍 Explore &amp; Scrub" %}
       </button>
     {% endif %}
@@ -199,8 +199,8 @@
 
 <!-- Places Along the Way -->
 <div class="card locations-list-card" style="margin: 1.5rem 0; padding: 1.25rem;">
-  <h3 style="margin-top: 0; margin-bottom: 0.25rem; color: var(--navy);">{% t "Places Along This Stage" %}</h3>
-  <p style="color: #64748b; font-size: 0.85rem; margin-top: 0; margin-bottom: 1rem;">
+  <h3 style="margin-top: 0; margin-bottom: 0.25rem; color: var(--heading);">{% t "Places Along This Stage" %}</h3>
+  <p style="color: var(--muted); font-size: 0.85rem; margin-top: 0; margin-bottom: 1rem;">
     {% t "Walking order with cumulative distance, estimated time, and available services." %}
   </p>
 
@@ -249,7 +249,7 @@
 
 <!-- Map View Selector -->
 <div class="map-view-switcher">
-  <h3 style="margin: 0; color: var(--navy);">{% t "Stage Route Map" %}</h3>
+  <h3 style="margin: 0; color: var(--heading);">{% t "Stage Route Map" %}</h3>
   {% if has_gps_track %}
     <div class="map-toggle-group">
       <button type="button" id="btnShowIllustrated" class="map-toggle-btn active">
@@ -304,9 +304,9 @@
 <!-- 2. Interactive Leaflet Map Container -->
 {% if has_gps_track %}
   <div id="interactive-map-container" style="display: none; position: relative;">
-    <p id="leaflet-status" role="status" style="font-size: 0.9rem; color: #475569; margin: 0 0 0.5rem;" hidden></p>
+    <p id="leaflet-status" role="status" style="font-size: 0.9rem; color: var(--muted); margin: 0 0 0.5rem;" hidden></p>
     <div id="leaflet-stage-map" style="width: 100%; height: 480px; border-radius: 8px; border: 1px solid var(--border);"></div>
-    <div style="font-size: 0.78rem; color: #64748b; margin-top: 0.4rem; display: flex; justify-content: space-between;">
+    <div style="font-size: 0.8125rem; color: var(--muted); margin-top: 0.4rem; display: flex; justify-content: space-between;">
       <span>{% t "Route track plotted from recorded Camino GPS coordinates." %}</span>
       <span>{% t "Layer: Topo / Satellite switchable via top-right icon." %}</span>
     </div>
@@ -334,7 +334,7 @@
 </div>
 {% endif %}
 
-<p id="debug-info" style="font-size: 0.8rem; color: #64748b; margin-top: 0.5rem;"></p>
+<p id="debug-info" style="font-size: 0.8125rem; color: var(--muted); margin-top: 0.5rem;"></p>
 
 <!-- Bottom Stage Navigation Bar -->
 <div class="stage-nav" style="margin-top: 2rem; margin-bottom: 2rem;">
@@ -511,7 +511,7 @@
     L.control.layers(baseMaps, null, { position: 'topright' }).addTo(leafletMap);
 
     trackPolyline = L.polyline(gpsTrack, {
-      color: '#d97706',
+      color: caminoColor('--accent-border'),
       weight: 5,
       opacity: 0.88,
       lineJoin: 'round'
@@ -519,9 +519,11 @@
 
     leafletMap.fitBounds(trackPolyline.getBounds(), { padding: [24, 24] });
 
+    document.addEventListener('camino:themechange', () => trackPolyline.setStyle({ color: caminoColor('--accent-border') }));
+
     const createVillageIcon = () => L.divIcon({
       className: 'leaflet-custom-marker',
-      html: `<div style="background:#1e3a8a; color:#fff; border:2px solid #fff; border-radius:50%; width:14px; height:14px; box-shadow:0 0 4px rgba(0,0,0,0.5);"></div>`,
+      html: '<div class="village-dot"></div>',
       iconSize: [14, 14],
       iconAnchor: [7, 7]
     });
@@ -532,9 +534,9 @@
           .addTo(leafletMap)
           .bindPopup(`
             <div style="font-family: sans-serif; padding: 2px;">
-              <strong style="color: #1e3a8a; font-size: 1.05rem;">${wp.name}</strong><br>
-              <span style="color: #64748b; font-size: 0.85rem;">${fmt(TXT.kmFromStart, { km: num(wp.km) })}</span><br>
-              <a href="${locationUrl(wp.id)}" style="display:inline-block; margin-top:6px; color:#d97706; font-weight:bold; font-size:0.85rem; text-decoration:none;">${TXT.viewAccommodations}</a>
+              <strong class="map-popup-name">${wp.name}</strong><br>
+              <span class="map-popup-km">${fmt(TXT.kmFromStart, { km: num(wp.km) })}</span><br>
+              <a href="${locationUrl(wp.id)}" class="map-popup-link">${TXT.viewAccommodations}</a>
             </div>
           `);
       }
@@ -715,7 +717,7 @@
           const isMatch = matches(wp);
           ctx.beginPath();
           ctx.setLineDash(isMatch ? [] : [3, 3]);
-          ctx.strokeStyle = isMatch ? '#d97706' : 'rgba(100, 116, 139, 0.45)';
+          ctx.strokeStyle = isMatch ? caminoColor('--accent-border') : 'rgba(100, 116, 139, 0.45)';
           ctx.lineWidth = isMatch ? 2.5 : 1;
           ctx.moveTo(xPos, placed[i] ? baseline(placed[i].row) + 3 : top);
           ctx.lineTo(xPos, bottom);
@@ -730,9 +732,9 @@
           const isMatch = matches(wp);
           ctx.beginPath();
           ctx.arc(xPos, y.getPixelForValue(wp.elevation), isMatch ? 7 : 4, 0, Math.PI * 2);
-          ctx.fillStyle = isMatch ? '#d97706' : '#12284c';
+          ctx.fillStyle = isMatch ? caminoColor('--accent-border') : caminoColor('--text');
           ctx.fill();
-          ctx.strokeStyle = '#ffffff';
+          ctx.strokeStyle = caminoColor('--surface');
           ctx.lineWidth = isMatch ? 2.5 : 1.5;
           ctx.stroke();
         });
@@ -744,25 +746,25 @@
         waypoints.forEach((wp, i) => {
           const p = placed[i];
           if (!p) return;
-          ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+          ctx.fillStyle = caminoColor('--surface');
           ctx.fillRect(p.from - 2, baseline(p.row) - 9, p.width + 4, 12);
-          ctx.fillStyle = '#1e293b';
+          ctx.fillStyle = caminoColor('--text');
           ctx.fillText(p.text, p.from, baseline(p.row));
         });
         waypoints.forEach((wp, i) => {
           if (!matches(wp)) return;
           const xPos = px(wp.km);
           if (xPos < left || xPos > right) return;
-          ctx.font = 'bold 12px sans-serif';
+          ctx.font = 'bold 13px sans-serif';
           const width = ctx.measureText(wp.name).width;
           const from = Math.min(Math.max(xPos - width / 2, left), Math.max(left, right - width));
           const y0 = baseline(placed[i] ? placed[i].row : 0);
-          ctx.fillStyle = '#ffffff';
+          ctx.fillStyle = caminoColor('--surface');
           ctx.fillRect(from - 3, y0 - 11, width + 6, 15);
-          ctx.strokeStyle = '#d97706';
+          ctx.strokeStyle = caminoColor('--accent-border');
           ctx.lineWidth = 1;
           ctx.strokeRect(from - 3, y0 - 11, width + 6, 15);
-          ctx.fillStyle = '#b45309';
+          ctx.fillStyle = caminoColor('--accent-text');
           ctx.fillText(wp.name, from, y0);
         });
         ctx.restore();
@@ -777,13 +779,13 @@
           label: TXT.elevationM,
           data: dataPoints,
           fill: 'start',
-          borderColor: '#d97706',
+          borderColor: caminoColor('--accent-border'),
           backgroundColor: 'rgba(245, 158, 11, 0.16)',
           borderWidth: 2,
           pointRadius: 0,
           pointHoverRadius: 6,
-          pointHoverBackgroundColor: '#12284c',
-          pointHoverBorderColor: '#ffffff',
+          pointHoverBackgroundColor: caminoColor('--text'),
+          pointHoverBorderColor: caminoColor('--surface'),
           pointHoverBorderWidth: 2,
           tension: 0.2,
         }]
@@ -801,7 +803,7 @@
         plugins: {
           legend: { display: false },
           tooltip: {
-            backgroundColor: '#12284c',
+            backgroundColor: caminoColor('--inverse-bg'),
             titleFont: { size: 12, weight: 'bold' },
             bodyFont: { size: 13 },
             padding: 8,
@@ -828,16 +830,16 @@
             type: 'linear',
             min: 0,
             max: maxDist,
-            title: { display: true, text: TXT.distanceKm, color: '#64748b', font: { size: 11 } },
-            ticks: { stepSize: 5, color: '#94a3b8', callback: val => val + ' km' },
-            grid: { color: '#f1f5f9' }
+            title: { display: true, text: TXT.distanceKm, color: caminoColor('--muted'), font: { size: 13 } },
+            ticks: { stepSize: 5, color: caminoColor('--muted'), callback: val => val + ' km' },
+            grid: { color: caminoColor('--border') }
           },
           y: {
             min: yMin,
             max: yMax,
-            title: { display: true, text: TXT.altitudeM, color: '#64748b', font: { size: 11 } },
-            ticks: { stepSize: 100, color: '#94a3b8' },
-            grid: { color: '#e2e8f0' }
+            title: { display: true, text: TXT.altitudeM, color: caminoColor('--muted'), font: { size: 13 } },
+            ticks: { stepSize: 100, color: caminoColor('--muted') },
+            grid: { color: caminoColor('--border') }
           }
         }
       }
@@ -857,6 +859,25 @@
     const hudWp = document.getElementById('hudWaypoint');
 
     let scrubChartInstance = null;
+
+    // The charts take their colours from the theme; apply them again when the theme changes.
+    function themeChart(chart) {
+      if (!chart) return;
+      const set = chart.data.datasets[0];
+      set.borderColor = caminoColor('--accent-border');
+      if ('pointHoverBackgroundColor' in set) { set.pointHoverBackgroundColor = caminoColor('--text'); set.pointHoverBorderColor = caminoColor('--surface'); }
+      const opts = chart.options;
+      if (opts.plugins && opts.plugins.tooltip && opts.plugins.tooltip.backgroundColor) opts.plugins.tooltip.backgroundColor = caminoColor('--inverse-bg');
+      ['x', 'y'].forEach((axis) => {
+        const scale = opts.scales && opts.scales[axis];
+        if (!scale) return;
+        if (scale.title) scale.title.color = caminoColor('--muted');
+        if (scale.ticks) scale.ticks.color = caminoColor('--muted');
+        if (scale.grid) scale.grid.color = caminoColor('--border');
+      });
+      chart.update('none');
+    }
+    document.addEventListener('camino:themechange', () => { themeChart(window.elevationChartInstance); themeChart(scrubChartInstance); });
     let currentScrubKm = 0;
 
     if (openBtn && backdrop && scrubCanvas && scrubber) {
@@ -916,7 +937,7 @@
 
             ctx.save();
             ctx.beginPath();
-            ctx.strokeStyle = '#d97706';
+            ctx.strokeStyle = caminoColor('--accent-border');
             ctx.lineWidth = 2;
             ctx.moveTo(xPos, top);
             ctx.lineTo(xPos, bottom);
@@ -924,9 +945,9 @@
 
             ctx.beginPath();
             ctx.arc(xPos, yPos, 6, 0, Math.PI * 2);
-            ctx.fillStyle = '#d97706';
+            ctx.fillStyle = caminoColor('--accent-border');
             ctx.fill();
-            ctx.strokeStyle = '#ffffff';
+            ctx.strokeStyle = caminoColor('--surface');
             ctx.lineWidth = 2.5;
             ctx.stroke();
             ctx.restore();
@@ -946,7 +967,7 @@
                 label: TXT.elevationM,
                 data: dataPoints,
                 fill: 'start',
-                borderColor: '#d97706',
+                borderColor: caminoColor('--accent-border'),
                 backgroundColor: 'rgba(245, 158, 11, 0.18)',
                 borderWidth: 2.5,
                 pointRadius: 0,
@@ -975,16 +996,16 @@
                   type: 'linear',
                   min: 0,
                   max: maxDist,
-                  title: { display: true, text: TXT.distanceKm, color: '#64748b' },
-                  ticks: { stepSize: 5, color: '#94a3b8', callback: val => val + ' km' },
-                  grid: { color: '#f1f5f9' }
+                  title: { display: true, text: TXT.distanceKm, color: caminoColor('--muted') },
+                  ticks: { stepSize: 5, color: caminoColor('--muted'), callback: val => val + ' km' },
+                  grid: { color: caminoColor('--border') }
                 },
                 y: {
                   min: yMin,
                   max: yMax,
-                  title: { display: true, text: TXT.altitudeM, color: '#64748b' },
-                  ticks: { stepSize: 100, color: '#94a3b8' },
-                  grid: { color: '#e2e8f0' }
+                  title: { display: true, text: TXT.altitudeM, color: caminoColor('--muted') },
+                  ticks: { stepSize: 100, color: caminoColor('--muted') },
+                  grid: { color: caminoColor('--border') }
                 }
               }
             }

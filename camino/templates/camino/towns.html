@@ -5,7 +5,7 @@
 {% block content %}
 <div style="text-align: center; margin-bottom: 1.25rem;">
   <h2 style="margin-bottom: 0.25rem;">{% t "All towns and villages" %}</h2>
-  <p style="color: #64748b; font-size: 0.95rem; margin-top: 0;">
+  <p style="color: var(--muted); font-size: 0.95rem; margin-top: 0;">
     {% t "{town_count} places on the Camino Francés, from Saint-Jean-Pied-de-Port to Santiago." town_count=town_count %}
   </p>
 </div>
@@ -15,7 +15,7 @@
   <input type="search" id="town-filter-input" placeholder="{% t_attr "Type to filter, e.g. Logroño" %}" autocomplete="off">
 </div>
 
-<p id="town-filter-empty" hidden style="text-align: center; color: #64748b;">
+<p id="town-filter-empty" hidden style="text-align: center; color: var(--muted);">
   {% t "No town matches that. Check the spelling, or" %} <a href="{% url 'stage_list' %}">{% t "browse the stages" %}</a>.
 </p>
 

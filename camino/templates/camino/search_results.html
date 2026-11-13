@@ -56,12 +56,12 @@
       {% endfor %}
     </ul>
     {% if more_stays %}
-      <p style="text-align: center; color: #475569;">{% t "{n} more places to stay match. Type more of the name to narrow the list." n=more_stays %}</p>
+      <p style="text-align: center; color: var(--muted);">{% t "{n} more places to stay match. Type more of the name to narrow the list." n=more_stays %}</p>
     {% endif %}
   {% endif %}
 
   {% if not town_results and not stage_results and not stay_results %}
-    <p style="text-align: center; color: #475569;">
+    <p style="text-align: center; color: var(--muted);">
       {% t "Nothing matches “{query}”. Check the spelling, or" query=query %} <a href="{% url 'towns' %}">{% t "browse all towns" %}</a>.
     </p>
   {% endif %}

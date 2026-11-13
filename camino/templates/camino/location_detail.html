@@ -68,7 +68,7 @@
 
 <!-- Accommodation Section -->
 <h3 style="margin-bottom: 0.25rem;">{% t "Places to Stay ({stay_count})" stay_count=stay_count %}</h3>
-<p style="color: #64748b; font-size: 0.85rem; margin-top: 0;">
+<p style="color: var(--muted); font-size: 0.85rem; margin-top: 0;">
   {% t "Filter by accommodation style and available pilgrim services." %}
 </p>
 
@@ -107,10 +107,10 @@
       <div class="accomm-body">
         <div class="accomm-header-row">
           <div>
-            <span class="badge" style="background:#e0f2fe; color:#0369a1; margin-bottom: 0.35rem;">{% t "Albergue" %}</span>
+            <span class="badge" style="background:var(--info-bg); color:var(--info-text); margin-bottom: 0.35rem;">{% t "Albergue" %}</span>
             <h4 class="accomm-title">{{ a.name }}</h4>
             {% if a.address %}
-              <div style="font-size: 0.82rem; color: #64748b; margin-top: 2px;">📍 {{ a.address }}</div>
+              <div style="font-size: 0.82rem; color: var(--muted); margin-top: 2px;">📍 {{ a.address }}</div>
             {% endif %}
           </div>
           {% if a.rate_1p_min %}
@@ -144,7 +144,7 @@
         </div>
 
         {% if a.rate_notes %}
-          <p style="font-size: 0.85rem; color: #475569; margin: 0.4rem 0;">{{ a.rate_notes|tr }}</p>
+          <p style="font-size: 0.85rem; color: var(--muted); margin: 0.4rem 0;">{{ a.rate_notes|tr }}</p>
         {% endif %}
 
         <!-- Action Links -->
@@ -178,10 +178,10 @@
       <div class="accomm-body">
         <div class="accomm-header-row">
           <div>
-            <span class="badge" style="background:#f3e8ff; color:#7e22ce; margin-bottom: 0.35rem;">{% t "Private Room" %}</span>
+            <span class="badge" style="background:var(--purple-bg); color:var(--purple-text); margin-bottom: 0.35rem;">{% t "Private Room" %}</span>
             <h4 class="accomm-title">{{ p.name }}</h4>
             {% if p.address %}
-              <div style="font-size: 0.82rem; color: #64748b; margin-top: 2px;">📍 {{ p.address }}</div>
+              <div style="font-size: 0.82rem; color: var(--muted); margin-top: 2px;">📍 {{ p.address }}</div>
             {% endif %}
           </div>
           {% if p.rate_1p_min or p.rate_2p_min %}
@@ -192,7 +192,7 @@
         </div>
 
         {% if p.rate_notes %}
-          <p style="font-size: 0.85rem; color: #475569; margin: 0.4rem 0;">{{ p.rate_notes|tr }}</p>
+          <p style="font-size: 0.85rem; color: var(--muted); margin: 0.4rem 0;">{{ p.rate_notes|tr }}</p>
         {% endif %}
 
         <!-- Action Links -->
@@ -234,12 +234,12 @@
     referrerpolicy="no-referrer-when-downgrade">
   </iframe>
   
-  <div style="background: #f8fafc; padding: 0.6rem 1rem; border-top: 1px solid #e2e8f0; font-size: 0.85rem; display: flex; justify-content: space-between; align-items: center;">
-    <span style="color: #64748b;">{% t "Coordinates: {latitude}, {longitude}" latitude=location.latitude|floatformat:5 longitude=location.longitude|floatformat:5 %}</span>
+  <div style="background: var(--soft); padding: 0.6rem 1rem; border-top: 1px solid var(--border); font-size: 0.85rem; display: flex; justify-content: space-between; align-items: center;">
+    <span style="color: var(--muted);">{% t "Coordinates: {latitude}, {longitude}" latitude=location.latitude|floatformat:5 longitude=location.longitude|floatformat:5 %}</span>
     <a href="https://www.google.com/maps/search/?api=1&query={{ location.latitude|unlocalize }},{{ location.longitude|unlocalize }}" 
        target="_blank" 
        rel="noopener"
-       style="color: #2563eb; text-decoration: none; font-weight: 600;">
+       style="color: var(--info-text); text-decoration: none; font-weight: 600;">
        {% t "Open in Google Maps App &nearr;" %}
     </a>
   </div>

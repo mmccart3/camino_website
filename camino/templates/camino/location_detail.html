@@ -149,6 +149,9 @@
 
         <!-- Action Links -->
         <div class="accomm-actions">
+          {% if a.can_ask %}
+            <button type="button" class="btn btn-ask" data-ask="a" data-name="{{ a.name }}" data-wa="{{ a.ask_whatsapp }}" data-em="{{ a.valid_email|default:'' }}" data-lg="{{ a.owner_language|default:'' }}" data-rooms="{{ a.privateRoomsAvailable|yesno:'1,0' }}" aria-label="{% t_attr "Ask {name} for a bed" name=a.name %}"><span>{% t "Ask for a bed" %}</span></button>
+          {% endif %}
           {% if a.valid_booking_url %}
             <a href="{{ a.valid_booking_url }}" target="_blank" rel="sponsored noopener" class="btn btn-booking"><span>{% t "Booking.com" %}</span></a>
           {% endif %}
@@ -197,6 +200,9 @@
 
         <!-- Action Links -->
         <div class="accomm-actions">
+          {% if p.can_ask %}
+            <button type="button" class="btn btn-ask" data-ask="p" data-name="{{ p.name }}" data-wa="{{ p.ask_whatsapp }}" data-em="{{ p.valid_email|default:'' }}" data-lg="{{ p.owner_language|default:'' }}" data-rooms="0" aria-label="{% t_attr "Ask {name} for a room" name=p.name %}"><span>{% t "Ask for a room" %}</span></button>
+          {% endif %}
           {% if p.valid_booking_url %}
             <a href="{{ p.valid_booking_url }}" target="_blank" rel="sponsored noopener" class="btn btn-booking"><span>{% t "Booking.com" %}</span></a>
           {% endif %}
@@ -258,6 +264,47 @@
   </div>
 </dialog>
 <script src="{% static 'camino/js/stay-photos.js' %}" defer></script>
+{% endif %}
+
+{% if has_ask %}
+<dialog id="ask-dialog" class="ask-dialog" aria-labelledby="ask-title">
+  <div class="ask-head">
+    <h3 id="ask-title">{% t "Ask for a bed" %}</h3>
+    <button type="button" class="ask-btn ask-btn-quiet" id="ask-close">{% t "Close" %}</button>
+  </div>
+  <div class="ask-body">
+    <div class="ask-grid">
+      <label><span>{% t "Arrival date" %}</span><input type="date" id="ask-date" class="ask-input"></label>
+      <label><span>{% t "Nights" %}</span><input type="number" id="ask-nights" class="ask-input" min="1" max="14" step="1" inputmode="numeric"></label>
+      <label><span>{% t "People" %}</span><input type="number" id="ask-people" class="ask-input" min="1" max="10" step="1" inputmode="numeric"></label>
+      <label id="ask-room-row" hidden><span>{% t "Bed type" %}</span>
+        <select id="ask-room" class="ask-input"><option value="dormitory">{% t "Bed in a dormitory" %}</option><option value="room">{% t "Private room" %}</option></select>
+      </label>
+      <label class="ask-wide"><span>{% t "Your name (optional)" %}</span><input type="text" id="ask-name" class="ask-input" maxlength="80" autocomplete="name"></label>
+    </div>
+    <p class="ask-problem" id="ask-problem" role="alert" hidden></p>
+    <div>
+      <label for="ask-text" class="ask-label">{% t "Message to the owner" %}</label>
+      <textarea id="ask-text" class="ask-input ask-text" rows="10"></textarea>
+      <p class="ask-hint" id="ask-language"></p>
+    </div>
+    <button type="button" class="ask-btn ask-btn-small" id="ask-reset" hidden>{% t "Reset message" %}</button>
+    <details class="ask-meaning-box" id="ask-meaning-box">
+      <summary>{% t "What this says" %}</summary>
+      <p class="ask-meaning" id="ask-meaning"></p>
+    </details>
+    <div class="ask-actions">
+      <a class="btn btn-wa" id="ask-whatsapp" target="_blank" rel="noopener" aria-label="{% t_attr "Send on WhatsApp" %}"><span>{% t "Send on" %}</span><img src="{% static 'camino/img/whatsapp-logo-green.svg' %}" alt="" width="86" height="20"></a>
+      <a class="btn btn-email" id="ask-email"><svg class="btn-icon" aria-hidden="true" focusable="false"><use href="#i-email"></use></svg><span>{% t "Send by email" %}</span></a>
+      <button type="button" class="ask-btn" id="ask-copy">{% t "Copy message" %}</button>
+    </div>
+    <p class="ask-status" id="ask-status" role="status" hidden></p>
+    <p class="ask-hint">{% t "Nothing is sent until you press Send in WhatsApp or your email program, and you can change the message first. Your name and the number of people are remembered in this browser only." %}</p>
+  </div>
+</dialog>
+<link rel="stylesheet" href="{% static 'camino/css/stay-request.css' %}">
+<script src="{% static 'camino/js/plan-message.js' %}" defer></script>
+<script src="{% static 'camino/js/stay-request.js' %}" defer></script>
 {% endif %}
 
 <script>

@@ -6,7 +6,7 @@ from django.db import models
 from django.utils.functional import cached_property
 from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 
-from . import i18n, stay_photos
+from . import i18n, planner, stay_photos
 from .stage_names import clean_stage_name
 
 BOOKING_AFFILIATE_PARAMS = {
@@ -350,7 +350,31 @@ class MapLocationCoord(models.Model):
         y2 = self.bottom_right_y if self.bottom_right_y is not None else self.bry_1920
         return (y2 - y1) if (y1 is not None and y2 is not None) else 0
 
-class Albergue(models.Model):
+def whatsapp_digits(value):
+    """A WhatsApp number as digits only (the form wa.me wants), or '' when it cannot be a phone number."""
+    digits = re.sub(r'\D', '', str(value if value is not None else ''))
+    return digits if 8 <= len(digits) <= 15 else ''
+
+
+class AskForBedMixin:
+    """What the "Ask for a bed" form on the town page needs to know about a place to stay (see stay-request.js)."""
+
+    @property
+    def ask_whatsapp(self):
+        return whatsapp_digits(self.whatsapp)
+
+    @property
+    def can_ask(self):
+        """True when there is a WhatsApp number or an email address to send a message to."""
+        return bool(self.ask_whatsapp or self.valid_email)
+
+    @property
+    def owner_language(self):
+        """'fr' when the owner is better written to in French, else '' (Spanish). Same rule as the planner and the app."""
+        return planner.owner_language(self.country_code, self.whatsapp, self.latitude, self.longitude) or ''
+
+
+class Albergue(AskForBedMixin, models.Model):
     id = models.IntegerField(db_column='ID', primary_key=True)
     location = models.ForeignKey(Location, db_column='locationID', on_delete=models.DO_NOTHING, related_name='albergues')
     name = models.CharField(db_column='albergueName', max_length=64)
@@ -438,7 +462,7 @@ class Albergue(models.Model):
         return None
 
 
-class PrivateAccomm(models.Model):
+class PrivateAccomm(AskForBedMixin, models.Model):
     id = models.IntegerField(db_column='ID', primary_key=True)
     location = models.ForeignKey(Location, db_column='locationID', on_delete=models.DO_NOTHING, related_name='private_accomm')
     name = models.CharField(db_column='privateAccommName', max_length=64)

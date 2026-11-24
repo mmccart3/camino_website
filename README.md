@@ -198,6 +198,20 @@ To add a photo:
 `--remove` in place of the picture deletes the two files and empties the column. Private places to stay have no photo columns
 yet, and the app does not show these photos yet.
 
+## Ask for a bed on the town pages
+
+Each place to stay on a town page that has a WhatsApp number or an email address has an "Ask for a bed" button ("Ask for a
+room" for a private place). It opens the same form and writes the same message as the planner's "Ask for a bed" (see
+"Itinerary planner" below): Spanish, or French on the French side of the route, with an English "What this says", ready to
+send from the visitor's own WhatsApp or email program, or to copy. Nothing is sent by the page or stored by the site; the
+name and the number of people are remembered in the visitor's browser only (the same entry as the planner's, so the name is
+asked for once). The arrival date starts empty, so a wrong date is never sent by accident.
+
+The pieces: `stay-request.js` and `stay-request.css` (the form), `plan-message.js` (the wording, shared with the planner),
+and in `models.py` `AskForBedMixin` (`can_ask`, `ask_whatsapp` and `owner_language`, which uses `planner.owner_language`). A
+town with no place that can be asked is sent without the form or the scripts. All of it is saved by the service worker, so it
+works offline. The visible words are in `camino/locale/es.json` ("ui" for the page, "js" for the script).
+
 ## Search
 
 `/search/` finds towns, stages and, from two letters up, places to stay by name (accents and capitals do not matter). A place to

@@ -410,6 +410,8 @@ def service_worker(request):
         static('camino/js/qr.js'),
         static('camino/js/plan-share.js'),
         static('camino/js/plan-message.js'),
+        static('camino/js/stay-request.js'),   # the "Ask for a bed" form on a town page
+        static('camino/css/stay-request.css'),
         static('camino/js/stage-pace.js'),   # the pace slider on a stage page (not only the planner) works offline
         static('camino/js/plan.js'),
         static('camino/css/plan.css'),
@@ -872,6 +874,7 @@ def location_detail(request, location_id):
         location, albergues, private_accomm, parent_stage, origin, origin + request.path, stage_url
     )
     context['stay_count'] = len(albergues) + len(private_accomm)
+    context['has_ask'] = any(place.can_ask for place in list(albergues) + list(private_accomm))   # the "Ask for a bed" form is only sent to pages with a place to ask
     context['has_stay_photos'] = any(a.photos for a in albergues)   # the photo viewer is only sent to pages that need it
     # A link that leaves the site: a web search for this place's forecast. Only the place's name is sent.
     context['weather_url'] = weather_search_url(weather_place_name(location), 'es' if i18n.is_spanish() else 'en')

@@ -121,6 +121,12 @@ class PwaEndpointTests(SimpleTestCase):
         for name in ('plan-core.js', 'qr.js', 'plan-share.js', 'plan-message.js', 'plan.js', 'plan.css'):
             self.assertTrue(any(u.endswith('/' + name) for u in urls), name)
 
+    def test_the_ask_for_a_bed_form_works_offline(self):
+        body = self.client.get('/sw.js').content.decode()
+        urls = json.loads(re.search(r'const PRECACHE_URLS = (\[.*?\]);', body, re.S).group(1))
+        for name in ('stay-request.js', 'stay-request.css', 'plan-message.js'):
+            self.assertTrue(any(u.endswith('/' + name) for u in urls), name)
+
     def test_the_stage_page_pace_script_works_offline(self):
         body = self.client.get('/sw.js').content.decode()
         urls = json.loads(re.search(r'const PRECACHE_URLS = (\[.*?\]);', body, re.S).group(1))
@@ -477,6 +483,45 @@ class StageLinkTests(SimpleTestCase):
         self.assertLess(base.index('@media print'), base.index('.stage-links, .place-links { display: none !important; }'))
 
 
+class AskForBedTests(SimpleTestCase):
+    """The "Ask for a bed" button on a town page: which places get it and what it carries (models.AskForBedMixin)."""
+
+    def place(self, **fields):
+        from .models import Albergue
+        return Albergue(id=1, name='Test', **fields)
+
+    def test_a_whatsapp_number_is_kept_as_digits_and_only_if_it_could_be_a_phone_number(self):
+        from .models import whatsapp_digits
+        self.assertEqual(whatsapp_digits('+34 600 11 22 33'), '34600112233')
+        self.assertEqual(whatsapp_digits(33617103189), '33617103189')
+        for bad in (None, '', 'NULL', '12345', '1' * 16):
+            self.assertEqual(whatsapp_digits(bad), '', bad)
+
+    def test_a_place_needs_a_whatsapp_number_or_an_email_address(self):
+        self.assertFalse(self.place().can_ask)
+        self.assertFalse(self.place(phone='+34 600 11 22 33', email='NULL').can_ask)   # a phone number alone cannot be sent a message
+        self.assertTrue(self.place(whatsapp='34600112233').can_ask)
+        self.assertTrue(self.place(email='casa@example.com\n').can_ask)
+
+    def test_the_owner_language_follows_the_planner_and_the_app(self):
+        self.assertEqual(self.place(whatsapp='33617103189', country_code='33').owner_language, 'fr')
+        self.assertEqual(self.place(whatsapp='34600112233', country_code='34', latitude=43.2, longitude=-1.2).owner_language, '')
+        self.assertEqual(self.place(country_code=None, latitude=43.16, longitude=-1.24).owner_language, 'fr')   # no calling code: the French side of the border
+        self.assertEqual(self.place(country_code=None, latitude=42.8, longitude=-1.64).owner_language, '')
+
+    def test_the_form_and_its_files_are_in_the_town_page_template(self):
+        template = (settings.BASE_DIR / 'camino' / 'templates' / 'camino' / 'location_detail.html').read_text(encoding='utf-8')
+        script = (settings.BASE_DIR / 'camino' / 'static' / 'camino' / 'js' / 'stay-request.js').read_text(encoding='utf-8')
+        for ident in ('ask-dialog', 'ask-title', 'ask-date', 'ask-nights', 'ask-people', 'ask-room-row', 'ask-room', 'ask-name', 'ask-problem',
+                      'ask-text', 'ask-language', 'ask-reset', 'ask-meaning-box', 'ask-meaning', 'ask-whatsapp', 'ask-email', 'ask-copy',
+                      'ask-status', 'ask-close'):
+            self.assertIn('id="%s"' % ident, template, ident)
+            self.assertIn("'%s'" % ident, script, ident)   # the script finds each of them by id
+        # the message words come first: plan-message.js is loaded before the script that uses it
+        self.assertLess(template.index('camino/js/plan-message.js'), template.index('camino/js/stay-request.js'))
+        self.assertIn('{% if has_ask %}', template)   # pages with no place to ask do not get the form
+
+
 class PlannerFoldTests(SimpleTestCase):
     """Send, keep and print fold away on the planner; plan.js finds them by these ids."""
 
@@ -658,6 +703,51 @@ class LiveDatabaseSmokeTests(unittest.TestCase):
         response = self.client.get(path)
         self.assertEqual(response.status_code, 200, path)
         return response.content.decode()
+
+    def test_the_ask_for_a_bed_button_carries_what_the_form_needs(self):
+        response = self.client.get('/location/1/')
+        html = response.content.decode()
+        self.assertTrue(response.context['has_ask'])
+        self.assertIn('id="ask-dialog"', html)
+        self.assertIn('camino/js/stay-request.js', html)
+        button = re.search(r'<button type="button" class="btn btn-ask" data-ask="a" data-name="Ospitalia Refuge Municipal"[^>]*>', html).group(0)
+        self.assertIn('data-wa="33617103189"', button)
+        self.assertIn('data-em="refugemunicipal@gmail.com"', button)   # no trailing new line
+        self.assertIn('data-lg="fr"', button)                           # a place in France is written to in French
+        self.assertIn('data-rooms="1"', button)                         # it offers private rooms too
+        self.assertIn('aria-label="Ask Ospitalia Refuge Municipal for a bed"', button)
+
+    def test_a_place_with_no_way_to_send_a_message_has_no_button(self):
+        from .models import Albergue, PrivateAccomm
+        no_contact = [p for p in list(Albergue.objects.all()) + list(PrivateAccomm.objects.all()) if not p.can_ask]
+        self.assertTrue(no_contact, 'the test needs a place with no WhatsApp number or email address')
+        place = no_contact[0]
+        html = self.get('/location/%d/' % place.location_id)
+        card = re.search(r'id="stay-%s%d".*?(?=<div class="accomm-card"|<div class="map-container"|</div>\s*</div>\s*\{|$)' % ('a' if isinstance(place, Albergue) else 'p', place.id), html, re.S)
+        self.assertIsNotNone(card)
+        self.assertNotIn('btn-ask', card.group(0))
+
+    def test_a_private_place_asks_for_a_room_and_the_page_is_in_spanish_on_the_spanish_site(self):
+        from .models import PrivateAccomm
+        place = next(p for p in PrivateAccomm.objects.all() if p.can_ask)
+        english = self.get('/location/%d/' % place.location_id)
+        self.assertRegex(english, r'data-ask="p" data-name="[^"]*"[^>]*data-rooms="0"')
+        self.assertIn('<span>Ask for a room</span>', english)
+        spanish = self.get('/es/location/%d/' % place.location_id)
+        self.assertIn('<span>Pedir una habitación</span>', spanish)
+        self.assertIn('Mensaje para el propietario', spanish)
+        self.assertNotIn('Message to the owner', spanish)
+
+    def test_a_town_with_nowhere_to_ask_does_not_load_the_form(self):
+        from .models import Location
+        for location in Location.objects.all():
+            places = list(location.albergues.all()) + list(location.private_accomm.all())
+            if not any(p.can_ask for p in places):
+                html = self.get('/location/%d/' % location.id)
+                self.assertNotIn('ask-dialog', html)
+                self.assertNotIn('stay-request.js', html)
+                return
+        self.skipTest('every town has a place to ask')
 
     def test_location_paragraphs_are_in_id_order(self):
         response = self.client.get('/location/9/')

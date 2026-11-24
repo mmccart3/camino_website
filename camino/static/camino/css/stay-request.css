@@ -1,0 +1,90 @@
+/* stay-request.css: the "Ask for a bed" button on a town page's places to stay, and the form it opens (stay-request.js). */
+
+/* The button sits with the other contact buttons (.accomm-actions .btn gives it its size). */
+.btn-ask {
+  background: var(--primary);
+  color: var(--on-primary);
+  font-family: inherit;
+  font-size: inherit;
+  cursor: pointer;
+}
+.btn-ask:hover { background: var(--primary-hover); }
+
+/* The form */
+.ask-dialog {
+  width: min(560px, calc(100vw - 2rem));
+  max-height: min(92vh, 52rem);
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 10px 40px rgba(15, 23, 42, 0.35);
+}
+.ask-dialog::backdrop { background: rgba(15, 23, 42, 0.55); }
+.ask-dialog [hidden] { display: none !important; }
+.ask-head { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; padding: 0.9rem 1.1rem; border-bottom: 1px solid var(--border); }
+.ask-head h3 { margin: 0; font-size: 1.05rem; color: var(--heading); }
+.ask-body { padding: 1rem 1.1rem 1.2rem; display: grid; gap: 0.9rem; }
+.ask-body p { margin: 0; }
+.ask-grid { display: grid; gap: 0.6rem; grid-template-columns: 1fr; }
+@media (min-width: 560px) { .ask-grid { grid-template-columns: 1fr 1fr; } .ask-wide { grid-column: 1 / -1; } }
+.ask-grid label span, .ask-label { display: block; margin-bottom: 0.2rem; font-size: 0.8125rem; font-weight: 600; }
+.ask-input {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 44px;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 1rem;
+}
+.ask-text { min-height: 12rem; line-height: 1.45; resize: vertical; }
+.ask-input:focus-visible, .ask-btn:focus-visible, .ask-meaning-box > summary:focus-visible { outline: 3px solid var(--accent-border); outline-offset: 2px; }
+.ask-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0.4rem 0.9rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--heading);
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.ask-btn:hover:not(:disabled) { background: var(--soft); }
+.ask-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.ask-btn-quiet { border-color: var(--border); }
+.ask-btn-small { min-height: 36px; padding: 0.2rem 0.7rem; font-size: 0.85rem; justify-self: start; }
+.ask-hint { font-size: 0.88rem; color: var(--muted); }
+.ask-hint:not(:last-child) { margin-top: 0.4rem; }
+.ask-problem, .ask-status { padding: 0.5rem 0.75rem; border-radius: 6px; font-size: 0.9rem; }
+.ask-problem, .ask-status.ask-failed { background: var(--danger-bg); color: var(--danger-text); border-left: 4px solid var(--danger-border); }
+.ask-status { background: var(--accent-bg); color: var(--accent-text); border-left: 4px solid var(--accent-border); }
+.ask-meaning-box > summary { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; min-height: 44px; cursor: pointer; list-style: none; font-size: 0.9rem; font-weight: 600; color: var(--heading); }
+.ask-meaning-box > summary::-webkit-details-marker { display: none; }
+.ask-meaning-box > summary::after { content: "+"; font-size: 1.4rem; font-weight: 400; line-height: 1; }
+.ask-meaning-box[open] > summary::after { content: "\2212"; }
+.ask-meaning { padding: 0.6rem 0.75rem; border-left: 3px solid var(--border); background: var(--soft); color: var(--text); font-size: 0.92rem; }
+.ask-actions { display: flex; flex-wrap: wrap; gap: 0.6rem; }
+.ask-actions .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 44px;
+  margin: 0;
+  padding: 0 0.9rem;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  text-decoration: none;
+}
+.ask-actions .btn-wa { border-color: var(--border); }
+.ask-actions .btn[aria-disabled="true"] { opacity: 0.45; pointer-events: none; cursor: not-allowed; }

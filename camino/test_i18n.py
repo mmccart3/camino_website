@@ -74,7 +74,7 @@ def python_phrases():
 
 # The browser scripts: where each file's phrases belong in es.json ("js" is loaded on every page, "plan" on the planner).
 SCRIPT_SECTIONS = {'plan.js': 'plan', 'plan-core.js': 'plan', 'plan-share.js': 'plan',
-                   'offline-pack.js': 'js', 'pwa.js': 'js', 'search.js': 'js'}
+                   'offline-pack.js': 'js', 'pwa.js': 'js', 'search.js': 'js', 'stay-request.js': 'js'}
 SCRIPT_CALL = re.compile(r"""\b(?:tr|t|camT)\(\s*('(?:[^'\\\n]|\\.)*'|"(?:[^"\\\n]|\\.)*")""")
 # Phrases a script picks by key at run time, so no call names them.
 CHOSEN_BY_KEY = ['{0} day', '{0} days', '{0} place', '{0} places', '{0} walking day', '{0} walking days', '{0} long day',
